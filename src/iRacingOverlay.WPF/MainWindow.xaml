@@ -1,639 +1,91 @@
-﻿<Window x:Class="iRacingOverlay.WPF.MainWindow"<Window x:Class="iRacingOverlay.WPF.MainWindow"
-
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"        Title="iRacing Overlay Manager" 
-
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"        Height="600" Width="650"
-
-        mc:Ignorable="d"        WindowStartupLocation="CenterScreen">
-
-        Title="MRT UI - iRacing Telemetry Manager"     
-
-        Height="1080" Width="1920"    <Grid Margin="15">
-
-        MinHeight="720" MinWidth="1280"        <Grid.RowDefinitions>
-
-        WindowStartupLocation="CenterScreen"            <RowDefinition Height="Auto"/>
-
-        Background="{StaticResource MRT.Background.Dark}">            <RowDefinition Height="*"/>
-
-                <RowDefinition Height="Auto"/>
-
-    <Grid>        </Grid.RowDefinitions>
-
-        <Grid.RowDefinitions>        
-
-            <RowDefinition Height="Auto"/>  <!-- Title Bar -->        <!-- Title -->
-
-            <RowDefinition Height="Auto"/>  <!-- Navigation -->        <TextBlock Grid.Row="0" 
-
-            <RowDefinition Height="*"/>     <!-- Content Area -->                   Text="iRacing Overlay Manager" 
-
-            <RowDefinition Height="Auto"/>  <!-- Status Bar -->                   FontSize="24" 
-
-        </Grid.RowDefinitions>                   FontWeight="Bold"
-
-                           Margin="0,0,0,15"/>
-
-        <!-- Title Bar -->        
-
-        <Border Grid.Row="0"         <!-- Main Content Tabs -->
-
-                Background="{StaticResource MRT.Background.Charcoal}"        <TabControl Grid.Row="1" Margin="0,0,0,15">
-
-                BorderBrush="{StaticResource MRT.Teal}"            <!-- Global Settings Tab -->
-
-                BorderThickness="0,0,0,3"            <TabItem Header="Global Settings">
-
-                Padding="20,15">                <ScrollViewer VerticalScrollBarVisibility="Auto">
-
-            <StackPanel Orientation="Horizontal">                    <StackPanel Margin="15">
-
-                <TextBlock Style="{StaticResource MRT.Text.Header}"                        <!-- Units Setting -->
-
-                           Text="MRT UI"                        <TextBlock Text="Units" 
-
-                           Foreground="{StaticResource MRT.Teal}"                                   FontSize="16" 
-
-                           Margin="0,0,10,0"/>                                   FontWeight="Bold"
-
-                <TextBlock Style="{StaticResource MRT.Text.Header}"                                   Margin="0,0,0,10"/>
-
-                           Text="|"                        
-
-                           Foreground="{StaticResource MRT.Orange}"                        <StackPanel Orientation="Horizontal" Margin="0,5">
-
-                           Margin="0,0,10,0"/>                            <RadioButton x:Name="MetricRadio" 
-
-                <TextBlock Style="{StaticResource MRT.Text.Header}"                                         Content="Metric (km/h, L, °C)" 
-
-                           Text="iRacing Telemetry Manager"                                         IsChecked="True"
-
-                           FontWeight="Normal"                                         Checked="MetricRadio_Checked"
-
-                           FontSize="20"/>                                         Margin="10,0,15,0"/>
-
-            </StackPanel>                            <RadioButton x:Name="ImperialRadio" 
-
-        </Border>                                         Content="Imperial (mph, gal, °F)"
-
-                                                 Checked="ImperialRadio_Checked"/>
-
-        <!-- Navigation Buttons -->                        </StackPanel>
-
-        <Border Grid.Row="1"                        
-
-                Background="{StaticResource MRT.Background.Gray}"                        <!-- Opacity Setting -->
-
-                BorderBrush="{StaticResource MRT.Teal}"                        <TextBlock Text="Widget Opacity" 
-
-                BorderThickness="0,0,0,1">                                   FontSize="16" 
-
-            <StackPanel Orientation="Horizontal"                                    FontWeight="Bold"
-
-                        HorizontalAlignment="Center"                                   Margin="0,20,0,10"/>
-
-                        Margin="0,10">                        
-
-                <Button x:Name="DashboardButton"                        <StackPanel Orientation="Horizontal" Margin="0,5">
-
-                        Content="📊 Dashboard"                            <Slider x:Name="OpacitySlider"
-
-                        Style="{StaticResource MRT.Button.Navigation.Active}"                                    Minimum="0.1"
-
-                        Width="200" Height="50"                                    Maximum="1.0"
-
-                        Margin="5"                                    Value="0.85"
-
-                        Click="DashboardButton_Click"/>                                    Width="400"
-
-                                                    TickFrequency="0.05"
-
-                <Button x:Name="OverlayButton"                                    IsSnapToTickEnabled="True"
-
-                        Content="🎮 Overlay"                                    VerticalAlignment="Center"
-
-                        Style="{StaticResource MRT.Button.Navigation}"                                    ValueChanged="OpacitySlider_ValueChanged"/>
-
-                        Width="200" Height="50"                            <TextBlock x:Name="OpacityValueText"
-
-                        Margin="5"                                       Text="85%"
-
-                        Click="OverlayButton_Click"/>                                       VerticalAlignment="Center"
-
-                                                       Margin="15,0,0,0"
-
-                <Button x:Name="SettingsButton"                                       Width="50"
-
-                        Content="⚙️ Settings"                                       FontWeight="Bold"
-
-                        Style="{StaticResource MRT.Button.Navigation}"                                       FontSize="14"/>
-
-                        Width="200" Height="50"                        </StackPanel>
-
-                        Margin="5"                        
-
-                        Click="SettingsButton_Click"/>                        <!-- Lock Windows Setting -->
-
-            </StackPanel>                        <TextBlock Text="Window Management" 
-
-        </Border>                                   FontSize="16" 
-
-                                           FontWeight="Bold"
-
-        <!-- Content Frame -->                                   Margin="0,20,0,10"/>
-
-        <Frame x:Name="ContentFrame"                         
-
-               Grid.Row="2"                        <CheckBox x:Name="LockWindowsCheckbox"
-
-               NavigationUIVisibility="Hidden"                                  Content="Lock all widgets in place (prevents dragging, enables click-through)"
-
-               Background="Transparent"/>                                  Margin="10,5"
-
-                                          Checked="LockWindows_Checked"
-
-        <!-- Status Bar -->                                  Unchecked="LockWindows_Unchecked"/>
-
-        <Border Grid.Row="3"                        
-
-                Background="{StaticResource MRT.Background.Charcoal}"                        <!-- Widget Management -->
-
-                BorderBrush="{StaticResource MRT.Teal}"                        <TextBlock Text="Widget Management" 
-
-                BorderThickness="0,1,0,0"                                   FontSize="16" 
-
-                Padding="15,10">                                   FontWeight="Bold"
-
-            <Grid>                                   Margin="0,30,0,10"/>
-
-                <Grid.ColumnDefinitions>                        
-
-                    <ColumnDefinition Width="Auto"/>                        <Button x:Name="ToggleAllButton" 
-
-                    <ColumnDefinition Width="*"/>                                Content="Toggle All Widgets (F12)" 
-
-                    <ColumnDefinition Width="Auto"/>                                Padding="10"
-
-                </Grid.ColumnDefinitions>                                Margin="10,5"
-
-                                                Click="ToggleAllButton_Click"/>
-
-                <!-- Connection Status -->                        
-
-                <StackPanel Grid.Column="0" Orientation="Horizontal">                        <Button x:Name="RemoveAllButton" 
-
-                    <TextBlock Style="{StaticResource MRT.Text.Label}"                                Content="Remove All Widgets" 
-
-                               Text="Connection:"                                Padding="10"
-
-                               Margin="0,0,10,0"                                Margin="10,5"
-
-                               VerticalAlignment="Center"/>                                Click="RemoveAllButton_Click"/>
-
-                    <TextBlock x:Name="ConnectionStatusText"                    </StackPanel>
-
-                               Style="{StaticResource MRT.Text.Status}"                </ScrollViewer>
-
-                               Text="🔴 Not Connected"            </TabItem>
-
-                               Foreground="{StaticResource MRT.Status.Disconnected}"            
-
-                               VerticalAlignment="Center"/>            <!-- Driving Widget Configuration Tab -->
-
-                </StackPanel>            <TabItem Header="Driving Widget Config" x:Name="DrivingWidgetConfigTab">
-
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-
-                <!-- Center Info -->                    <StackPanel Margin="15">
-
-                <StackPanel Grid.Column="1"                         <!-- Widget Activation -->
-
-                            Orientation="Horizontal"                        <CheckBox x:Name="ActivateDrivingWidget" 
-
-                            HorizontalAlignment="Center">                                  Content="Activate Driving Widget" 
-
-                    <TextBlock Style="{StaticResource MRT.Text.Label}"                                  FontSize="16"
-
-                               x:Name="StatusInfoText"                                  FontWeight="Bold"
-
-                               Text="Ready"                                  Margin="0,0,0,20"
-
-                               VerticalAlignment="Center"/>                                  Checked="ActivateDrivingWidget_Checked"
-
-                </StackPanel>                                  Unchecked="ActivateDrivingWidget_Unchecked"/>
-
-                                        
-
-                <!-- Version Info -->                        <Separator Margin="0,0,0,20"/>
-
-                <TextBlock Grid.Column="2"                        
-
-                           Style="{StaticResource MRT.Text.Label}"                        <TextBlock Text="Configure Driving Widget Sections" 
-
-                           Text="MRT UI v0.5.0"                                   FontSize="18" 
-
-                           VerticalAlignment="Center"/>                                   FontWeight="Bold"
-
-            </Grid>                                   Margin="0,0,0,20"/>
-
-        </Border>                        
-
-    </Grid>                        <!-- Top Section -->
-
-</Window>                        <GroupBox Header="Top Section (Speed)" Margin="0,0,0,15" Padding="10">
-
-                            <StackPanel>
-                                <CheckBox x:Name="ShowTopSection" Content="Show Top Section" IsChecked="True" Margin="0,5"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                                    <TextBlock Text="Display Field:" VerticalAlignment="Center" Width="100"/>
-                                    <ComboBox x:Name="TopSectionField" Width="200" SelectedIndex="1">
-                                        <ComboBoxItem Content="Gear"/>
-                                        <ComboBoxItem Content="Speed"/>
-                                        <ComboBoxItem Content="RPM"/>
-                                        <ComboBoxItem Content="Throttle %"/>
-                                        <ComboBoxItem Content="Brake %"/>
-                                        <ComboBoxItem Content="Clutch %"/>
-                                    </ComboBox>
-                                </StackPanel>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Center Section -->
-                        <GroupBox Header="Center Section (Gear)" Margin="0,0,0,15" Padding="10">
-                            <StackPanel>
-                                <CheckBox x:Name="ShowCenterSection" Content="Show Center Section" IsChecked="True" Margin="0,5"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                                    <TextBlock Text="Display Field:" VerticalAlignment="Center" Width="100"/>
-                                    <ComboBox x:Name="CenterSectionField" Width="200" SelectedIndex="0">
-                                        <ComboBoxItem Content="Gear"/>
-                                        <ComboBoxItem Content="Speed"/>
-                                        <ComboBoxItem Content="RPM"/>
-                                        <ComboBoxItem Content="Throttle %"/>
-                                        <ComboBoxItem Content="Brake %"/>
-                                        <ComboBoxItem Content="Clutch %"/>
-                                    </ComboBox>
-                                </StackPanel>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Bottom Section -->
-                        <GroupBox Header="Bottom Section (RPM)" Margin="0,0,0,15" Padding="10">
-                            <StackPanel>
-                                <CheckBox x:Name="ShowBottomSection" Content="Show Bottom Section" IsChecked="True" Margin="0,5"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,10,0,5">
-                                    <TextBlock Text="Display Field:" VerticalAlignment="Center" Width="100"/>
-                                    <ComboBox x:Name="BottomSectionField" Width="200" SelectedIndex="2">
-                                        <ComboBoxItem Content="Gear"/>
-                                        <ComboBoxItem Content="Speed"/>
-                                        <ComboBoxItem Content="RPM"/>
-                                        <ComboBoxItem Content="Throttle %"/>
-                                        <ComboBoxItem Content="Brake %"/>
-                                        <ComboBoxItem Content="Clutch %"/>
-                                    </ComboBox>
-                                </StackPanel>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Widget Size -->
-                        <GroupBox Header="Widget Size" Margin="0,0,0,15" Padding="10">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,5">
-                                    <TextBlock Text="Size:" VerticalAlignment="Center" Width="100"/>
-                                    <Slider x:Name="WidgetSizeSlider" 
-                                            Minimum="100" 
-                                            Maximum="400" 
-                                            Value="200" 
-                                            Width="200"
-                                            TickFrequency="20"
-                                            IsSnapToTickEnabled="True"
-                                            TickPlacement="BottomRight"
-                                            ValueChanged="DrivingWidgetSize_Changed"/>
-                                    <TextBlock x:Name="WidgetSizeValue" 
-                                               Text="200px" 
-                                               VerticalAlignment="Center" 
-                                               Margin="10,0,0,0"
-                                               Width="60"/>
-                                </StackPanel>
-                                <TextBlock Text="Adjust the size of the circular gauge (100-400 pixels)" 
-                                           TextWrapping="Wrap"
-                                           Foreground="Gray" 
-                                           FontSize="11" 
-                                           Margin="0,10,0,0"/>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Left Side Box -->
-                        <GroupBox Header="Left Side Box (Optional)" Margin="0,0,0,15" Padding="10">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,5">
-                                    <TextBlock Text="Field:" VerticalAlignment="Center" Width="100"/>
-                                    <ComboBox x:Name="LeftSideField" Width="200" SelectedIndex="4">
-                                        <ComboBoxItem Content="None"/>
-                                        <ComboBoxItem Content="Throttle %"/>
-                                        <ComboBoxItem Content="Brake %"/>
-                                        <ComboBoxItem Content="Clutch %"/>
-                                        <ComboBoxItem Content="Fuel Level"/>
-                                        <ComboBoxItem Content="Water Temp"/>
-                                        <ComboBoxItem Content="Oil Temp"/>
-                                        <ComboBoxItem Content="Speed"/>
-                                        <ComboBoxItem Content="RPM"/>
-                                        <ComboBoxItem Content="Gear"/>
-                                    </ComboBox>
-                                </StackPanel>
-                                <TextBlock Text="Choose an optional data field to display on the left side of the gauge" 
-                                           TextWrapping="Wrap"
-                                           Foreground="Gray" 
-                                           FontSize="11" 
-                                           Margin="0,10,0,0"/>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Right Side Box -->
-                        <GroupBox Header="Right Side Box (Optional)" Margin="0,0,0,15" Padding="10">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,5">
-                                    <TextBlock Text="Field:" VerticalAlignment="Center" Width="100"/>
-                                    <ComboBox x:Name="RightSideField" Width="200" SelectedIndex="2">
-                                        <ComboBoxItem Content="None"/>
-                                        <ComboBoxItem Content="Throttle %"/>
-                                        <ComboBoxItem Content="Brake %"/>
-                                        <ComboBoxItem Content="Clutch %"/>
-                                        <ComboBoxItem Content="Fuel Level"/>
-                                        <ComboBoxItem Content="Water Temp"/>
-                                        <ComboBoxItem Content="Oil Temp"/>
-                                        <ComboBoxItem Content="Speed"/>
-                                        <ComboBoxItem Content="RPM"/>
-                                        <ComboBoxItem Content="Gear"/>
-                                    </ComboBox>
-                                </StackPanel>
-                                <TextBlock Text="Choose an optional data field to display on the right side of the gauge" 
-                                           TextWrapping="Wrap"
-                                           Foreground="Gray" 
-                                           FontSize="11" 
-                                           Margin="0,10,0,0"/>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <TextBlock Text="Note: All configuration changes apply immediately to active widget."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,20,0,10"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-            
-            <!-- Data Widget Configuration Tab -->
-            <TabItem Header="Data Widget Config" x:Name="DataWidgetConfigTab">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="15">
-                        <!-- Widget Activation -->
-                        <CheckBox x:Name="ActivateDataWidget" 
-                                  Content="Activate Data Widget" 
-                                  FontSize="16"
-                                  FontWeight="Bold"
-                                  Margin="0,0,0,20"
-                                  Checked="ActivateDataWidget_Checked"
-                                  Unchecked="ActivateDataWidget_Unchecked"/>
-                        
-                        <Separator Margin="0,0,0,20"/>
-                        
-                        <TextBlock Text="Configure Data Widget Cells (2x3 Grid)" 
-                                   FontSize="18" 
-                                   FontWeight="Bold"
-                                   Margin="0,0,0,20"/>
-                        
-                        <TextBlock Text="Select telemetry fields for each cell. Empty cells will be hidden automatically."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="12"
-                                   Margin="0,0,0,20"/>
-                        
-                        <!-- Row 1 -->
-                        <TextBlock Text="Row 1" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                            <StackPanel Width="180" Margin="0,0,10,0">
-                                <TextBlock Text="Cell 1 (Top Left):" Margin="0,0,0,5"/>
-                                <ComboBox x:Name="DataCell1Field" Width="170"/>
-                            </StackPanel>
-                            <StackPanel Width="180">
-                                <TextBlock Text="Cell 2 (Top Right):" Margin="0,0,0,5"/>
-                                <ComboBox x:Name="DataCell2Field" Width="170"/>
-                            </StackPanel>
-                        </StackPanel>
-                        
-                        <!-- Row 2 -->
-                        <TextBlock Text="Row 2" FontSize="14" FontWeight="Bold" Margin="0,10,0,10"/>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                            <StackPanel Width="180" Margin="0,0,10,0">
-                                <TextBlock Text="Cell 3 (Middle Left):" Margin="0,0,0,5"/>
-                                <ComboBox x:Name="DataCell3Field" Width="170"/>
-                            </StackPanel>
-                            <StackPanel Width="180">
-                                <TextBlock Text="Cell 4 (Middle Right):" Margin="0,0,0,5"/>
-                                <ComboBox x:Name="DataCell4Field" Width="170"/>
-                            </StackPanel>
-                        </StackPanel>
-                        
-                        <!-- Row 3 -->
-                        <TextBlock Text="Row 3" FontSize="14" FontWeight="Bold" Margin="0,10,0,10"/>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,15">
-                            <StackPanel Width="180" Margin="0,0,10,0">
-                                <TextBlock Text="Cell 5 (Bottom Left):" Margin="0,0,0,5"/>
-                                <ComboBox x:Name="DataCell5Field" Width="170"/>
-                            </StackPanel>
-                            <StackPanel Width="180">
-                                <TextBlock Text="Cell 6 (Bottom Right):" Margin="0,0,0,5"/>
-                                <ComboBox x:Name="DataCell6Field" Width="170"/>
-                            </StackPanel>
-                        </StackPanel>
-                        
-                        <Separator Margin="0,20"/>
-                        
-                        <!-- Widget Size Configuration -->
-                        <TextBlock Text="Widget Size" FontSize="14" FontWeight="Bold" Margin="0,20,0,10"/>
-                        <TextBlock Text="Adjust the size of the Data Widget (all elements scale proportionally)"
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,0,0,10"/>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                            <TextBlock Text="Size:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <Slider x:Name="DataWidgetSizeSlider" 
-                                    Width="200" 
-                                    Minimum="200" 
-                                    Maximum="800" 
-                                    Value="400"
-                                    TickFrequency="100"
-                                    IsSnapToTickEnabled="True"
-                                    VerticalAlignment="Center"
-                                    ValueChanged="DataWidgetSizeSlider_ValueChanged"/>
-                            <TextBlock x:Name="DataWidgetSizeText" 
-                                       Text="400 x 300" 
-                                       VerticalAlignment="Center" 
-                                       Margin="10,0,0,0"
-                                       Width="80"/>
-                        </StackPanel>
-                        
-                        <TextBlock Text="Note: All configuration changes apply immediately to active widget."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,20,0,5"/>
-                        
-                        <TextBlock Text="Tip: Select 'None' for cells you don't want to display. Empty cells will be automatically hidden."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,5,0,10"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-            
-            <!-- Fuel Widget Configuration Tab -->
-            <TabItem Header="Fuel Widget Config" x:Name="FuelWidgetConfigTab">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="15">
-                        <!-- Widget Activation -->
-                        <CheckBox x:Name="ActivateFuelWidget" 
-                                  Content="Activate Fuel Calculator Widget" 
-                                  FontSize="16"
-                                  FontWeight="Bold"
-                                  Margin="0,0,0,20"
-                                  Checked="ActivateFuelWidget_Checked"
-                                  Unchecked="ActivateFuelWidget_Unchecked"/>
-                        
-                        <Separator Margin="0,0,0,20"/>
-                        
-                        <TextBlock Text="Fuel Calculator Widget" 
-                                   FontSize="18" 
-                                   FontWeight="Bold"
-                                   Margin="0,0,0,10"/>
-                        
-                        <TextBlock Text="Automatically calculates fuel consumption per lap and estimates remaining laps based on current fuel level."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="12"
-                                   Margin="0,0,0,20"/>
-                        
-                        <!-- Widget Size Configuration -->
-                        <TextBlock Text="Widget Size" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock Text="Adjust the size of the Fuel Widget (all elements scale proportionally)"
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,0,0,10"/>
-                        
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                            <TextBlock Text="Size:" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <Slider x:Name="FuelWidgetSizeSlider" 
-                                    Width="200" 
-                                    Minimum="50" 
-                                    Maximum="150" 
-                                    Value="100"
-                                    TickFrequency="10"
-                                    IsSnapToTickEnabled="True"
-                                    VerticalAlignment="Center"
-                                    ValueChanged="FuelWidgetSizeSlider_ValueChanged"/>
-                            <TextBlock x:Name="FuelWidgetSizeText" 
-                                       Text="100%" 
-                                       VerticalAlignment="Center" 
-                                       Margin="10,0,0,0"
-                                       Width="50"/>
-                        </StackPanel>
-                        
-                        <Separator Margin="0,10,0,20"/>
-                        
-                        <!-- Reset Button -->
-                        <TextBlock Text="Reset Calculations" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock Text="Clear all fuel consumption data and start fresh calculations."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,0,0,10"/>
-                        
-                        <Button x:Name="ResetFuelCalculations" 
-                                Content="Reset Fuel Data" 
-                                Width="150"
-                                Height="30"
-                                HorizontalAlignment="Left"
-                                Click="ResetFuelCalculations_Click"
-                                Background="#FFCC5500"
-                                Foreground="White"
-                                FontWeight="Bold"
-                                Margin="0,0,0,20"/>
-                        
-                        <Separator Margin="0,10,0,20"/>
-                        
-                        <!-- Usage Information -->
-                        <TextBlock Text="How It Works" FontSize="14" FontWeight="Bold" Margin="0,0,0,10"/>
-                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,5">
-                            <Run Text="• "/>
-                            <Run Text="Current Fuel Level: " FontWeight="Bold"/>
-                            <Run Text="Shows your current fuel in the tank"/>
-                        </TextBlock>
-                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,5">
-                            <Run Text="• "/>
-                            <Run Text="Used Last Lap: " FontWeight="Bold"/>
-                            <Run Text="Fuel consumed on the previous lap"/>
-                        </TextBlock>
-                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,5">
-                            <Run Text="• "/>
-                            <Run Text="Avg Per Lap: " FontWeight="Bold"/>
-                            <Run Text="Running average of fuel consumption per lap"/>
-                        </TextBlock>
-                        <TextBlock TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="0,0,0,20">
-                            <Run Text="• "/>
-                            <Run Text="Laps Remaining: " FontWeight="Bold"/>
-                            <Run Text="Estimated laps based on current fuel and average consumption"/>
-                            <LineBreak/>
-                            <Run Text="  - "/>
-                            <Run Text="Red: &lt; 2 laps" Foreground="#FFFF3333"/>
-                            <LineBreak/>
-                            <Run Text="  - "/>
-                            <Run Text="Orange: &lt; 5 laps" Foreground="#FFFF9900"/>
-                            <LineBreak/>
-                            <Run Text="  - "/>
-                            <Run Text="Yellow: OK" Foreground="#FFFFFF00"/>
-                        </TextBlock>
-                        
-                        <TextBlock Text="Note: All configuration changes apply immediately to active widget."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,20,0,5"/>
-                        
-                        <TextBlock Text="Tip: Reset fuel calculations when starting a new stint or after refueling."
-                                   TextWrapping="Wrap"
-                                   Foreground="Gray"
-                                   FontSize="11"
-                                   Margin="0,5,0,10"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-        </TabControl>
+<Window x:Class="iRacingOverlay.WPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MRT UI | iRacing Telemetry Manager" 
+        Height="720" Width="1280"
+        MinHeight="720" MinWidth="1280"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource DarkBackground}">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="80"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="40"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Title Bar -->
+        <Border Grid.Row="0" Background="{StaticResource DarkSurface}" 
+                BorderBrush="{StaticResource TealPrimary}" BorderThickness="0,0,0,2">
+            <Grid Margin="30,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="MRT UI" 
+                               FontSize="32" 
+                               FontWeight="Bold"
+                               Foreground="{StaticResource TealPrimary}"
+                               Margin="0,0,15,0"/>
+                    <TextBlock Text="| iRacing Telemetry Manager" 
+                               FontSize="24" 
+                               Foreground="{StaticResource LightText}"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        
+        <!-- Navigation Bar -->
+        <Border Grid.Row="1" Background="{StaticResource DarkSurface}">
+            <StackPanel Orientation="Horizontal" Margin="30,15" Height="50">
+                <Button x:Name="BtnHome" 
+                        Content="🏠 Home" 
+                        Style="{StaticResource NavigationButton}"
+                        Click="BtnHome_Click"
+                        Width="150" Margin="0,0,15,0"/>
+                <Button x:Name="BtnDashboard" 
+                        Content="📊 Dashboard" 
+                        Style="{StaticResource NavigationButton}"
+                        Click="BtnDashboard_Click"
+                        Width="180" Margin="0,0,15,0"/>
+                <Button x:Name="BtnOverlay" 
+                        Content="🎮 Overlay Manager" 
+                        Style="{StaticResource NavigationButton}"
+                        Click="BtnOverlay_Click"
+                        Width="220" Margin="0,0,15,0"/>
+                <Button x:Name="BtnSettings" 
+                        Content="⚙️ Settings" 
+                        Style="{StaticResource NavigationButton}"
+                        Click="BtnSettings_Click"
+                        Width="180"/>
+            </StackPanel>
+        </Border>
+        
+        <!-- Content Frame -->
+        <Frame x:Name="ContentFrame" 
+               Grid.Row="2" 
+               NavigationUIVisibility="Hidden"
+               Background="{StaticResource DarkBackground}"/>
         
         <!-- Status Bar -->
-        <Border Grid.Row="2" 
-                Background="#F0F0F0" 
-                Padding="10">
-            <StackPanel>
-                <TextBlock x:Name="StatusText" 
-                           Text="Status: Ready" 
-                           FontSize="12"/>
-                <TextBlock x:Name="WidgetCountText" 
-                           Text="Active Widgets: 0" 
+        <Border Grid.Row="3" Background="{StaticResource DarkSurface}"
+                BorderBrush="{StaticResource DarkBorder}" BorderThickness="0,1,0,0">
+            <Grid Margin="30,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="ConnectionStatusText" 
+                               Text="🔴 Disconnected" 
+                               FontSize="14"
+                               Foreground="{StaticResource LightText}"
+                               Margin="0,0,20,0"/>
+                    <TextBlock Text="Version 0.4" 
+                               FontSize="12"
+                               Foreground="{StaticResource MutedText}"/>
+                </StackPanel>
+                
+                <TextBlock Text="Press F12 for debug overlay" 
                            FontSize="12"
-                           Margin="0,5,0,0"/>
-            </StackPanel>
+                           Foreground="{StaticResource MutedText}"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"/>
+            </Grid>
         </Border>
     </Grid>
 </Window>

@@ -24,6 +24,21 @@
     <SolidColorBrush x:Key="MRT.Status.Connecting" Color="#FFFF00"/>
     <SolidColorBrush x:Key="MRT.Status.Disconnected" Color="#FF3333"/>
     
+    <!-- ==================== SIMPLIFIED ALIASES FOR EASE OF USE ==================== -->
+    
+    <!-- Background Aliases -->
+    <SolidColorBrush x:Key="DarkBackground" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="DarkSurface" Color="#2F2F2F"/>
+    <SolidColorBrush x:Key="DarkBorder" Color="#3F3F3F"/>
+    
+    <!-- Primary Color Aliases -->
+    <SolidColorBrush x:Key="TealPrimary" Color="#008080"/>
+    <SolidColorBrush x:Key="OrangePrimary" Color="#FF8000"/>
+    
+    <!-- Text Color Aliases -->
+    <SolidColorBrush x:Key="LightText" Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="MutedText" Color="#888888"/>
+    
     <!-- ==================== BUTTON STYLES ==================== -->
     
     <!-- Navigation Button Style -->
@@ -62,6 +77,16 @@
     <Style x:Key="MRT.Button.Navigation.Active" TargetType="Button" BasedOn="{StaticResource MRT.Button.Navigation}">
         <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
         <Setter Property="BorderBrush" Value="{StaticResource MRT.Orange}"/>
+    </Style>
+    
+    <!-- Navigation Button Alias for simplified usage -->
+    <Style x:Key="NavigationButton" TargetType="Button" BasedOn="{StaticResource MRT.Button.Navigation}">
+        <Style.Triggers>
+            <Trigger Property="Tag" Value="Active">
+                <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource MRT.Orange}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
     
     <!-- Primary Action Button (Orange) -->

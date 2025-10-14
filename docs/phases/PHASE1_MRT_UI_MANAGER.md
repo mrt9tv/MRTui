@@ -1,7 +1,7 @@
 # Phase 1: MRT UI Manager - Modern Interface Redesign
 
 **Duration:** 2 weeks (10 working days)  
-**Status:** 🚧 In Progress  
+**Status:** 🚧 In Progress (40% Complete)  
 **Started:** October 14, 2025  
 **Target Completion:** October 28, 2025
 
@@ -10,11 +10,11 @@
 ## 🎯 Phase Goals
 
 Transform the basic tab-based configuration window into a modern, full-screen MRT UI Manager with:
-- Professional branding (Mokka Racing Team colors)
-- Intuitive navigation (Dashboard, Overlay, Settings)
-- Modular architecture for easy future redesigns
-- Connection status monitoring
-- Enhanced widget management interface
+- Professional branding (Mokka Racing Team colors) ✅
+- Intuitive navigation (Home, Dashboard, Overlay, Settings) ✅
+- Modular architecture for easy future redesigns ✅
+- Connection status monitoring ✅
+- Enhanced widget management interface ⏳
 
 ---
 
@@ -24,30 +24,30 @@ Transform the basic tab-based configuration window into a modern, full-screen MR
 - [x] Analyze current MainWindow.xaml structure
 - [x] Create UI/UX requirements document
 - [x] Define color scheme (Teal #008080 + Orange #FF8000)
-- [x] Plan navigation structure (3 pages)
+- [x] Plan navigation structure (4 pages: Home, Dashboard, Overlay, Settings)
 - [x] Identify modular components needed
-- [ ] Create UI mockups/wireframes (optional)
+- [x] Create initial theme system
 
 ### Technical Preparation
 - [x] Review existing backend services (WidgetManager, AppSettings)
 - [x] Verify current widget system functionality
 - [x] Backup current MainWindow files
 - [x] Plan file structure for Views/ViewModels
-- [ ] Set up theme resource dictionary structure
+- [x] Set up theme resource dictionary structure
 
 ---
 
 ## 📅 Week 1: Core Structure & Navigation
 
-### Day 1-2: Foundation & Theme Setup
+### Day 1-2: Foundation & Theme Setup ✅
 **Goal:** Create navigation shell and apply MRT branding
 
 #### App-Level Theme Configuration
-- [ ] Create `Resources/Themes/MRTTheme.xaml`
-  - [ ] Define color resources (Teal, Orange, backgrounds)
-  - [ ] Create button styles
-  - [ ] Create toggle switch styles
-  - [ ] Create slider styles
+- [x] Create `Resources/Themes/MRTTheme.xaml`
+  - [x] Define color resources (Teal, Orange, backgrounds)
+  - [x] Create button styles
+  - [x] Create toggle switch styles
+  - [x] Create slider styles
   - [ ] Create card/panel styles
 - [ ] Update `App.xaml` to reference MRTTheme
 - [ ] Test theme resources load correctly
@@ -74,42 +74,51 @@ Transform the basic tab-based configuration window into a modern, full-screen MR
 
 ---
 
-### Day 3: Dashboard View (Front Page)
+### Day 3: Dashboard View (Front Page) ✅
 **Goal:** Create professional dashboard with connection monitoring
 
 #### Dashboard View Creation
-- [ ] Create `Views/DashboardView.xaml`
-  - [ ] Add welcome header "MRT UI - iRacing Telemetry Manager"
-  - [ ] Create connection status card
-    - [ ] Status indicator (🔴 Not Connected / 🟡 Connecting / 🟢 Connected / 🔴 Disconnected)
-    - [ ] Connection uptime display
-    - [ ] Last update timestamp
-  - [ ] Add quick stats section
-    - [ ] Active widgets count
-    - [ ] Telemetry update rate (Hz)
-    - [ ] Session info (if available)
-  - [ ] Add MRT branding/logo area
-  - [ ] Style with teal/orange theme
+- [x] Create `Views/DashboardView.xaml`
+  - [x] Add welcome header "Dashboard"
+  - [x] Create connection status card
+    - [x] Status indicator (🔴 Not Running / 🟡 Connecting / 🟢 Connected)
+    - [x] Connection status text with real-time updates
+    - [x] Last connection timestamp (military time format)
+    - [x] Update rate display (Hz)
+  - [x] Add quick stats section
+    - [x] Active widgets count
+    - [x] Active widgets list
+    - [x] "Manage Widgets" navigation button
+  - [x] Add system stats card
+    - [x] Application uptime (live updates every second)
+    - [x] Version info display
+  - [x] Style with teal/orange theme
 
-- [ ] Create `ViewModels/DashboardViewModel.cs`
-  - [ ] Connection status property (bound to telemetry service)
-  - [ ] Uptime calculation
-  - [ ] Active widget count
-  - [ ] Update rate tracking
-  - [ ] INotifyPropertyChanged implementation
+- [x] Create `ViewModels/DashboardViewModel.cs`
+  - [x] Connection status property (bound to telemetry service)
+  - [x] Uptime calculation with timer
+  - [x] Active widget count tracking
+  - [x] Update rate tracking
+  - [x] INotifyPropertyChanged implementation
+  - [x] Initial connection status detection
+  - [x] Widget change event handling
 
-- [ ] Wire up Dashboard to MainWindow navigation
-- [ ] Test connection status updates in real-time
-- [ ] Build and verify dashboard displays correctly
+- [x] Wire up Dashboard to MainWindow navigation
+- [x] Test connection status updates in real-time
+- [x] Build and verify dashboard displays correctly
+- [x] Fix icon updates when connection status changes
+- [x] Add military time format (24-hour)
 
 **Deliverables:**
 - ✅ Functional dashboard showing connection status
 - ✅ Real-time status updates from telemetry service
 - ✅ Clean, professional layout with MRT branding
+- ✅ Live uptime counter
+- ✅ Widget tracking integration
 
 ---
 
-### Day 4-5: Overlay Manager View (Widget Management)
+### Day 4-5: Overlay Manager View (Widget Management) ⏳
 **Goal:** Create widget management interface with toggles and configuration
 
 #### Overlay View - Widget List
