@@ -68,3 +68,26 @@ public class InverseBoolConverter : IValueConverter
         return true;
     }
 }
+
+/// <summary>
+/// Converts widget item to "Active" tag (for button styling in Overlay Manager)
+/// Similar to TabActiveConverter but compares objects instead of strings
+/// </summary>
+public class WidgetSelectionConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        // value = SelectedWidget, parameter = current widget item
+        if (value != null && parameter != null && value == parameter)
+        {
+            return "Active";
+        }
+        return string.Empty;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+

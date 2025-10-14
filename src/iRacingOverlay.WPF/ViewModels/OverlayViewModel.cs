@@ -19,33 +19,28 @@ public class OverlayViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<WidgetItemViewModel> Widgets { get; }
+    
+    public ICommand SelectWidgetCommand { get; }
 
     public WidgetItemViewModel? SelectedWidget
     {
         get => _selectedWidget;
         set
         {
-            // Deselect previous widget
-            if (_selectedWidget != null)
+            if (_selectedWidget != value)
             {
-                _selectedWidget.IsSelected = false;
+                _selectedWidget = value;
+                OnPropertyChanged();
             }
-            
-            _selectedWidget = value;
-            
-            // Select new widget
-            if (_selectedWidget != null)
-            {
-                _selectedWidget.IsSelected = true;
-            }
-            
-            OnPropertyChanged();
         }
     }
 
     public OverlayViewModel(WidgetManager widgetManager)
     {
         _widgetManager = widgetManager;
+
+        // Initialize commands
+        SelectWidgetCommand = new RelayCommand<WidgetItemViewModel>(OnSelectWidget);
 
         // Initialize widget list with all available widget types
         Widgets = new ObservableCollection<WidgetItemViewModel>
@@ -78,6 +73,11 @@ public class OverlayViewModel : INotifyPropertyChanged
         _updateTimer.Start();
     }
 
+    private void OnSelectWidget(WidgetItemViewModel? widget)
+    {
+        SelectedWidget = widget;
+    }
+
     private void OnWidgetCreated(object? sender, Core.WidgetBase e)
     {
         // Update the corresponding widget item's state
@@ -107,7 +107,6 @@ public class WidgetItemViewModel : INotifyPropertyChanged
 {
     private readonly WidgetManager _widgetManager;
     private bool _isActive;
-    private bool _isSelected;
     private double _opacity;
     private double _scale;
     private string _position;
@@ -117,16 +116,6 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     public string Name { get; }
     public WidgetType Type { get; }
     public string Icon { get; }
-
-    public bool IsSelected
-    {
-        get => _isSelected;
-        set
-        {
-            _isSelected = value;
-            OnPropertyChanged();
-        }
-    }
 
     public bool IsActive
     {
@@ -219,7 +208,6 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         _scale = 1.0;
         _position = "N/A";
         _isActive = false;
-        _isSelected = false;
         
         ToggleActiveCommand = new RelayCommand(ToggleActive);
     }
