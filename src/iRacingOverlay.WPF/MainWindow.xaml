@@ -99,8 +99,5 @@
                 </StackPanel>
             </Grid>
         </Border>
-                           VerticalAlignment="Center"/>
-            </Grid>
-        </Border>
     </Grid>
 </Window>

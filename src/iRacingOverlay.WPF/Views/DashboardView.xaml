@@ -212,16 +212,12 @@
                             <TextBlock Text="📦 Version Info" 
                                        FontSize="14"
                                        Foreground="{StaticResource MutedText}"
-                                       HorizontalAlignment="Center"/>
-                            <TextBlock Text="MRT UI v0.5" 
-                                       FontSize="20" 
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource LightText}"
                                        HorizontalAlignment="Center"
-                                       Margin="0,10,0,5"/>
-                            <TextBlock Text="Phase 1 - Day 10" 
-                                       FontSize="12"
-                                       Foreground="{StaticResource MutedText}"
+                                       Margin="0,0,0,10"/>
+                            <TextBlock Text="MRT UI v0.5.0" 
+                                       FontSize="22" 
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource TealPrimary}"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Grid>

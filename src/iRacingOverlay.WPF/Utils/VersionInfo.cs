@@ -14,13 +14,15 @@ public static class VersionInfo
 
     /// <summary>
     /// Formatted version string with 'v' prefix for display.
+    /// Example: "v0.5.0"
     /// </summary>
     public static string DisplayVersion => $"v{APP_VERSION}";
 
     /// <summary>
-    /// Short version string for status bar (no 'v' prefix, no patch).
+    /// Full version string with "Version" prefix for status bar.
+    /// Example: "Version 0.5.0"
     /// </summary>
-    public static string ShortVersion => $"Version {APP_VERSION.Substring(0, 3)}"; // "Version 0.5"
+    public static string FullVersion => $"Version {APP_VERSION}";
 
     /// <summary>
     /// iRacing SDK version currently in use.

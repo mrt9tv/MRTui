@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Core;
@@ -26,6 +27,9 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             InitializeComponent();
             
+            // Subscribe to SizeChanged to update scale transform
+            SizeChanged += OnWidgetSizeChanged;
+            
             // Apply default size if not specified in config
             if (Config.Width == 0 || Config.Height == 0)
             {
@@ -34,6 +38,23 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 Config.Width = 280;
                 Config.Height = 220;
             }
+        }
+        
+        /// <summary>
+        /// Handle widget resize by scaling the content via LayoutTransform.
+        /// This prevents content shift by maintaining relative positions of all elements.
+        /// </summary>
+        private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // Calculate scale factors based on original 280x220 design
+            double scaleX = ActualWidth / 280.0;
+            double scaleY = ActualHeight / 220.0;
+            
+            // Use uniform scale (smallest of the two to maintain aspect ratio)
+            double scale = Math.Min(scaleX, scaleY);
+            
+            // Apply scale transform to the entire grid
+            MainGrid.LayoutTransform = new ScaleTransform(scale, scale);
         }
 
         protected override void UpdateUI(TelemetryData data)

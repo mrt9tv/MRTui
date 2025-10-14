@@ -50,8 +50,8 @@ public partial class MainWindow : Window
         // Initialize status bar with current connection status
         UpdateConnectionStatus(_telemetryService.Status);
 
-        // Set version text from centralized source
-        VersionText.Text = VersionInfo.ShortVersion;
+        // Set version text from centralized source (full version)
+        VersionText.Text = VersionInfo.FullVersion;
 
         NavigateToHome();
     }

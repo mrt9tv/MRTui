@@ -38,10 +38,12 @@ public class DataWidget : WidgetBase
         // Subscribe to settings changes to update temperature unit indicators
         AppSettings.Instance.SettingsChanged += OnSettingsChanged;
 
-        // Create main grid (2 columns x 3 rows)
+        // Create main grid (2 columns x 3 rows) with fixed design dimensions
         _mainGrid = new Grid
         {
-            Background = Brushes.Transparent
+            Background = Brushes.Transparent,
+            Width = 420,
+            Height = 300
         };
 
         // Define columns (fixed width for better text fitting)
@@ -76,8 +78,28 @@ public class DataWidget : WidgetBase
 
         Content = _border;
         
+        // Subscribe to SizeChanged to update scale transform
+        SizeChanged += OnWidgetSizeChanged;
+        
         // Initialize with all cells collapsed since they all start as None
         UpdateGridLayout();
+    }
+    
+    /// <summary>
+    /// Handle widget resize by scaling the content via LayoutTransform.
+    /// This prevents content shift by maintaining relative positions of all elements.
+    /// </summary>
+    private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Calculate scale factors based on original 420x300 design
+        double scaleX = ActualWidth / 420.0;
+        double scaleY = ActualHeight / 300.0;
+        
+        // Use uniform scale (smallest of the two to maintain aspect ratio)
+        double scale = Math.Min(scaleX, scaleY);
+        
+        // Apply scale transform to the entire grid
+        _mainGrid.LayoutTransform = new ScaleTransform(scale, scale);
     }
 
     /// <summary>

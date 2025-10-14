@@ -10,7 +10,7 @@
             BorderThickness="2" 
             CornerRadius="8"
             Padding="12">
-        <Grid>
+        <Grid x:Name="MainGrid" Width="280" Height="220">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="8"/>
