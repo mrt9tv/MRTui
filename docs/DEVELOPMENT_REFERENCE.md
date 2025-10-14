@@ -459,10 +459,20 @@ widget.Config.Opacity = 0.8;  // Does not exist!
 ```xml
 <!-- ❌ WRONG -->
 <CheckBox Style="{StaticResource ToggleSwitchStyle}"/>
+<Button Style="{StaticResource SecondaryButton}"/>
+<TextBlock Foreground="{StaticResource MRT.Foreground}"/>  <!-- Doesn't exist! -->
 
 <!-- ✅ CORRECT -->
 <CheckBox Style="{StaticResource MRT.ToggleButton}"/>
+<Button Style="{StaticResource MRT.Button.Secondary}"/>
+<TextBlock Foreground="{StaticResource MRT.White}"/>  <!-- Use MRT.White or LightText -->
 ```
+
+**Common Mistakes:**
+- `MRT.Foreground` → Use `MRT.White` or `LightText`
+- `ToggleSwitchStyle` → Use `MRT.ToggleButton`
+- `MRTSlider` → Use `MRT.Slider`
+- `SecondaryButton` → Use `MRT.Button.Secondary`
 
 ### Pitfall 2: Widget Opacity Not Working
 **Symptom:** Setting opacity doesn't change widget transparency  
