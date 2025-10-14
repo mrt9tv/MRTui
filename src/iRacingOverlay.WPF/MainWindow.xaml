@@ -71,7 +71,7 @@
             <Grid Margin="30,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="ConnectionStatusText" 
-                               Text="🔴 Disconnected" 
+                               Text="🤌 Disconnected" 
                                FontSize="14"
                                Foreground="{StaticResource LightText}"
                                Margin="0,0,20,0"/>

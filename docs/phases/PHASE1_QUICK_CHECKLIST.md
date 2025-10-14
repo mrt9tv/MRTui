@@ -4,7 +4,7 @@
 
 ---
 
-## 🎯 Overall Progress: 40% Complete
+## 🎯 Overall Progress: 60% Complete
 
 ### Pre-Phase Setup ✅
 - [x] Requirements analysis complete
@@ -35,13 +35,18 @@
 - [x] Military time format (24-hour)
 - [x] Fix initial connection status detection
 
-### Day 4-5: Overlay Manager ⏳
-- [ ] Create OverlayView.xaml
-- [ ] Create OverlayViewModel.cs
-- [ ] List all 4 widgets with toggles
-- [ ] Add opacity/size sliders
-- [ ] Rename GearGauge → "The MRT Simplicity"
-- [ ] Test widget controls work
+### Day 4-5: Overlay Manager ✅
+- [x] Create OverlayView.xaml (3-panel layout)
+- [x] Create OverlayViewModel.cs with WidgetItemViewModel
+- [x] List all 4 widgets with toggle switches
+- [x] Add opacity slider (10-100%)
+- [x] Add size slider (50-200%)
+- [x] Display "The MRT Simplicity" for GearGauge
+- [x] Wire up to MainWindow navigation
+- [x] Test widget ON/OFF toggles work
+- [x] Test opacity changes apply in real-time
+- [x] Test size changes apply in real-time
+- [x] Position tracking (X, Y display)
 
 ---
 

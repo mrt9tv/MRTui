@@ -37,7 +37,7 @@ public class DashboardViewModel : INotifyPropertyChanged
         // Initialize properties
         _connectionStatus = ConnectionStatus.Disconnected;
         _connectionStatusText = "iRacing Not Running";
-        _connectionStatusIcon = "🔴";
+        _connectionStatusIcon = "🤌";
         _sessionInfo = "No active session";
         _activeWidgetCount = 0;
         _activeWidgetsList = "No widgets active";
@@ -131,7 +131,7 @@ public class DashboardViewModel : INotifyPropertyChanged
         switch (e.Status)
         {
             case ConnectionStatus.Connected:
-                ConnectionStatusIcon = "🟢";
+                ConnectionStatusIcon = "🏁";
                 ConnectionStatusText = "Connected to iRacing";
                 LastConnectionTime = DateTime.Now.ToString("HH:mm:ss");
                 SessionInfo = "Session active - Data streaming";
@@ -139,14 +139,14 @@ public class DashboardViewModel : INotifyPropertyChanged
                 break;
             
             case ConnectionStatus.Connecting:
-                ConnectionStatusIcon = "🟡";
+                ConnectionStatusIcon = "🤞";
                 ConnectionStatusText = "Connecting to iRacing...";
                 SessionInfo = "Waiting for session data...";
                 UpdateRate = 0.0;
                 break;
             
             case ConnectionStatus.Disconnected:
-                ConnectionStatusIcon = "🔴";
+                ConnectionStatusIcon = "🤌";
                 ConnectionStatusText = "iRacing Not Running";
                 SessionInfo = "No active session";
                 UpdateRate = 0.0;

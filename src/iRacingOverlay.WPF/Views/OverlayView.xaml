@@ -1,0 +1,289 @@
+<UserControl x:Class="iRacingOverlay.WPF.Views.OverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" 
+             d:DesignHeight="900" d:DesignWidth="1200"
+             Background="{StaticResource DarkBackground}">
+    <Grid Margin="30">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Text="🎮 Overlay Manager" 
+                   FontSize="28" 
+                   FontWeight="Bold"
+                   Foreground="{StaticResource TealPrimary}"
+                   Margin="0,0,0,30"/>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="350"/>
+                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="350"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: Widget List -->
+            <Border Grid.Column="0" 
+                    Background="{StaticResource DarkSurface}"
+                    BorderBrush="{StaticResource TealPrimary}"
+                    BorderThickness="2"
+                    CornerRadius="10"
+                    Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Available Widgets" 
+                               FontSize="18" 
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TealPrimary}"
+                               Margin="0,0,0,20"/>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding Widgets}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{StaticResource DarkBackground}"
+                                            BorderBrush="{StaticResource DarkBorder}"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            Padding="15"
+                                            Margin="0,0,0,15">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="40"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Widget Icon -->
+                                            <TextBlock Grid.Column="0" 
+                                                      Text="{Binding Icon}" 
+                                                      FontSize="24"
+                                                      VerticalAlignment="Center"
+                                                      HorizontalAlignment="Center"/>
+
+                                            <!-- Widget Name -->
+                                            <StackPanel Grid.Column="1" 
+                                                       VerticalAlignment="Center"
+                                                       Margin="10,0,10,0">
+                                                <TextBlock Text="{Binding Name}" 
+                                                          FontSize="14"
+                                                          FontWeight="SemiBold"
+                                                          Foreground="{StaticResource LightText}"/>
+                                                <TextBlock Text="{Binding Position}" 
+                                                          FontSize="11"
+                                                          Foreground="{StaticResource MutedText}"
+                                                          Margin="0,2,0,0"/>
+                                            </StackPanel>
+
+                                            <!-- Toggle Switch -->
+                                            <CheckBox Grid.Column="2" 
+                                                     Style="{StaticResource ToggleSwitchStyle}"
+                                                     IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                     VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- Center Panel: Live Preview Placeholder -->
+            <Border Grid.Column="2" 
+                    Background="{StaticResource DarkSurface}"
+                    BorderBrush="{StaticResource DarkBorder}"
+                    BorderThickness="2"
+                    CornerRadius="10"
+                    Padding="20">
+                <StackPanel VerticalAlignment="Center" 
+                           HorizontalAlignment="Center">
+                    <TextBlock Text="🖼️" 
+                              FontSize="64"
+                              HorizontalAlignment="Center"
+                              Opacity="0.3"
+                              Margin="0,0,0,20"/>
+                    <TextBlock Text="Live Preview" 
+                              FontSize="24"
+                              FontWeight="Bold"
+                              Foreground="{StaticResource MutedText}"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,10"/>
+                    <TextBlock Text="Coming Soon" 
+                              FontSize="16"
+                              Foreground="{StaticResource MutedText}"
+                              HorizontalAlignment="Center"
+                              Margin="0,0,0,20"/>
+                    <TextBlock Text="Changes apply to widgets immediately" 
+                              FontSize="12"
+                              Foreground="{StaticResource MutedText}"
+                              HorizontalAlignment="Center"
+                              TextWrapping="Wrap"
+                              TextAlignment="Center"
+                              MaxWidth="300"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Right Panel: Widget Configuration -->
+            <Border Grid.Column="4" 
+                    Background="{StaticResource DarkSurface}"
+                    BorderBrush="{StaticResource OrangePrimary}"
+                    BorderThickness="2"
+                    CornerRadius="10"
+                    Padding="20">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Widget Configuration" 
+                               FontSize="18" 
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource OrangePrimary}"
+                               Margin="0,0,0,20"/>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel DataContext="{Binding SelectedWidget}">
+                            <!-- Widget Info -->
+                            <Border Background="{StaticResource DarkBackground}"
+                                   BorderBrush="{StaticResource DarkBorder}"
+                                   BorderThickness="1"
+                                   CornerRadius="8"
+                                   Padding="15"
+                                   Margin="0,0,0,20">
+                                <StackPanel>
+                                    <TextBlock Text="Selected Widget" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource MutedText}"
+                                              Margin="0,0,0,5"/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Icon}" 
+                                                  FontSize="20"
+                                                  Margin="0,0,10,0"/>
+                                        <TextBlock Text="{Binding Name}" 
+                                                  FontSize="16"
+                                                  FontWeight="SemiBold"
+                                                  Foreground="{StaticResource LightText}"
+                                                  VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Position}" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource MutedText}"
+                                              Margin="0,5,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Opacity Slider -->
+                            <StackPanel Margin="0,0,0,25">
+                                <Grid Margin="0,0,0,10">
+                                    <TextBlock Text="Opacity" 
+                                              FontSize="14"
+                                              FontWeight="SemiBold"
+                                              Foreground="{StaticResource LightText}"/>
+                                    <TextBlock Text="{Binding OpacityPercentage}" 
+                                              FontSize="14"
+                                              FontWeight="Bold"
+                                              Foreground="{StaticResource OrangePrimary}"
+                                              HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Slider Value="{Binding Opacity, Mode=TwoWay}"
+                                       Minimum="0.1"
+                                       Maximum="1.0"
+                                       TickFrequency="0.1"
+                                       IsSnapToTickEnabled="True"
+                                       Style="{StaticResource MRTSlider}"
+                                       IsEnabled="{Binding IsActive}"/>
+                                <Grid Margin="0,5,0,0">
+                                    <TextBlock Text="10%" 
+                                              FontSize="11"
+                                              Foreground="{StaticResource MutedText}"/>
+                                    <TextBlock Text="100%" 
+                                              FontSize="11"
+                                              Foreground="{StaticResource MutedText}"
+                                              HorizontalAlignment="Right"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- Size Slider -->
+                            <StackPanel Margin="0,0,0,25">
+                                <Grid Margin="0,0,0,10">
+                                    <TextBlock Text="Size" 
+                                              FontSize="14"
+                                              FontWeight="SemiBold"
+                                              Foreground="{StaticResource LightText}"/>
+                                    <TextBlock Text="{Binding ScalePercentage}" 
+                                              FontSize="14"
+                                              FontWeight="Bold"
+                                              Foreground="{StaticResource OrangePrimary}"
+                                              HorizontalAlignment="Right"/>
+                                </Grid>
+                                <Slider Value="{Binding Scale, Mode=TwoWay}"
+                                       Minimum="0.5"
+                                       Maximum="2.0"
+                                       TickFrequency="0.1"
+                                       IsSnapToTickEnabled="True"
+                                       Style="{StaticResource MRTSlider}"
+                                       IsEnabled="{Binding IsActive}"/>
+                                <Grid Margin="0,5,0,0">
+                                    <TextBlock Text="50%" 
+                                              FontSize="11"
+                                              Foreground="{StaticResource MutedText}"/>
+                                    <TextBlock Text="200%" 
+                                              FontSize="11"
+                                              Foreground="{StaticResource MutedText}"
+                                              HorizontalAlignment="Right"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- Widget-Specific Settings Placeholder -->
+                            <Border Background="{StaticResource DarkBackground}"
+                                   BorderBrush="{StaticResource DarkBorder}"
+                                   BorderThickness="1"
+                                   CornerRadius="8"
+                                   Padding="15"
+                                   Margin="0,0,0,20">
+                                <StackPanel>
+                                    <TextBlock Text="Widget-Specific Settings" 
+                                              FontSize="14"
+                                              FontWeight="SemiBold"
+                                              Foreground="{StaticResource MutedText}"
+                                              Margin="0,0,0,10"/>
+                                    <TextBlock Text="Coming in Phase 1.5" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource MutedText}"
+                                              TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Action Buttons -->
+                            <StackPanel Orientation="Horizontal" 
+                                       HorizontalAlignment="Right">
+                                <Button Content="Reset Position" 
+                                       Style="{StaticResource SecondaryButton}"
+                                       IsEnabled="{Binding IsActive}"
+                                       Margin="0,0,10,0"
+                                       Padding="15,8"/>
+                                <Button Content="Reset All" 
+                                       Style="{StaticResource SecondaryButton}"
+                                       IsEnabled="{Binding IsActive}"
+                                       Padding="15,8"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

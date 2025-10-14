@@ -28,6 +28,9 @@ public partial class MainWindow : Window
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
         KeyDown += MainWindow_KeyDown;
 
+        // Initialize status bar with current connection status
+        UpdateConnectionStatus(_telemetryService.Status);
+
         NavigateToHome();
     }
 
@@ -65,15 +68,9 @@ public partial class MainWindow : Window
 
     private void NavigateToOverlay()
     {
-        ContentFrame.Content = new TextBlock
-        {
-            Text = "🎮 Overlay Manager View\n\nComing soon...",
-            FontSize = 24,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 128, 128)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextAlignment = TextAlignment.Center
-        };
+        var viewModel = new OverlayViewModel(_widgetManager);
+        var overlayView = new OverlayView(viewModel);
+        ContentFrame.Content = overlayView;
         SetActiveButton(BtnOverlay);
     }
 
@@ -109,9 +106,9 @@ public partial class MainWindow : Window
     {
         ConnectionStatusText.Text = status switch
         {
-            ConnectionStatus.Connected => "🟢 Connected",
-            ConnectionStatus.Connecting => "🟡 Connecting...",
-            ConnectionStatus.Disconnected => "🔴 Disconnected",
+            ConnectionStatus.Connected => "🏁 Connected",
+            ConnectionStatus.Connecting => "🤞 Connecting...",
+            ConnectionStatus.Disconnected => "🤌 Disconnected",
             _ => "❓ Unknown"
         };
     }
