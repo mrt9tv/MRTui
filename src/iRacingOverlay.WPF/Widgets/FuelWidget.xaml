@@ -1,0 +1,124 @@
+<core:WidgetBase x:Class="iRacingOverlay.WPF.Widgets.FuelWidget"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:core="clr-namespace:iRacingOverlay.WPF.Core"
+        Title="Fuel Calculator"
+        Width="280" Height="220">
+
+    <Border Background="#DD000000" 
+            BorderBrush="#008080" 
+            BorderThickness="2" 
+            CornerRadius="8"
+            Padding="12">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Title -->
+            <TextBlock Grid.Row="0" 
+                       Text="⛽ FUEL CALCULATOR"
+                       FontSize="16"
+                       FontWeight="Bold"
+                       Foreground="#008080"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,4"/>
+
+            <!-- Current Fuel Level -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0"
+                           Text="Current Fuel:"
+                           FontSize="13"
+                           Foreground="White"
+                           VerticalAlignment="Center"/>
+                
+                <TextBlock Grid.Column="1"
+                           x:Name="CurrentFuelText"
+                           Text="0.0 L"
+                           FontSize="15"
+                           FontWeight="Bold"
+                           Foreground="#008080"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Fuel Used Last Lap -->
+            <Grid Grid.Row="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0"
+                           Text="Used Last Lap:"
+                           FontSize="13"
+                           Foreground="White"
+                           VerticalAlignment="Center"/>
+                
+                <TextBlock Grid.Column="1"
+                           x:Name="UsedLastLapText"
+                           Text="0.0 L"
+                           FontSize="15"
+                           FontWeight="Bold"
+                           Foreground="#FF8000"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Average Fuel Per Lap -->
+            <Grid Grid.Row="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0"
+                           Text="Avg Per Lap:"
+                           FontSize="13"
+                           Foreground="White"
+                           VerticalAlignment="Center"/>
+                
+                <TextBlock Grid.Column="1"
+                           x:Name="AvgPerLapText"
+                           Text="0.0 L"
+                           FontSize="15"
+                           FontWeight="Bold"
+                           Foreground="#008080"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- Laps Remaining -->
+            <Grid Grid.Row="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0"
+                           Text="Laps Remaining:"
+                           FontSize="13"
+                           Foreground="White"
+                           VerticalAlignment="Center"/>
+                
+                <TextBlock Grid.Column="1"
+                           x:Name="LapsRemainingText"
+                           Text="0.0"
+                           FontSize="15"
+                           FontWeight="Bold"
+                           Foreground="#FFFF00"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Grid>
+    </Border>
+</core:WidgetBase>
