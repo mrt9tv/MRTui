@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
@@ -17,6 +18,8 @@ public partial class MainWindow : Window
     private readonly WidgetManager _widgetManager;
     private readonly ITelemetryService _telemetryService;
     private readonly IServiceProvider _services;
+    private readonly DispatcherTimer _uptimeTimer;
+    private readonly DateTime _startTime;
 
     public MainWindow(IServiceProvider services)
     {
@@ -25,6 +28,7 @@ public partial class MainWindow : Window
         _services = services;
         _widgetManager = services.GetRequiredService<WidgetManager>();
         _telemetryService = services.GetRequiredService<ITelemetryService>();
+        _startTime = DateTime.Now;
 
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
         KeyDown += MainWindow_KeyDown;
@@ -32,6 +36,14 @@ public partial class MainWindow : Window
         LocationChanged += MainWindow_LocationChanged;
         SizeChanged += MainWindow_SizeChanged;
         StateChanged += MainWindow_StateChanged;
+
+        // Setup uptime timer for status bar
+        _uptimeTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _uptimeTimer.Tick += (s, e) => UpdateUptimeDisplay();
+        _uptimeTimer.Start();
 
         // Load and apply saved settings
         ApplyWindowSettings();
@@ -114,6 +126,12 @@ public partial class MainWindow : Window
             ConnectionStatus.Disconnected => "🤌 Disconnected",
             _ => "❓ Unknown"
         };
+    }
+
+    private void UpdateUptimeDisplay()
+    {
+        var uptime = DateTime.Now - _startTime;
+        UptimeText.Text = $"{uptime.Hours:D2}:{uptime.Minutes:D2}:{uptime.Seconds:D2}";
     }
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)

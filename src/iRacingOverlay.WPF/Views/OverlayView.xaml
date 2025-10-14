@@ -121,7 +121,7 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="40">
-                <StackPanel DataContext="{Binding SelectedWidget}">
+                <StackPanel DataContext="{Binding SelectedWidget}" MaxWidth="600" HorizontalAlignment="Left">
                     <!-- Activate/Deactivate Button -->
                     <Button Command="{Binding ToggleActiveCommand}"
                            Height="50"

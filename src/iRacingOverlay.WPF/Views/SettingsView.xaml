@@ -123,7 +123,7 @@
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       Padding="40">
-            <StackPanel>
+            <StackPanel MaxWidth="700" HorizontalAlignment="Left">
                 <!-- General Settings Tab -->
                 <StackPanel Visibility="{Binding SelectedTab, Converter={StaticResource TabVisibilityConverter}, ConverterParameter=General}">
                     <TextBlock Text="General Settings" Style="{StaticResource SectionHeaderStyle}"/>
