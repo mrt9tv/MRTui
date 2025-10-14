@@ -99,6 +99,13 @@ public abstract class WidgetBase : Window
                 // Swallow this exception
             }
         };
+        
+        // Subscribe to LocationChanged to update config when window moves
+        LocationChanged += (sender, e) =>
+        {
+            Config.X = Left;
+            Config.Y = Top;
+        };
     }
 
     /// <summary>

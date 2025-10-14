@@ -60,3 +60,31 @@ public enum WidgetType
     /// </summary>
     Tires
 }
+
+/// <summary>
+/// Helper class for WidgetType display names
+/// </summary>
+public static class WidgetTypeExtensions
+{
+    /// <summary>
+    /// Get user-friendly display name for a widget type
+    /// </summary>
+    public static string GetDisplayName(this WidgetType type)
+    {
+        return type switch
+        {
+            WidgetType.GearGauge => "The MRT Simplicity",
+            WidgetType.Speed => "Speed Widget",
+            WidgetType.Data => "Data Widget",
+            WidgetType.Fuel => "Fuel Calculator",
+            WidgetType.TelemetryTable => "Telemetry Table",
+            WidgetType.RPMGauge => "RPM Gauge",
+            WidgetType.Temperature => "Temperature",
+            WidgetType.LapTimes => "Lap Times",
+            WidgetType.Gear => "Gear Indicator",
+            WidgetType.Inputs => "Input Bars",
+            WidgetType.Tires => "Tire Monitor",
+            _ => type.ToString()
+        };
+    }
+}

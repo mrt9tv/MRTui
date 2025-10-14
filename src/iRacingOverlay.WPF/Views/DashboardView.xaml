@@ -16,10 +16,6 @@
                            FontSize="28" 
                            FontWeight="Bold"
                            Foreground="{StaticResource LightText}"/>
-                <TextBlock Text="Monitor connection status and active widgets" 
-                           FontSize="14"
-                           Foreground="{StaticResource MutedText}"
-                           Margin="0,5,0,0"/>
             </StackPanel>
             
             <!-- Cards Grid -->

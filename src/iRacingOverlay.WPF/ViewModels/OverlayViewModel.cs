@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using System.Windows.Threading;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Services;
 
@@ -12,6 +13,7 @@ namespace iRacingOverlay.WPF.ViewModels;
 public class OverlayViewModel : INotifyPropertyChanged
 {
     private readonly WidgetManager _widgetManager;
+    private readonly DispatcherTimer _updateTimer;
     private WidgetItemViewModel? _selectedWidget;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -66,6 +68,14 @@ public class OverlayViewModel : INotifyPropertyChanged
 
         // Select first widget by default
         SelectedWidget = Widgets.FirstOrDefault();
+        
+        // Setup timer to update selected widget position periodically
+        _updateTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500) // Update every 500ms
+        };
+        _updateTimer.Tick += (s, e) => SelectedWidget?.UpdateState();
+        _updateTimer.Start();
     }
 
     private void OnWidgetCreated(object? sender, Core.WidgetBase e)

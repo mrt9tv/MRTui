@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Threading;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
+using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Services;
 
 namespace iRacingOverlay.WPF.ViewModels;
@@ -174,12 +175,12 @@ public class DashboardViewModel : INotifyPropertyChanged
         }
         else
         {
-            var widgetTypes = _widgetManager.ActiveWidgets.Values
-                .Select(w => w.GetType().Name.Replace("Widget", ""))
+            var widgetNames = _widgetManager.ActiveWidgets.Values
+                .Select(w => w.WidgetType.GetDisplayName())
                 .Distinct()
                 .OrderBy(name => name);
             
-            ActiveWidgetsList = string.Join(", ", widgetTypes);
+            ActiveWidgetsList = string.Join(", ", widgetNames);
         }
     }
 

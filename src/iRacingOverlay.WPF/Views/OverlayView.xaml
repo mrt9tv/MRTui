@@ -8,19 +8,11 @@
              Background="{StaticResource DarkBackground}">
     <Grid Margin="30">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <TextBlock Text="🎮 Overlay Manager" 
-                   FontSize="28" 
-                   FontWeight="Bold"
-                   Foreground="{StaticResource TealPrimary}"
-                   Margin="0,0,0,30"/>
-
         <!-- Main Content Area -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="350"/>
                 <ColumnDefinition Width="20"/>
@@ -78,12 +70,14 @@
                                                 </Setter>
                                                 <Style.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="{StaticResource DarkSurface}"/>
+                                                        <Setter Property="Background" Value="#2F2F2F"/>
+                                                        <Setter Property="BorderBrush" Value="{StaticResource OrangePrimary}"/>
+                                                        <Setter Property="BorderThickness" Value="1"/>
                                                     </Trigger>
                                                     <DataTrigger Binding="{Binding IsSelected}" Value="True">
                                                         <Setter Property="BorderBrush" Value="{StaticResource TealPrimary}"/>
                                                         <Setter Property="BorderThickness" Value="2"/>
-                                                        <Setter Property="Background" Value="{StaticResource DarkSurface}"/>
+                                                        <Setter Property="Background" Value="#1E3A3A"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
@@ -201,11 +195,7 @@
                                    Padding="15"
                                    Margin="0,0,0,20">
                                 <StackPanel>
-                                    <TextBlock Text="Selected Widget" 
-                                              FontSize="12"
-                                              Foreground="{StaticResource MutedText}"
-                                              Margin="0,0,0,5"/>
-                                    <StackPanel Orientation="Horizontal">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
                                         <TextBlock Text="{Binding Icon}" 
                                                   FontSize="20"
                                                   Margin="0,0,10,0"/>
@@ -217,28 +207,31 @@
                                     </StackPanel>
                                     <TextBlock Text="{Binding Position}" 
                                               FontSize="12"
-                                              Foreground="{StaticResource MutedText}"
-                                              Margin="0,5,0,0"/>
+                                              Foreground="{StaticResource MutedText}"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- Activate/Deactivate Button -->
                             <Button Command="{Binding ToggleActiveCommand}"
                                    Height="50"
-                                   Margin="0,0,0,25"
-                                   Style="{StaticResource MRT.Button.Primary}">
+                                   Margin="0,0,0,25">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource MRT.Button.Primary}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                <Setter Property="Background" Value="#D32F2F"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                <Setter Property="Background" Value="#388E3C"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
                                 <Button.Content>
-                                    <StackPanel Orientation="Horizontal" 
-                                               HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding ActivateButtonIcon}" 
-                                                  FontSize="18"
-                                                  Margin="0,0,10,0"
-                                                  VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding ActivateButtonText}" 
-                                                  FontSize="16"
-                                                  FontWeight="SemiBold"
-                                                  VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                    <TextBlock Text="{Binding ActivateButtonText}" 
+                                              FontSize="16"
+                                              FontWeight="SemiBold"
+                                              HorizontalAlignment="Center"/>
                                 </Button.Content>
                             </Button>
 
