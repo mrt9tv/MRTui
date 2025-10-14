@@ -20,8 +20,8 @@ public class DataWidget : WidgetBase
 {
     private readonly Grid _mainGrid;
     private readonly Border _border;
-    private readonly Color _primaryColor = Color.FromRgb(0, 128, 128); // Teal #008080
-    private readonly Color _secondaryColor = Color.FromRgb(255, 128, 0); // Orange #FF8000
+    private readonly System.Windows.Media.Color _primaryColor = System.Windows.Media.Color.FromRgb(0, 128, 128); // Teal #008080
+    private readonly System.Windows.Media.Color _secondaryColor = System.Windows.Media.Color.FromRgb(255, 128, 0); // Orange #FF8000
     
     // Store cell components
     private readonly List<DataCell> _dataCells = new();
@@ -358,7 +358,7 @@ public class DataWidget : WidgetBase
     /// <summary>
     /// Format field value and determine color
     /// </summary>
-    private (string text, Color color) FormatFieldValueAndColor(TelemetryField field, object? value, TelemetryData data)
+    private (string text, System.Windows.Media.Color color) FormatFieldValueAndColor(TelemetryField field, object? value, TelemetryData data)
     {
         if (value == null)
             return ("---", Colors.Gray);
@@ -719,7 +719,7 @@ public class DataWidget : WidgetBase
         public int Column { get; set; }
         public TelemetryField Field { get; set; }
         public Border Container { get; set; } = null!;
-        public ComboBox FieldSelector { get; set; } = null!;
+        public System.Windows.Controls.ComboBox FieldSelector { get; set; } = null!;
         public TextBlock Label { get; set; } = null!;
         public TextBlock Value { get; set; } = null!;
     }

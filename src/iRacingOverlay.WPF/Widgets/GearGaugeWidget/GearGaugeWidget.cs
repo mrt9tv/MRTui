@@ -51,8 +51,8 @@ public class GearGaugeWidget : WidgetBase
     private bool _blinkState = false;
     
     // Theme colors
-    private Color _primaryColor;   // Teal #008080
-    private Color _secondaryColor; // Orange #FF8000
+    private System.Windows.Media.Color _primaryColor;   // Teal #008080
+    private System.Windows.Media.Color _secondaryColor; // Orange #FF8000
     
     // Configurable opacity
     private double _backgroundOpacity = 0.85;
@@ -390,7 +390,7 @@ public class GearGaugeWidget : WidgetBase
         };
     }
     
-    private Color GetValueColor(TelemetryField field, object value, TelemetryData data)
+    private System.Windows.Media.Color GetValueColor(TelemetryField field, object value, TelemetryData data)
     {
         if (value is not float floatValue)
             return _primaryColor; // Default to teal

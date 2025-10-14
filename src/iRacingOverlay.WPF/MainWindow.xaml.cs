@@ -9,7 +9,6 @@ using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Views;
 using iRacingOverlay.WPF.ViewModels;
 using iRacingOverlay.WPF.Models;
-using WinForms = System.Windows.Forms;
 
 namespace iRacingOverlay.WPF;
 
@@ -92,7 +91,7 @@ public partial class MainWindow : Window
         SetActiveButton(BtnSettings);
     }
 
-    private void SetActiveButton(Button activeButton)
+    private void SetActiveButton(System.Windows.Controls.Button activeButton)
     {
         BtnHome.Tag = null;
         BtnDashboard.Tag = null;
@@ -185,19 +184,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Check if a window position is visible on any screen
+    /// Check if a window position is visible on screen (simplified - uses primary screen bounds)
     /// </summary>
     private bool IsPositionOnScreen(double left, double top)
     {
-        var rect = new System.Drawing.Rectangle((int)left, (int)top, (int)Width, (int)Height);
-        foreach (var screen in WinForms.Screen.AllScreens)
-        {
-            if (screen.WorkingArea.IntersectsWith(rect))
-            {
-                return true;
-            }
-        }
-        return false;
+        // Simple check: is the window top-left corner within the virtual screen bounds?
+        return left >= SystemParameters.VirtualScreenLeft && 
+               left < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth &&
+               top >= SystemParameters.VirtualScreenTop &&
+               top < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight;
     }
 
     /// <summary>

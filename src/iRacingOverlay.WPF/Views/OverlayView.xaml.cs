@@ -4,7 +4,7 @@ using iRacingOverlay.WPF.ViewModels;
 
 namespace iRacingOverlay.WPF.Views;
 
-public partial class OverlayView : UserControl
+public partial class OverlayView : System.Windows.Controls.UserControl
 {
     public OverlayView(OverlayViewModel viewModel)
     {

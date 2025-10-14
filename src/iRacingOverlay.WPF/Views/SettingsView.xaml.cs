@@ -3,7 +3,7 @@ using iRacingOverlay.WPF.ViewModels;
 
 namespace iRacingOverlay.WPF.Views;
 
-public partial class SettingsView : UserControl
+public partial class SettingsView : System.Windows.Controls.UserControl
 {
     public SettingsView(SettingsViewModel viewModel)
     {
