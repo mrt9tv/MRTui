@@ -88,7 +88,7 @@
 
                                             <!-- Toggle Switch -->
                                             <CheckBox Grid.Column="2" 
-                                                     Style="{StaticResource ToggleSwitchStyle}"
+                                                     Style="{StaticResource MRT.ToggleButton}"
                                                      IsChecked="{Binding IsActive, Mode=TwoWay}"
                                                      VerticalAlignment="Center"/>
                                         </Grid>
@@ -203,7 +203,7 @@
                                        Maximum="1.0"
                                        TickFrequency="0.1"
                                        IsSnapToTickEnabled="True"
-                                       Style="{StaticResource MRTSlider}"
+                                       Style="{StaticResource MRT.Slider}"
                                        IsEnabled="{Binding IsActive}"/>
                                 <Grid Margin="0,5,0,0">
                                     <TextBlock Text="10%" 
@@ -234,7 +234,7 @@
                                        Maximum="2.0"
                                        TickFrequency="0.1"
                                        IsSnapToTickEnabled="True"
-                                       Style="{StaticResource MRTSlider}"
+                                       Style="{StaticResource MRT.Slider}"
                                        IsEnabled="{Binding IsActive}"/>
                                 <Grid Margin="0,5,0,0">
                                     <TextBlock Text="50%" 
@@ -271,12 +271,12 @@
                             <StackPanel Orientation="Horizontal" 
                                        HorizontalAlignment="Right">
                                 <Button Content="Reset Position" 
-                                       Style="{StaticResource SecondaryButton}"
+                                       Style="{StaticResource MRT.Button.Secondary}"
                                        IsEnabled="{Binding IsActive}"
                                        Margin="0,0,10,0"
                                        Padding="15,8"/>
                                 <Button Content="Reset All" 
-                                       Style="{StaticResource SecondaryButton}"
+                                       Style="{StaticResource MRT.Button.Secondary}"
                                        IsEnabled="{Binding IsActive}"
                                        Padding="15,8"/>
                             </StackPanel>
