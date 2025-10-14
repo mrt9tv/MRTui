@@ -8,7 +8,7 @@ echo =========================================
 echo.
 
 REM Change to WPF project directory
-cd /d "f:\VSCode\Programming\MRTui - Copy\src\iRacingOverlay.WPF"
+cd /d "f:\VSCode\Programming\MRTui\src\iRacingOverlay.WPF"
 
 echo Building application...
 dotnet build --configuration Release --nologo --verbosity quiet
