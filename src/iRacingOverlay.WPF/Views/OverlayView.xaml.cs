@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using iRacingOverlay.WPF.ViewModels;
 
@@ -9,5 +10,13 @@ public partial class OverlayView : UserControl
     {
         InitializeComponent();
         DataContext = viewModel;
+    }
+
+    private void WidgetItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is WidgetItemViewModel widget && DataContext is OverlayViewModel vm)
+        {
+            vm.SelectedWidget = widget;
+        }
     }
 }

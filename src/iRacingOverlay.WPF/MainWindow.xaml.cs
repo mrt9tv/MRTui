@@ -8,6 +8,7 @@ using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Views;
 using iRacingOverlay.WPF.ViewModels;
+using iRacingOverlay.WPF.Models;
 
 namespace iRacingOverlay.WPF;
 
@@ -27,6 +28,13 @@ public partial class MainWindow : Window
 
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
         KeyDown += MainWindow_KeyDown;
+        Closing += MainWindow_Closing;
+        LocationChanged += MainWindow_LocationChanged;
+        SizeChanged += MainWindow_SizeChanged;
+        StateChanged += MainWindow_StateChanged;
+
+        // Load and apply saved settings
+        ApplyWindowSettings();
 
         // Initialize status bar with current connection status
         UpdateConnectionStatus(_telemetryService.Status);
@@ -122,4 +130,139 @@ public partial class MainWindow : Window
         _telemetryService.StatusChanged -= OnTelemetryStatusChanged;
         base.OnClosed(e);
     }
+
+    #region Window State Management
+
+    /// <summary>
+    /// Apply saved window settings (size, position, state)
+    /// </summary>
+    private void ApplyWindowSettings()
+    {
+        var settings = AppSettings.Instance;
+
+        // Apply size
+        Width = settings.WindowWidth;
+        Height = settings.WindowHeight;
+
+        // Apply position (center if first launch, otherwise use saved position)
+        if (settings.WindowLeft.HasValue && settings.WindowTop.HasValue)
+        {
+            // Check if saved position is still valid (monitor might be disconnected)
+            if (IsPositionOnScreen(settings.WindowLeft.Value, settings.WindowTop.Value))
+            {
+                Left = settings.WindowLeft.Value;
+                Top = settings.WindowTop.Value;
+                WindowStartupLocation = WindowStartupLocation.Manual;
+            }
+            else
+            {
+                // Monitor disconnected - center on primary monitor
+                WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
+        }
+        else
+        {
+            // First launch - center on primary monitor
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        // Apply maximized state
+        if (settings.WindowMaximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+
+        // Apply start minimized (only if setting is enabled)
+        if (settings.StartMinimized)
+        {
+            WindowState = WindowState.Minimized;
+        }
+
+        // Apply opacity and topmost
+        Opacity = settings.ManagerOpacity;
+        Topmost = settings.AlwaysOnTop;
+    }
+
+    /// <summary>
+    /// Check if a window position is visible on any screen
+    /// </summary>
+    private bool IsPositionOnScreen(double left, double top)
+    {
+        var rect = new System.Drawing.Rectangle((int)left, (int)top, (int)Width, (int)Height);
+        foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+        {
+            if (screen.WorkingArea.IntersectsWith(rect))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Save window state when closing
+    /// </summary>
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        SaveWindowState();
+    }
+
+    /// <summary>
+    /// Save window position when moved
+    /// </summary>
+    private void MainWindow_LocationChanged(object? sender, EventArgs e)
+    {
+        // Don't save position if minimized or maximized
+        if (WindowState == WindowState.Normal)
+        {
+            SaveWindowState();
+        }
+    }
+
+    /// <summary>
+    /// Save window size when resized
+    /// </summary>
+    private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Don't save size if minimized or maximized
+        if (WindowState == WindowState.Normal)
+        {
+            SaveWindowState();
+        }
+    }
+
+    /// <summary>
+    /// Save window state when maximized/restored
+    /// </summary>
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        var settings = AppSettings.Instance;
+        settings.WindowMaximized = (WindowState == WindowState.Maximized);
+        settings.Save();
+    }
+
+    /// <summary>
+    /// Save current window state to settings
+    /// </summary>
+    private void SaveWindowState()
+    {
+        // Don't save if window is being initialized
+        if (!IsLoaded) return;
+
+        var settings = AppSettings.Instance;
+
+        // Save size and position (only when in normal state)
+        if (WindowState == WindowState.Normal)
+        {
+            settings.WindowWidth = Width;
+            settings.WindowHeight = Height;
+            settings.WindowLeft = Left;
+            settings.WindowTop = Top;
+        }
+
+        settings.WindowMaximized = (WindowState == WindowState.Maximized);
+        settings.Save();
+    }
+
+    #endregion
 }

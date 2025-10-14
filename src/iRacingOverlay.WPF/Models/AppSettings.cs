@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace iRacingOverlay.WPF.Models;
 
 /// <summary>
@@ -94,10 +100,47 @@ public class AppSettings
     /// </summary>
     public bool StartMinimized { get; set; } = false;
     
+    // Window State Settings
+    /// <summary>
+    /// Manager window width (default 1280)
+    /// </summary>
+    public double WindowWidth { get; set; } = 1280;
+    
+    /// <summary>
+    /// Manager window height (default 720)
+    /// </summary>
+    public double WindowHeight { get; set; } = 720;
+    
+    /// <summary>
+    /// Manager window left position (null = center on first launch)
+    /// </summary>
+    public double? WindowLeft { get; set; }
+    
+    /// <summary>
+    /// Manager window top position (null = center on first launch)
+    /// </summary>
+    public double? WindowTop { get; set; }
+    
+    /// <summary>
+    /// Manager window maximized state
+    /// </summary>
+    public bool WindowMaximized { get; set; } = false;
+    
     /// <summary>
     /// Event raised when settings change
     /// </summary>
+    [JsonIgnore]
     public event EventHandler? SettingsChanged;
+    
+    /// <summary>
+    /// Settings file path
+    /// </summary>
+    [JsonIgnore]
+    private static string SettingsFilePath =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            "MRT-UI",
+            "settings.json");
     
     /// <summary>
     /// Notify listeners that settings have changed
@@ -108,12 +151,65 @@ public class AppSettings
     }
     
     /// <summary>
-    /// Save settings to file
+    /// Save settings to JSON file
     /// </summary>
     public void Save()
     {
-        // TODO: Implement JSON serialization to file
-        // For now, just notify listeners
-        NotifyChanged();
+        try
+        {
+            // Create directory if it doesn't exist
+            var directory = Path.GetDirectoryName(SettingsFilePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            
+            // Serialize settings to JSON with indentation
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = JsonIgnoreCondition.Never
+            };
+            
+            var json = JsonSerializer.Serialize(this, options);
+            File.WriteAllText(SettingsFilePath, json);
+            
+            // Notify listeners after successful save
+            NotifyChanged();
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't crash the app
+            System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Load settings from JSON file
+    /// </summary>
+    public static AppSettings Load()
+    {
+        try
+        {
+            if (File.Exists(SettingsFilePath))
+            {
+                var json = File.ReadAllText(SettingsFilePath);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json);
+                
+                if (settings != null)
+                {
+                    _instance = settings;
+                    return settings;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error but return default settings
+            System.Diagnostics.Debug.WriteLine($"Failed to load settings: {ex.Message}");
+        }
+        
+        // Return default settings if load failed
+        return Instance;
     }
 }

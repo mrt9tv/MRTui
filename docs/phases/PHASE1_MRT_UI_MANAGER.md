@@ -1,7 +1,7 @@
 # Phase 1: MRT UI Manager - Modern Interface Redesign
 
 **Duration:** 2 weeks (10 working days)  
-**Status:** 🚧 In Progress (70% Complete)  
+**Status:** 🚧 In Progress (80% Complete)  
 **Started:** October 14, 2025  
 **Target Completion:** October 28, 2025
 
@@ -235,29 +235,89 @@ Transform the basic tab-based configuration window into a modern, full-screen MR
 
 ---
 
-### Day 8: Window Management & Polish
+### Day 8: Window Management & Polish ✅
 **Goal:** Professional window behavior and final touches
 
 #### Window Features
-- [ ] Implement fullscreen mode
-  - [ ] Set initial size to 1920x1080
-  - [ ] Add maximize/restore functionality
-  - [ ] Ensure minimum size constraint (1280x720)
-- [ ] Implement minimize to taskbar
-  - [ ] Test minimize/restore from taskbar
-  - [ ] Optional: System tray icon
-- [ ] Add window icon (MRT logo)
-- [ ] Test multi-monitor support
+- [x] Implement window state persistence
+  - [x] Save/restore window size (defaults to 1280x720)
+  - [x] Save/restore window position
+  - [x] Save/restore maximized state
+  - [x] Handle monitor disconnection gracefully
+  - [x] Center on first launch
+  - [x] Settings stored in Documents\MRT-UI\settings.json
+- [x] Implement StartMinimized feature
+  - [x] Apply WindowState.Minimized when setting enabled
+  - [x] Test minimize/restore from taskbar
+- [x] Window state management
+  - [x] ApplyWindowSettings() on startup
+  - [x] SaveWindowState() on close, move, resize, state change
+  - [x] IsPositionOnScreen() validation for multi-monitor
+- ⏸️ Add window icon (MRT logo) - Skipped per user request
 
-#### UI Polish
-- [ ] Review all spacing and alignment
-  - [ ] Consistent margins (15px standard)
-  - [ ] Button sizes uniform
-  - [ ] Text sizes appropriate
-- [ ] Add hover effects to buttons
-- [ ] Add focus indicators
-- [ ] Smooth page transitions (optional fade)
-- [ ] Connection status color accuracy
+#### Widget Management UI Redesign
+- [x] Remove individual widget toggles from widget list
+- [x] Make widget items selectable (button-style with selection highlight)
+- [x] Add "ACTIVE" badge to active widgets
+- [x] Add Activate/Deactivate button to configuration panel
+  - [x] Single toggle button with dynamic text/icon
+  - [x] 🟢 "Activate Widget" when inactive
+  - [x] 🔴 "Deactivate Widget" when active
+  - [x] Prominent placement at top of config panel
+- [x] Implement ToggleActiveCommand in WidgetItemViewModel
+- [x] Add IsSelected property for visual feedback
+
+#### UI Compactness
+- [x] Reduce padding 20px → 15px across all views
+  - [x] SettingsView.xaml (12 locations)
+  - [x] DashboardView.xaml (all cards)
+  - [x] OverlayView.xaml (all panels)
+- [x] Reduced button padding 20,10 → 15,8 where applicable
+- [x] Test at 1280x720 resolution for improved layout
+
+#### Code Cleanup
+- ⏸️ XML documentation comments (deferred to next phase)
+- [x] Verify no compiler warnings
+- [x] Format code consistently
+
+**Deliverables:**
+- ✅ Window state save/restore system with JSON persistence
+- ✅ StartMinimized feature functional
+- ✅ Widget activation via single button (no more toggles in list)
+- ✅ Cleaner, more compact UI (15px padding standard)
+- ✅ Professional widget selection UI with visual feedback
+- ✅ Clean build with 0 errors, 0 warnings
+
+---
+
+### Day 9-10: Testing & Documentation
+**Goal:** Comprehensive testing and user documentation
+
+#### Functional Testing
+- [ ] Test all navigation flows
+  - [ ] Dashboard → Overlay → Settings → Dashboard
+  - [ ] All buttons respond correctly
+- [ ] Test connection status updates
+  - [ ] Start without iRacing (🔴 Not Connected)
+  - [ ] Launch iRacing (🟡 Connecting → 🟢 Connected)
+  - [ ] Close iRacing (🔴 Disconnected)
+- [ ] Test widget management
+  - [ ] Select widget in list
+  - [ ] Click Activate → widget appears
+  - [ ] Change opacity for active widget
+  - [ ] Change size for active widget
+  - [ ] Click Deactivate → widget closes
+  - [ ] Verify widgets persist positions
+- [ ] Test settings persistence
+  - [ ] Change settings, close app, reopen → settings restored
+  - [ ] Test window size/position restore
+  - [ ] Test StartMinimized feature
+  - [ ] Test on multi-monitor setup
+- [ ] Test settings
+  - [ ] Switch metric/imperial
+  - [ ] Lock/unlock widgets
+  - [ ] Change manager opacity
+- [ ] Test window management
   - [ ] 🟢 Green for connected
   - [ ] 🟡 Yellow for connecting
   - [ ] 🔴 Red for not connected/disconnected

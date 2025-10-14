@@ -23,7 +23,20 @@ public class OverlayViewModel : INotifyPropertyChanged
         get => _selectedWidget;
         set
         {
+            // Deselect previous widget
+            if (_selectedWidget != null)
+            {
+                _selectedWidget.IsSelected = false;
+            }
+            
             _selectedWidget = value;
+            
+            // Select new widget
+            if (_selectedWidget != null)
+            {
+                _selectedWidget.IsSelected = true;
+            }
+            
             OnPropertyChanged();
         }
     }
@@ -84,6 +97,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
 {
     private readonly WidgetManager _widgetManager;
     private bool _isActive;
+    private bool _isSelected;
     private double _opacity;
     private double _scale;
     private string _position;
@@ -94,6 +108,16 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     public WidgetType Type { get; }
     public string Icon { get; }
 
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            _isSelected = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool IsActive
     {
         get => _isActive;
@@ -103,6 +127,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             {
                 _isActive = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(ActivateButtonText));
+                OnPropertyChanged(nameof(ActivateButtonIcon));
 
                 // Toggle widget on/off
                 if (value)
@@ -167,6 +193,11 @@ public class WidgetItemViewModel : INotifyPropertyChanged
 
     public string OpacityPercentage => $"{(int)(Opacity * 100)}%";
     public string ScalePercentage => $"{(int)(Scale * 100)}%";
+    
+    public string ActivateButtonText => IsActive ? "Deactivate Widget" : "Activate Widget";
+    public string ActivateButtonIcon => IsActive ? "🔴" : "🟢";
+    
+    public ICommand ToggleActiveCommand { get; }
 
     public WidgetItemViewModel(string name, WidgetType type, string icon, WidgetManager widgetManager)
     {
@@ -178,6 +209,14 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         _scale = 1.0;
         _position = "N/A";
         _isActive = false;
+        _isSelected = false;
+        
+        ToggleActiveCommand = new RelayCommand(ToggleActive);
+    }
+    
+    private void ToggleActive()
+    {
+        IsActive = !IsActive;
     }
 
     public void UpdateState()
@@ -190,6 +229,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         {
             _isActive = hasWidget;
             OnPropertyChanged(nameof(IsActive));
+            OnPropertyChanged(nameof(ActivateButtonText));
+            OnPropertyChanged(nameof(ActivateButtonIcon));
         }
 
         // Update position and other properties from first widget of this type
@@ -240,4 +281,29 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+}
+
+/// <summary>
+/// Simple ICommand implementation for button click handling
+/// </summary>
+public class RelayCommand : ICommand
+{
+    private readonly Action _execute;
+    private readonly Func<bool>? _canExecute;
+
+    public event EventHandler? CanExecuteChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public RelayCommand(Action execute, Func<bool>? canExecute = null)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+        _canExecute = canExecute;
+    }
+
+    public bool CanExecute(object? parameter) => _canExecute?.Invoke() ?? true;
+    
+    public void Execute(object? parameter) => _execute();
 }

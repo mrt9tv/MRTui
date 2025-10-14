@@ -4,7 +4,7 @@
 
 ---
 
-## 🎯 Overall Progress: 70% Complete
+## 🎯 Overall Progress: 80% Complete
 
 ### Pre-Phase Setup ✅
 - [x] Requirements analysis complete
@@ -67,12 +67,19 @@
 - [x] Add AppSettings properties: ManagerOpacity, AlwaysOnTop, StartMinimized
 - [x] Create value converters for tab navigation
 
-### Day 8: Window Management ⏳
-- [ ] Implement fullscreen (1920x1080)
-- [ ] Add minimize to taskbar
-- [ ] Polish UI spacing/alignment
-- [ ] Add hover effects
-- [ ] Code cleanup
+### Day 8: Window Management & Polish ✅
+- [x] Window state persistence (size, position, maximized)
+- [x] Settings saved to Documents\MRT-UI\settings.json
+- [x] Center on first launch, restore saved position
+- [x] Handle monitor disconnection gracefully
+- [x] StartMinimized feature implemented
+- [x] Widget toggle UI redesign
+  - [x] Remove individual toggles from widget list
+  - [x] Add selectable widget items with ACTIVE badge
+  - [x] Add Activate/Deactivate button to config panel
+  - [x] Dynamic button text/icon (🟢 Activate / 🔴 Deactivate)
+- [x] UI compactness: 20px → 15px padding across all views
+- [x] Clean build (0 errors, 0 warnings)
 
 ### Day 9-10: Testing & Documentation ⏳
 - [ ] Test all navigation
