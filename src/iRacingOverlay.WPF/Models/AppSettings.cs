@@ -126,10 +126,7 @@ public class AppSettings
     /// </summary>
     public bool WindowMaximized { get; set; } = false;
     
-    /// <summary>
-    /// Event raised when settings change
-    /// </summary>
-    [JsonIgnore]
+    // Note: Events cannot be serialized and don't need [JsonIgnore] attribute
     public event EventHandler? SettingsChanged;
     
     /// <summary>

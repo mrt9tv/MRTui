@@ -9,6 +9,7 @@ using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Views;
 using iRacingOverlay.WPF.ViewModels;
 using iRacingOverlay.WPF.Models;
+using WinForms = System.Windows.Forms;
 
 namespace iRacingOverlay.WPF;
 
@@ -189,7 +190,7 @@ public partial class MainWindow : Window
     private bool IsPositionOnScreen(double left, double top)
     {
         var rect = new System.Drawing.Rectangle((int)left, (int)top, (int)Width, (int)Height);
-        foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+        foreach (var screen in WinForms.Screen.AllScreens)
         {
             if (screen.WorkingArea.IntersectsWith(rect))
             {
