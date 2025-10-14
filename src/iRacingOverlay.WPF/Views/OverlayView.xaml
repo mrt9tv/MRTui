@@ -14,7 +14,7 @@
         <!-- Main Content Area -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="400"/>
+                <ColumnDefinition Width="250"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
@@ -39,10 +39,11 @@
                                         Padding="20,15"
                                         Tag="{Binding}"
                                         Click="WidgetItem_Click"
-                                        HorizontalContentAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
                                         Cursor="Hand">
                                     <Button.Style>
                                         <Style TargetType="Button">
+                                            <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
                                             <Setter Property="Template">
                                                 <Setter.Value>
                                                     <ControlTemplate TargetType="Button">
@@ -70,42 +71,29 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Button.Style>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="30"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Widget Icon -->
-                                        <TextBlock Grid.Column="0" 
-                                                  Text="{Binding Icon}" 
-                                                  FontSize="20"
+                                    <StackPanel Orientation="Horizontal">
+                                        <!-- Widget Icon and Name -->
+                                        <TextBlock Text="{Binding Icon}" 
+                                                  FontSize="16"
                                                   VerticalAlignment="Center"
-                                                  HorizontalAlignment="Left"/>
-
-                                        <!-- Widget Name -->
-                                        <StackPanel Grid.Column="1" 
-                                                   VerticalAlignment="Center"
-                                                   Margin="10,0,10,0">
-                                            <TextBlock Text="{Binding Name}" 
-                                                      FontSize="16"
-                                                      Foreground="{StaticResource MRT.White}"/>
-                                        </StackPanel>
-
+                                                  Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding Name}" 
+                                                  FontSize="16"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,0,8,0"/>
+                                        
                                         <!-- Active Indicator -->
-                                        <Border Grid.Column="2" 
-                                               Background="{StaticResource TealPrimary}"
-                                               CornerRadius="10"
-                                               Padding="6,2"
+                                        <Border Background="{StaticResource TealPrimary}"
+                                               CornerRadius="8"
+                                               Padding="5,2"
                                                VerticalAlignment="Center"
                                                Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}">
                                             <TextBlock Text="ACTIVE" 
-                                                      FontSize="10"
+                                                      FontSize="9"
                                                       FontWeight="Bold"
                                                       Foreground="{StaticResource DarkBackground}"/>
                                         </Border>
-                                    </Grid>
+                                    </StackPanel>
                                 </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -119,41 +107,10 @@
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="40">
                 <StackPanel DataContext="{Binding SelectedWidget}">
-                    <!-- Configuration Header -->
-                    <TextBlock Text="Widget Configuration" 
-                               FontSize="22" 
-                               FontWeight="Bold"
-                               Foreground="{StaticResource TealPrimary}"
-                               Margin="0,0,0,30"/>
-                    
-                    <!-- Widget Info -->
-                            <Border Background="{StaticResource DarkBackground}"
-                                   BorderBrush="{StaticResource DarkBorder}"
-                                   BorderThickness="1"
-                                   CornerRadius="8"
-                                   Padding="15"
-                                   Margin="0,0,0,20">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
-                                        <TextBlock Text="{Binding Icon}" 
-                                                  FontSize="20"
-                                                  Margin="0,0,10,0"/>
-                                        <TextBlock Text="{Binding Name}" 
-                                                  FontSize="16"
-                                                  FontWeight="SemiBold"
-                                                  Foreground="{StaticResource LightText}"
-                                                  VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding Position}" 
-                                              FontSize="12"
-                                              Foreground="{StaticResource MutedText}"/>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- Activate/Deactivate Button -->
-                            <Button Command="{Binding ToggleActiveCommand}"
-                                   Height="50"
-                                   Margin="0,0,0,25">
+                    <!-- Activate/Deactivate Button -->
+                    <Button Command="{Binding ToggleActiveCommand}"
+                           Height="50"
+                           Margin="0,0,0,25">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource MRT.Button.Primary}">
                                         <Style.Triggers>
