@@ -10,7 +10,7 @@
             BorderThickness="2" 
             CornerRadius="8"
             Padding="12">
-        <Grid x:Name="MainGrid" Width="280" Height="220">
+        <Grid x:Name="MainGrid" Width="256" Height="196">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="8"/>
@@ -43,7 +43,8 @@
                            Text="Current Fuel:"
                            FontSize="13"
                            Foreground="White"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           TextAlignment="Left"/>
                 
                 <TextBlock Grid.Column="1"
                            x:Name="CurrentFuelText"
@@ -51,7 +52,9 @@
                            FontSize="15"
                            FontWeight="Bold"
                            Foreground="#008080"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           TextAlignment="Right"/>
             </Grid>
 
             <!-- Fuel Used Last Lap -->
@@ -65,7 +68,8 @@
                            Text="Used Last Lap:"
                            FontSize="13"
                            Foreground="White"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           TextAlignment="Left"/>
                 
                 <TextBlock Grid.Column="1"
                            x:Name="UsedLastLapText"
@@ -73,7 +77,9 @@
                            FontSize="15"
                            FontWeight="Bold"
                            Foreground="#FF8000"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           TextAlignment="Right"/>
             </Grid>
 
             <!-- Average Fuel Per Lap -->
@@ -87,7 +93,8 @@
                            Text="Avg Per Lap:"
                            FontSize="13"
                            Foreground="White"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           TextAlignment="Left"/>
                 
                 <TextBlock Grid.Column="1"
                            x:Name="AvgPerLapText"
@@ -95,7 +102,9 @@
                            FontSize="15"
                            FontWeight="Bold"
                            Foreground="#008080"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           TextAlignment="Right"/>
             </Grid>
 
             <!-- Laps Remaining -->
@@ -109,7 +118,8 @@
                            Text="Laps Remaining:"
                            FontSize="13"
                            Foreground="White"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           TextAlignment="Left"/>
                 
                 <TextBlock Grid.Column="1"
                            x:Name="LapsRemainingText"
@@ -117,7 +127,9 @@
                            FontSize="15"
                            FontWeight="Bold"
                            Foreground="#FFFF00"
-                           VerticalAlignment="Center"/>
+                           VerticalAlignment="Center"
+                           HorizontalAlignment="Right"
+                           TextAlignment="Right"/>
             </Grid>
         </Grid>
     </Border>

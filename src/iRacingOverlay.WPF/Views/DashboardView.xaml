@@ -214,11 +214,16 @@
                                        Foreground="{StaticResource MutedText}"
                                        HorizontalAlignment="Center"
                                        Margin="0,0,0,10"/>
-                            <TextBlock Text="MRT UI v0.5.0" 
-                                       FontSize="22" 
-                                       FontWeight="Bold"
-                                       Foreground="{StaticResource TealPrimary}"
-                                       HorizontalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBlock Text="MRT UI " 
+                                           FontSize="22" 
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource TealPrimary}"/>
+                                <TextBlock Text="{Binding AppVersion}" 
+                                           FontSize="22" 
+                                           FontWeight="Bold"
+                                           Foreground="{StaticResource TealPrimary}"/>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>

@@ -43,12 +43,21 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         /// <summary>
         /// Handle widget resize by scaling the content via LayoutTransform.
         /// This prevents content shift by maintaining relative positions of all elements.
+        /// MainGrid is 256x196 (accounts for Border Padding="12" on all sides).
         /// </summary>
         private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            // Calculate scale factors based on original 280x220 design
-            double scaleX = ActualWidth / 280.0;
-            double scaleY = ActualHeight / 220.0;
+            // Border has Padding="12" on all sides (12px * 2 = 24px total per axis)
+            const double borderPaddingSingleSide = 12;
+            const double borderPaddingTotal = borderPaddingSingleSide * 2; // 24px
+            
+            // Calculate available space inside border
+            double availableWidth = ActualWidth - borderPaddingTotal;
+            double availableHeight = ActualHeight - borderPaddingTotal;
+            
+            // Calculate scale factors based on MainGrid design dimensions (256x196)
+            double scaleX = availableWidth / 256.0;
+            double scaleY = availableHeight / 196.0;
             
             // Use uniform scale (smallest of the two to maintain aspect ratio)
             double scale = Math.Min(scaleX, scaleY);

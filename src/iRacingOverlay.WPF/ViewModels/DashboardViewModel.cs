@@ -120,6 +120,8 @@ public class DashboardViewModel : INotifyPropertyChanged
         set { _updateRate = value; OnPropertyChanged(); }
     }
 
+    public string AppVersion => VersionInfo.DisplayVersion;
+
     #endregion
 
     #region Event Handlers

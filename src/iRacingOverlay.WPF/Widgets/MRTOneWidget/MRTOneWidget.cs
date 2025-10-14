@@ -13,13 +13,13 @@ using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
 using ConnectionStatus = iRacingOverlay.Core.Models.ConnectionStatus;
 
-namespace iRacingOverlay.WPF.Widgets.GearGaugeWidget;
+namespace iRacingOverlay.WPF.Widgets.MRTOneWidget;
 
 /// <summary>
-/// Compact circular gauge widget showing Gear (center), Speed (top), and RPM (bottom)
+/// MRT One - Compact circular gauge widget showing Gear (center), Speed (top), and RPM (bottom)
 /// Racelabs-inspired design with intelligent shift point detection and theme colors
 /// </summary>
-public class GearGaugeWidget : WidgetBase
+public class MRTOneWidget : WidgetBase
 {
     private readonly Grid _mainGrid;
     private readonly Ellipse _gaugeCircle;
@@ -57,7 +57,7 @@ public class GearGaugeWidget : WidgetBase
     // Configurable opacity
     private double _backgroundOpacity = 0.85;
     
-    public GearGaugeWidget(ITelemetryService telemetryService) : base(telemetryService)
+    public MRTOneWidget(ITelemetryService telemetryService) : base(telemetryService)
     {
         // Load theme colors from settings
         _primaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.PrimaryColor);
@@ -78,7 +78,7 @@ public class GearGaugeWidget : WidgetBase
         // Set window properties (base size - will be scaled via LayoutTransform)
         Width = 200;
         Height = 200;
-        Title = "Driving Widget";
+        Title = "MRT One";
         
         // Create main grid (no background - transparent)
         // Use fixed size of 200x200 for content, then scale via LayoutTransform
@@ -274,7 +274,7 @@ public class GearGaugeWidget : WidgetBase
         AppSettings.Instance.SettingsChanged += OnSettingsChanged;
     }
     
-    public override WidgetType WidgetType => WidgetType.GearGauge;
+    public override WidgetType WidgetType => WidgetType.MRTOne;
     
     /// <summary>
     /// Handle widget resize by scaling the content via LayoutTransform.

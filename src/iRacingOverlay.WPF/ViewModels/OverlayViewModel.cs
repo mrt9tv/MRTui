@@ -45,9 +45,10 @@ public class OverlayViewModel : INotifyPropertyChanged
         // Initialize widget list with all available widget types
         Widgets = new ObservableCollection<WidgetItemViewModel>
         {
-            new WidgetItemViewModel("The MRT Simplicity", WidgetType.GearGauge, "🐶", _widgetManager),
-            new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
-            new WidgetItemViewModel("Fuel Calculator", WidgetType.Fuel, "⛽", _widgetManager)
+            new WidgetItemViewModel("MRT One", WidgetType.MRTOne, "🥇", _widgetManager)
+            // DataWidget and FuelWidget hidden for now
+            // new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
+            // new WidgetItemViewModel("Fuel Calculator", WidgetType.Fuel, "⛽", _widgetManager)
         };
 
         // Subscribe to widget manager events
@@ -107,16 +108,24 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     private readonly WidgetManager _widgetManager;
     private bool _isActive;
     private double _opacity;
-    private double _scale;
+    private double _widgetSize;
     private string _position;
-    private double _baseWidth;
-    private double _baseHeight;
+    
+    // Default and min/max sizes for each widget type
+    private const double DEFAULT_MRTONE_SIZE = 200;
+    private const double MIN_MRTONE_SIZE = 100;
+    private const double MAX_MRTONE_SIZE = 400;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Name { get; }
     public WidgetType Type { get; }
     public string Icon { get; }
+    
+    // Size constraints based on widget type
+    public double MinSize => Type == WidgetType.MRTOne ? MIN_MRTONE_SIZE : 100;
+    public double MaxSize => Type == WidgetType.MRTOne ? MAX_MRTONE_SIZE : 400;
+    public double DefaultSize => Type == WidgetType.MRTOne ? DEFAULT_MRTONE_SIZE : 200;
 
     public bool IsActive
     {
@@ -164,19 +173,22 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         }
     }
 
-    public double Scale
+    public double WidgetSize
     {
-        get => _scale;
+        get => _widgetSize;
         set
         {
-            if (Math.Abs(_scale - value) > 0.01)
+            // Clamp to min/max bounds
+            double clampedValue = Math.Max(MinSize, Math.Min(MaxSize, value));
+            
+            if (Math.Abs(_widgetSize - clampedValue) > 0.01)
             {
-                _scale = value;
+                _widgetSize = clampedValue;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(ScalePercentage));
+                OnPropertyChanged(nameof(SizeDisplay));
 
-                // Apply scale to all widgets of this type
-                ApplyScale();
+                // Apply size to all widgets of this type
+                ApplySize();
             }
         }
     }
@@ -192,12 +204,16 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     }
 
     public string OpacityPercentage => $"{(int)(Opacity * 100)}%";
-    public string ScalePercentage => $"{(int)(Scale * 100)}%";
+    public string SizeDisplay => $"{(int)WidgetSize}px";
     
     public string ActivateButtonText => IsActive ? "Deactivate Widget" : "Activate Widget";
     public string ActivateButtonIcon => IsActive ? "🔴" : "🟢";
     
     public ICommand ToggleActiveCommand { get; }
+    public ICommand ResetPositionCommand { get; }
+    public ICommand ResetAllCommand { get; }
+    public ICommand CenterHorizontallyCommand { get; }
+    public ICommand CenterVerticallyCommand { get; }
 
     public WidgetItemViewModel(string name, WidgetType type, string icon, WidgetManager widgetManager)
     {
@@ -206,13 +222,15 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         Icon = icon;
         _widgetManager = widgetManager;
         _opacity = 1.0;
-        _scale = 1.0;
+        _widgetSize = DefaultSize; // Initialize to default size based on widget type
         _position = "N/A";
         _isActive = false;
-        _baseWidth = 0;
-        _baseHeight = 0;
         
         ToggleActiveCommand = new RelayCommand(ToggleActive);
+        ResetPositionCommand = new RelayCommand(ResetPosition);
+        ResetAllCommand = new RelayCommand(ResetAll);
+        CenterHorizontallyCommand = new RelayCommand(CenterHorizontally);
+        CenterVerticallyCommand = new RelayCommand(CenterVertically);
     }
     
     private void ToggleActive()
@@ -234,18 +252,20 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ActivateButtonIcon));
         }
 
-        // Update position and other properties from first widget of this type
+        // Update position, size, and opacity from first widget of this type
         var widget = _widgetManager.GetWidgetsByType(Type).FirstOrDefault();
         if (widget != null)
         {
             var config = widget.GetConfiguration();
             Position = $"X: {(int)config.X}, Y: {(int)config.Y}";
             
-            // Store base dimensions if not set yet (first time widget is created)
-            if (_baseWidth == 0 || _baseHeight == 0)
+            // Read current widget size (width for square widgets like MRTOne)
+            double currentSize = config.Width;
+            if (Math.Abs(_widgetSize - currentSize) > 0.01)
             {
-                _baseWidth = config.Width;
-                _baseHeight = config.Height;
+                _widgetSize = currentSize;
+                OnPropertyChanged(nameof(WidgetSize));
+                OnPropertyChanged(nameof(SizeDisplay));
             }
             
             // Update opacity from window property
@@ -259,9 +279,10 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         else
         {
             Position = "N/A";
-            // Reset base dimensions when widget is removed
-            _baseWidth = 0;
-            _baseHeight = 0;
+            // Reset to default size when widget is removed
+            _widgetSize = DefaultSize;
+            OnPropertyChanged(nameof(WidgetSize));
+            OnPropertyChanged(nameof(SizeDisplay));
         }
     }
 
@@ -274,19 +295,67 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         }
     }
 
-    private void ApplyScale()
+    private void ApplySize()
     {
         var widgets = _widgetManager.GetWidgetsByType(Type);
         foreach (var widget in widgets)
         {
-            // Scale is applied from BASE dimensions (not current dimensions)
-            // This prevents compounding scale values
-            if (_baseWidth > 0 && _baseHeight > 0)
-            {
-                widget.Width = _baseWidth * Scale;
-                widget.Height = _baseHeight * Scale;
-            }
+            // For square widgets (MRTOne), set both width and height to the same value
+            widget.Width = WidgetSize;
+            widget.Height = WidgetSize;
         }
+    }
+
+    private void ResetPosition()
+    {
+        var widgets = _widgetManager.GetWidgetsByType(Type);
+        foreach (var widget in widgets)
+        {
+            // Reset to top-left corner with small offset
+            widget.Left = 50;
+            widget.Top = 50;
+        }
+        UpdateState(); // Update position display
+    }
+
+    private void ResetAll()
+    {
+        // Reset size to default
+        WidgetSize = DefaultSize;
+        
+        // Reset opacity to 100%
+        Opacity = 1.0;
+        
+        // Reset position
+        ResetPosition();
+    }
+
+    private void CenterHorizontally()
+    {
+        var widgets = _widgetManager.GetWidgetsByType(Type);
+        foreach (var widget in widgets)
+        {
+            // Get primary screen dimensions
+            var screenWidth = System.Windows.SystemParameters.PrimaryScreenWidth;
+            
+            // Center horizontally: (screenWidth - widgetWidth) / 2
+            widget.Left = (screenWidth - widget.Width) / 2;
+        }
+        UpdateState(); // Update position display
+    }
+
+    private void CenterVertically()
+    {
+        var widgets = _widgetManager.GetWidgetsByType(Type);
+        foreach (var widget in widgets)
+        {
+            // Get primary screen dimensions
+            var screenHeight = System.Windows.SystemParameters.PrimaryScreenHeight;
+            
+            // Center vertically: (screenHeight - widgetHeight) / 2
+            widget.Top = (screenHeight - widget.Height) / 2;
+        }
+        UpdateState(); // Update position display
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

@@ -36,8 +36,8 @@ public class WidgetManager
     /// </summary>
     private void RegisterWidgetFactories()
     {
-        _widgetFactories[WidgetType.GearGauge] = (service, config) =>
-            new Widgets.GearGaugeWidget.GearGaugeWidget(service);
+        _widgetFactories[WidgetType.MRTOne] = (service, config) =>
+            new Widgets.MRTOneWidget.MRTOneWidget(service);
 
         _widgetFactories[WidgetType.Data] = (service, config) =>
             new Widgets.DataWidget.DataWidget(service, config);
