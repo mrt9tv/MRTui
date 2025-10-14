@@ -226,7 +226,7 @@
                             <Button Command="{Binding ToggleActiveCommand}"
                                    Height="50"
                                    Margin="0,0,0,25"
-                                   Style="{StaticResource MRT.PrimaryButton}">
+                                   Style="{StaticResource MRT.Button.Primary}">
                                 <Button.Content>
                                     <StackPanel Orientation="Horizontal" 
                                                HorizontalAlignment="Center">

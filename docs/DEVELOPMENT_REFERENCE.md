@@ -76,6 +76,8 @@
 <Style="{StaticResource MRTSlider}"/>          <!-- ❌ Crashes -->
 <Style="{StaticResource SecondaryButton}"/>    <!-- ❌ Crashes -->
 <Style="{StaticResource PrimaryButton}"/>      <!-- ❌ Crashes -->
+<Style="{StaticResource MRT.PrimaryButton}"/>  <!-- ❌ Crashes (wrong order) -->
+<Foreground="{StaticResource MRT.Foreground}"/><!-- ❌ Doesn't exist (use MRT.White) -->
 ```
 
 ### Quick Reference Cheat Sheet
@@ -83,9 +85,10 @@
 |-----------|-------------------|-------------------|
 | Toggle Switch | `MRT.ToggleButton` | `ToggleSwitchStyle` |
 | Slider | `MRT.Slider` | `MRTSlider` |
-| Primary Button | `MRT.Button.Primary` | `PrimaryButton` |
+| Primary Button | `MRT.Button.Primary` | `PrimaryButton`, `MRT.PrimaryButton` |
 | Secondary Button | `MRT.Button.Secondary` | `SecondaryButton` |
 | Navigation Button | `NavigationButton` | `NavButton` |
+| White Foreground | `MRT.White` or `LightText` | `MRT.Foreground` |
 
 ---
 
