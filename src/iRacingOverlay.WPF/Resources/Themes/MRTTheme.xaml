@@ -191,8 +191,6 @@
                             <Setter TargetName="ThumbEllipse" Property="Fill" Value="{StaticResource MRT.White}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
