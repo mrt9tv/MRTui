@@ -38,12 +38,12 @@
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#2F2F2F"/>
                     <Setter Property="BorderThickness" Value="0,0,3,0"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource OrangePrimary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource TealPrimary}"/>
                 </Trigger>
                 <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource Self}}" Value="Active">
                     <Setter Property="Background" Value="#1E3A3A"/>
                     <Setter Property="BorderThickness" Value="0,0,3,0"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource TealPrimary}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource OrangePrimary}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
