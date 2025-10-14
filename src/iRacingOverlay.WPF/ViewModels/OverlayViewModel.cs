@@ -110,6 +110,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     private double _opacity;
     private double _scale;
     private string _position;
+    private double _baseWidth;
+    private double _baseHeight;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -208,6 +210,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         _scale = 1.0;
         _position = "N/A";
         _isActive = false;
+        _baseWidth = 0;
+        _baseHeight = 0;
         
         ToggleActiveCommand = new RelayCommand(ToggleActive);
     }
@@ -238,6 +242,13 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             var config = widget.GetConfiguration();
             Position = $"X: {(int)config.X}, Y: {(int)config.Y}";
             
+            // Store base dimensions if not set yet (first time widget is created)
+            if (_baseWidth == 0 || _baseHeight == 0)
+            {
+                _baseWidth = config.Width;
+                _baseHeight = config.Height;
+            }
+            
             // Update opacity from window property
             if (Math.Abs(_opacity - widget.Opacity) > 0.01)
             {
@@ -249,6 +260,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         else
         {
             Position = "N/A";
+            // Reset base dimensions when widget is removed
+            _baseWidth = 0;
+            _baseHeight = 0;
         }
     }
 
@@ -266,12 +280,13 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         var widgets = _widgetManager.GetWidgetsByType(Type);
         foreach (var widget in widgets)
         {
-            // Scale is applied via Width/Height
-            var baseWidth = widget.Config.Width;
-            var baseHeight = widget.Config.Height;
-            
-            widget.Width = baseWidth * Scale;
-            widget.Height = baseHeight * Scale;
+            // Scale is applied from BASE dimensions (not current dimensions)
+            // This prevents compounding scale values
+            if (_baseWidth > 0 && _baseHeight > 0)
+            {
+                widget.Width = _baseWidth * Scale;
+                widget.Height = _baseHeight * Scale;
+            }
         }
     }
 
