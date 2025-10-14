@@ -79,8 +79,13 @@
                             <DataTemplate>
                                 <Button Style="{StaticResource WidgetButtonStyle}"
                                         Command="{Binding DataContext.SelectWidgetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding}"
-                                        Tag="{Binding DataContext.SelectedWidget, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource WidgetSelectionConverter}, ConverterParameter={Binding}}">
+                                        CommandParameter="{Binding}">
+                                    <Button.Tag>
+                                        <MultiBinding Converter="{StaticResource WidgetSelectionConverter}">
+                                            <Binding Path="DataContext.SelectedWidget" RelativeSource="{RelativeSource AncestorType=UserControl}"/>
+                                            <Binding Path="."/>
+                                        </MultiBinding>
+                                    </Button.Tag>
                                     <StackPanel Orientation="Horizontal">
                                         <!-- Widget Icon and Name -->
                                         <TextBlock Text="{Binding Icon}" 
