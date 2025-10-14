@@ -82,17 +82,23 @@
                     <TextBlock x:Name="UptimeText" 
                                Text="00:00:00" 
                                FontSize="12"
-                               Foreground="{StaticResource TealPrimary}"
+                               Foreground="{StaticResource TealPrimary}"/>
+                </StackPanel>
+                
+                <StackPanel Orientation="Horizontal" 
+                            HorizontalAlignment="Right" 
+                            VerticalAlignment="Center">
+                    <TextBlock x:Name="VersionText" 
+                               Text="Version 0.5" 
+                               FontSize="12"
+                               Foreground="{StaticResource MutedText}"
                                Margin="0,0,30,0"/>
-                    <TextBlock Text="Version 0.5" 
+                    <TextBlock Text="Press F12 for debug overlay" 
                                FontSize="12"
                                Foreground="{StaticResource MutedText}"/>
                 </StackPanel>
-                
-                <TextBlock Text="Press F12 for debug overlay" 
-                           FontSize="12"
-                           Foreground="{StaticResource MutedText}"
-                           HorizontalAlignment="Right"
+            </Grid>
+        </Border>
                            VerticalAlignment="Center"/>
             </Grid>
         </Border>

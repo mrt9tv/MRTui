@@ -6,11 +6,6 @@ namespace iRacingOverlay.WPF.Models;
 public enum WidgetType
 {
     /// <summary>
-    /// Simple speed display widget
-    /// </summary>
-    Speed,
-
-    /// <summary>
     /// Circular gauge showing Gear (center) with Speed and RPM indicators
     /// </summary>
     GearGauge,
@@ -74,7 +69,6 @@ public static class WidgetTypeExtensions
         return type switch
         {
             WidgetType.GearGauge => "The MRT Simplicity",
-            WidgetType.Speed => "Speed Widget",
             WidgetType.Data => "Data Widget",
             WidgetType.Fuel => "Fuel Calculator",
             WidgetType.TelemetryTable => "Telemetry Table",

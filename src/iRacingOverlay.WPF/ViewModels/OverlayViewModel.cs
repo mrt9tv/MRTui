@@ -46,7 +46,6 @@ public class OverlayViewModel : INotifyPropertyChanged
         Widgets = new ObservableCollection<WidgetItemViewModel>
         {
             new WidgetItemViewModel("The MRT Simplicity", WidgetType.GearGauge, "🎯", _widgetManager),
-            new WidgetItemViewModel("Speed Widget", WidgetType.Speed, "🏎️", _widgetManager),
             new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
             new WidgetItemViewModel("Fuel Calculator", WidgetType.Fuel, "⛽", _widgetManager)
         };

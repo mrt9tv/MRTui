@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Input;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Services;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.ViewModels;
 
@@ -150,21 +151,14 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Application version from assembly
+    /// Application version from centralized VersionInfo
     /// </summary>
-    public string AppVersion
-    {
-        get
-        {
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
-            return version != null ? $"v{version.Major}.{version.Minor}.{version.Build}" : "v0.5.0";
-        }
-    }
+    public string AppVersion => VersionInfo.DisplayVersion;
 
     /// <summary>
-    /// iRacing SDK version (placeholder for now)
+    /// iRacing SDK version from centralized VersionInfo
     /// </summary>
-    public string IracingSdkVersion => "2024.10.01.01";
+    public string IracingSdkVersion => VersionInfo.IRACING_SDK_VERSION;
 
     #endregion
 

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Services;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF;
 
@@ -18,6 +19,9 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Initialize application start time (single source of truth for uptime)
+        ApplicationInfo.ApplicationStartTime = DateTime.Now;
 
         // Build dependency injection container
         _host = Host.CreateDefaultBuilder()

@@ -36,10 +36,6 @@ public class WidgetManager
     /// </summary>
     private void RegisterWidgetFactories()
     {
-        // MVP 2 widgets
-        _widgetFactories[WidgetType.Speed] = (service, config) =>
-            new Widgets.SpeedWidget.SpeedWidget(service, config);
-
         _widgetFactories[WidgetType.GearGauge] = (service, config) =>
             new Widgets.GearGaugeWidget.GearGaugeWidget(service);
 
@@ -47,7 +43,7 @@ public class WidgetManager
             new Widgets.DataWidget.DataWidget(service, config);
 
         _widgetFactories[WidgetType.Fuel] = (service, config) =>
-            new Widgets.FuelWidget(service, config);
+            new Widgets.FuelWidget.FuelWidget(service, config);
 
         // TODO: Uncomment as we create more widgets
         // _widgetFactories[WidgetType.TelemetryTable] = (service, config) =>

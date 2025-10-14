@@ -10,6 +10,7 @@ using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Views;
 using iRacingOverlay.WPF.ViewModels;
 using iRacingOverlay.WPF.Models;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF;
 
@@ -19,7 +20,6 @@ public partial class MainWindow : Window
     private readonly ITelemetryService _telemetryService;
     private readonly IServiceProvider _services;
     private readonly DispatcherTimer _uptimeTimer;
-    private readonly DateTime _startTime;
 
     public MainWindow(IServiceProvider services)
     {
@@ -28,7 +28,6 @@ public partial class MainWindow : Window
         _services = services;
         _widgetManager = services.GetRequiredService<WidgetManager>();
         _telemetryService = services.GetRequiredService<ITelemetryService>();
-        _startTime = DateTime.Now;
 
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
         KeyDown += MainWindow_KeyDown;
@@ -50,6 +49,9 @@ public partial class MainWindow : Window
 
         // Initialize status bar with current connection status
         UpdateConnectionStatus(_telemetryService.Status);
+
+        // Set version text from centralized source
+        VersionText.Text = VersionInfo.ShortVersion;
 
         NavigateToHome();
     }
@@ -130,8 +132,7 @@ public partial class MainWindow : Window
 
     private void UpdateUptimeDisplay()
     {
-        var uptime = DateTime.Now - _startTime;
-        UptimeText.Text = $"{uptime.Hours:D2}:{uptime.Minutes:D2}:{uptime.Seconds:D2}";
+        UptimeText.Text = ApplicationInfo.GetUptimeFormatted();
     }
 
     private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)

@@ -7,6 +7,7 @@ using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Services;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.ViewModels;
 
@@ -15,7 +16,6 @@ public class DashboardViewModel : INotifyPropertyChanged
     private readonly ITelemetryService _telemetryService;
     private readonly WidgetManager _widgetManager;
     private readonly DispatcherTimer _uptimeTimer;
-    private readonly DateTime _startTime;
 
     private ConnectionStatus _connectionStatus;
     private string _connectionStatusText;
@@ -33,7 +33,6 @@ public class DashboardViewModel : INotifyPropertyChanged
     {
         _telemetryService = telemetryService;
         _widgetManager = widgetManager;
-        _startTime = DateTime.Now;
 
         // Initialize properties
         _connectionStatus = ConnectionStatus.Disconnected;
@@ -186,8 +185,7 @@ public class DashboardViewModel : INotifyPropertyChanged
 
     private void UpdateUptime(object? sender, EventArgs e)
     {
-        var uptime = DateTime.Now - _startTime;
-        UptimeText = uptime.ToString(@"hh\:mm\:ss");
+        UptimeText = ApplicationInfo.GetUptimeFormatted();
     }
 
     #endregion

@@ -6,7 +6,7 @@ using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
 
-namespace iRacingOverlay.WPF.Widgets
+namespace iRacingOverlay.WPF.Widgets.FuelWidget
 {
     /// <summary>
     /// Fuel Calculator Widget - displays fuel level, usage, and laps remaining
