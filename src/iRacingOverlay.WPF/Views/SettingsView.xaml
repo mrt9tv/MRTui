@@ -237,41 +237,6 @@
                 <StackPanel Visibility="{Binding SelectedTab, Converter={StaticResource TabVisibilityConverter}, ConverterParameter=Manager}">
                     <TextBlock Text="Manager Window" Style="{StaticResource SectionHeaderStyle}"/>
 
-                    <!-- Manager Opacity -->
-                    <Border Background="{StaticResource DarkSurface}"
-                            BorderBrush="{StaticResource TealPrimary}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="15"
-                            Margin="0,0,0,20">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <TextBlock Grid.Column="0" Text="Window Opacity" Style="{StaticResource SettingLabelStyle}"/>
-                                <TextBlock Grid.Column="1" 
-                                         Text="{Binding ManagerOpacityPercent, StringFormat='{}{0}%'}"
-                                         FontSize="18"
-                                         FontWeight="Bold"
-                                         Foreground="{StaticResource OrangePrimary}"/>
-                            </Grid>
-
-                            <Slider Value="{Binding ManagerOpacityPercent}"
-                                  Minimum="20"
-                                  Maximum="100"
-                                  TickFrequency="5"
-                                  IsSnapToTickEnabled="True"
-                                  Style="{StaticResource MRT.Slider}"
-                                  Margin="0,10,0,0"/>
-
-                            <TextBlock Text="Minimum 20% to prevent invisible window"
-                                     Style="{StaticResource SettingDescriptionStyle}"/>
-                        </StackPanel>
-                    </Border>
-
                     <!-- Always On Top -->
                     <Border Background="{StaticResource DarkSurface}"
                             BorderBrush="{StaticResource TealPrimary}"

@@ -86,9 +86,9 @@ public class AppSettings
     public bool UseMetric { get; set; } = true;
     
     /// <summary>
-    /// Manager window opacity (0.2 to 1.0, enforced minimum 20%)
+    /// Manager window opacity (kept for backward compatibility, always 1.0)
     /// </summary>
-    public double ManagerOpacity { get; set; } = 0.95;
+    public double ManagerOpacity { get; set; } = 1.0;
     
     /// <summary>
     /// Keep manager window always on top

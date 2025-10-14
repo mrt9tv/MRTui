@@ -32,8 +32,8 @@ public class SettingsViewModel : INotifyPropertyChanged
         SelectTabCommand = new RelayCommand<string>(OnSelectTab);
         ResetAllCommand = new RelayCommand(OnResetAll);
 
-        // Apply current manager opacity to window
-        _mainWindow.Opacity = _settings.ManagerOpacity;
+        // Apply current manager settings to window
+        _mainWindow.Opacity = 1.0; // Always 100% opacity
         _mainWindow.Topmost = _settings.AlwaysOnTop;
     }
 
@@ -112,40 +112,6 @@ public class SettingsViewModel : INotifyPropertyChanged
     public string Hotkey => "F12";
 
     /// <summary>
-    /// Manager window opacity (0.2 to 1.0, 20-100%)
-    /// </summary>
-    public double ManagerOpacity
-    {
-        get => _settings.ManagerOpacity;
-        set
-        {
-            // Enforce minimum 20%
-            var clampedValue = Math.Max(0.2, Math.Min(1.0, value));
-            
-            if (Math.Abs(_settings.ManagerOpacity - clampedValue) > 0.01)
-            {
-                _settings.ManagerOpacity = clampedValue;
-                OnPropertyChanged();
-                OnPropertyChanged(nameof(ManagerOpacityPercent));
-                
-                // Apply opacity to MainWindow immediately
-                _mainWindow.Opacity = clampedValue;
-                
-                SaveAndNotify();
-            }
-        }
-    }
-
-    /// <summary>
-    /// Manager opacity as percentage (20-100)
-    /// </summary>
-    public int ManagerOpacityPercent
-    {
-        get => (int)(ManagerOpacity * 100);
-        set => ManagerOpacity = value / 100.0;
-    }
-
-    /// <summary>
     /// Keep manager window always on top
     /// </summary>
     public bool AlwaysOnTop
@@ -218,7 +184,7 @@ public class SettingsViewModel : INotifyPropertyChanged
     private void OnResetAll()
     {
         var result = MessageBox.Show(
-            "Reset all settings to defaults?\n\nThis will:\n• Set units to Metric\n• Unlock all widgets\n• Reset manager opacity to 95%\n• Disable Always On Top\n• Disable Start Minimized",
+            "Reset all settings to defaults?\n\nThis will:\n• Set units to Metric\n• Unlock all widgets\n• Disable Always On Top\n• Disable Start Minimized",
             "Reset All Settings",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -228,7 +194,6 @@ public class SettingsViewModel : INotifyPropertyChanged
             // Reset to defaults
             UseMetric = true;
             LockWidgets = false;
-            ManagerOpacity = 0.95;
             AlwaysOnTop = false;
             StartMinimized = false;
 

@@ -178,8 +178,8 @@ public partial class MainWindow : Window
             WindowState = WindowState.Minimized;
         }
 
-        // Apply opacity and topmost
-        Opacity = settings.ManagerOpacity;
+        // Apply opacity (always 100%) and topmost
+        Opacity = 1.0;
         Topmost = settings.AlwaysOnTop;
     }
 
