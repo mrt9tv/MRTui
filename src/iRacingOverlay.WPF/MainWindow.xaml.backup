@@ -1,251 +1,127 @@
-﻿<Window x:Class="iRacingOverlay.WPF.MainWindow"<Window x:Class="iRacingOverlay.WPF.MainWindow"
-
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"        Title="iRacing Overlay Manager" 
-
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"        Height="600" Width="650"
-
-        mc:Ignorable="d"        WindowStartupLocation="CenterScreen">
-
-        Title="MRT UI - iRacing Telemetry Manager"     
-
-        Height="1080" Width="1920"    <Grid Margin="15">
-
-        MinHeight="720" MinWidth="1280"        <Grid.RowDefinitions>
-
-        WindowStartupLocation="CenterScreen"            <RowDefinition Height="Auto"/>
-
-        Background="{StaticResource MRT.Background.Dark}">            <RowDefinition Height="*"/>
-
-                <RowDefinition Height="Auto"/>
-
-    <Grid>        </Grid.RowDefinitions>
-
-        <Grid.RowDefinitions>        
-
-            <RowDefinition Height="Auto"/>  <!-- Title Bar -->        <!-- Title -->
-
-            <RowDefinition Height="Auto"/>  <!-- Navigation -->        <TextBlock Grid.Row="0" 
-
-            <RowDefinition Height="*"/>     <!-- Content Area -->                   Text="iRacing Overlay Manager" 
-
-            <RowDefinition Height="Auto"/>  <!-- Status Bar -->                   FontSize="24" 
-
-        </Grid.RowDefinitions>                   FontWeight="Bold"
-
-                           Margin="0,0,0,15"/>
-
-        <!-- Title Bar -->        
-
-        <Border Grid.Row="0"         <!-- Main Content Tabs -->
-
-                Background="{StaticResource MRT.Background.Charcoal}"        <TabControl Grid.Row="1" Margin="0,0,0,15">
-
-                BorderBrush="{StaticResource MRT.Teal}"            <!-- Global Settings Tab -->
-
-                BorderThickness="0,0,0,3"            <TabItem Header="Global Settings">
-
-                Padding="20,15">                <ScrollViewer VerticalScrollBarVisibility="Auto">
-
-            <StackPanel Orientation="Horizontal">                    <StackPanel Margin="15">
-
-                <TextBlock Style="{StaticResource MRT.Text.Header}"                        <!-- Units Setting -->
-
-                           Text="MRT UI"                        <TextBlock Text="Units" 
-
-                           Foreground="{StaticResource MRT.Teal}"                                   FontSize="16" 
-
-                           Margin="0,0,10,0"/>                                   FontWeight="Bold"
-
-                <TextBlock Style="{StaticResource MRT.Text.Header}"                                   Margin="0,0,0,10"/>
-
-                           Text="|"                        
-
-                           Foreground="{StaticResource MRT.Orange}"                        <StackPanel Orientation="Horizontal" Margin="0,5">
-
-                           Margin="0,0,10,0"/>                            <RadioButton x:Name="MetricRadio" 
-
-                <TextBlock Style="{StaticResource MRT.Text.Header}"                                         Content="Metric (km/h, L, °C)" 
-
-                           Text="iRacing Telemetry Manager"                                         IsChecked="True"
-
-                           FontWeight="Normal"                                         Checked="MetricRadio_Checked"
-
-                           FontSize="20"/>                                         Margin="10,0,15,0"/>
-
-            </StackPanel>                            <RadioButton x:Name="ImperialRadio" 
-
-        </Border>                                         Content="Imperial (mph, gal, °F)"
-
-                                                 Checked="ImperialRadio_Checked"/>
-
-        <!-- Navigation Buttons -->                        </StackPanel>
-
-        <Border Grid.Row="1"                        
-
-                Background="{StaticResource MRT.Background.Gray}"                        <!-- Opacity Setting -->
-
-                BorderBrush="{StaticResource MRT.Teal}"                        <TextBlock Text="Widget Opacity" 
-
-                BorderThickness="0,0,0,1">                                   FontSize="16" 
-
-            <StackPanel Orientation="Horizontal"                                    FontWeight="Bold"
-
-                        HorizontalAlignment="Center"                                   Margin="0,20,0,10"/>
-
-                        Margin="0,10">                        
-
-                <Button x:Name="DashboardButton"                        <StackPanel Orientation="Horizontal" Margin="0,5">
-
-                        Content="📊 Dashboard"                            <Slider x:Name="OpacitySlider"
-
-                        Style="{StaticResource MRT.Button.Navigation.Active}"                                    Minimum="0.1"
-
-                        Width="200" Height="50"                                    Maximum="1.0"
-
-                        Margin="5"                                    Value="0.85"
-
-                        Click="DashboardButton_Click"/>                                    Width="400"
-
-                                                    TickFrequency="0.05"
-
-                <Button x:Name="OverlayButton"                                    IsSnapToTickEnabled="True"
-
-                        Content="🎮 Overlay"                                    VerticalAlignment="Center"
-
-                        Style="{StaticResource MRT.Button.Navigation}"                                    ValueChanged="OpacitySlider_ValueChanged"/>
-
-                        Width="200" Height="50"                            <TextBlock x:Name="OpacityValueText"
-
-                        Margin="5"                                       Text="85%"
-
-                        Click="OverlayButton_Click"/>                                       VerticalAlignment="Center"
-
-                                                       Margin="15,0,0,0"
-
-                <Button x:Name="SettingsButton"                                       Width="50"
-
-                        Content="⚙️ Settings"                                       FontWeight="Bold"
-
-                        Style="{StaticResource MRT.Button.Navigation}"                                       FontSize="14"/>
-
-                        Width="200" Height="50"                        </StackPanel>
-
-                        Margin="5"                        
-
-                        Click="SettingsButton_Click"/>                        <!-- Lock Windows Setting -->
-
-            </StackPanel>                        <TextBlock Text="Window Management" 
-
-        </Border>                                   FontSize="16" 
-
-                                           FontWeight="Bold"
-
-        <!-- Content Frame -->                                   Margin="0,20,0,10"/>
-
-        <Frame x:Name="ContentFrame"                         
-
-               Grid.Row="2"                        <CheckBox x:Name="LockWindowsCheckbox"
-
-               NavigationUIVisibility="Hidden"                                  Content="Lock all widgets in place (prevents dragging, enables click-through)"
-
-               Background="Transparent"/>                                  Margin="10,5"
-
-                                          Checked="LockWindows_Checked"
-
-        <!-- Status Bar -->                                  Unchecked="LockWindows_Unchecked"/>
-
-        <Border Grid.Row="3"                        
-
-                Background="{StaticResource MRT.Background.Charcoal}"                        <!-- Widget Management -->
-
-                BorderBrush="{StaticResource MRT.Teal}"                        <TextBlock Text="Widget Management" 
-
-                BorderThickness="0,1,0,0"                                   FontSize="16" 
-
-                Padding="15,10">                                   FontWeight="Bold"
-
-            <Grid>                                   Margin="0,30,0,10"/>
-
-                <Grid.ColumnDefinitions>                        
-
-                    <ColumnDefinition Width="Auto"/>                        <Button x:Name="ToggleAllButton" 
-
-                    <ColumnDefinition Width="*"/>                                Content="Toggle All Widgets (F12)" 
-
-                    <ColumnDefinition Width="Auto"/>                                Padding="10"
-
-                </Grid.ColumnDefinitions>                                Margin="10,5"
-
-                                                Click="ToggleAllButton_Click"/>
-
-                <!-- Connection Status -->                        
-
-                <StackPanel Grid.Column="0" Orientation="Horizontal">                        <Button x:Name="RemoveAllButton" 
-
-                    <TextBlock Style="{StaticResource MRT.Text.Label}"                                Content="Remove All Widgets" 
-
-                               Text="Connection:"                                Padding="10"
-
-                               Margin="0,0,10,0"                                Margin="10,5"
-
-                               VerticalAlignment="Center"/>                                Click="RemoveAllButton_Click"/>
-
-                    <TextBlock x:Name="ConnectionStatusText"                    </StackPanel>
-
-                               Style="{StaticResource MRT.Text.Status}"                </ScrollViewer>
-
-                               Text="🔴 Not Connected"            </TabItem>
-
-                               Foreground="{StaticResource MRT.Status.Disconnected}"            
-
-                               VerticalAlignment="Center"/>            <!-- Driving Widget Configuration Tab -->
-
-                </StackPanel>            <TabItem Header="Driving Widget Config" x:Name="DrivingWidgetConfigTab">
-
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-
-                <!-- Center Info -->                    <StackPanel Margin="15">
-
-                <StackPanel Grid.Column="1"                         <!-- Widget Activation -->
-
-                            Orientation="Horizontal"                        <CheckBox x:Name="ActivateDrivingWidget" 
-
-                            HorizontalAlignment="Center">                                  Content="Activate Driving Widget" 
-
-                    <TextBlock Style="{StaticResource MRT.Text.Label}"                                  FontSize="16"
-
-                               x:Name="StatusInfoText"                                  FontWeight="Bold"
-
-                               Text="Ready"                                  Margin="0,0,0,20"
-
-                               VerticalAlignment="Center"/>                                  Checked="ActivateDrivingWidget_Checked"
-
-                </StackPanel>                                  Unchecked="ActivateDrivingWidget_Unchecked"/>
-
-                                        
-
-                <!-- Version Info -->                        <Separator Margin="0,0,0,20"/>
-
-                <TextBlock Grid.Column="2"                        
-
-                           Style="{StaticResource MRT.Text.Label}"                        <TextBlock Text="Configure Driving Widget Sections" 
-
-                           Text="MRT UI v0.5.0"                                   FontSize="18" 
-
-                           VerticalAlignment="Center"/>                                   FontWeight="Bold"
-
-            </Grid>                                   Margin="0,0,0,20"/>
-
-        </Border>                        
-
-    </Grid>                        <!-- Top Section -->
-
-</Window>                        <GroupBox Header="Top Section (Speed)" Margin="0,0,0,15" Padding="10">
-
+﻿<Window x:Class="iRacingOverlay.WPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="iRacing Overlay Manager" 
+        Height="600" Width="650"
+        WindowStartupLocation="CenterScreen">
+    
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Title -->
+        <TextBlock Grid.Row="0" 
+                   Text="iRacing Overlay Manager" 
+                   FontSize="24" 
+                   FontWeight="Bold"
+                   Margin="0,0,0,15"/>
+        
+        <!-- Main Content Tabs -->
+        <TabControl Grid.Row="1" Margin="0,0,0,15">
+            <!-- Global Settings Tab -->
+            <TabItem Header="Global Settings">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <!-- Units Setting -->
+                        <TextBlock Text="Units" 
+                                   FontSize="16" 
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,10"/>
+                        
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                            <RadioButton x:Name="MetricRadio" 
+                                         Content="Metric (km/h, L, °C)" 
+                                         IsChecked="True"
+                                         Checked="MetricRadio_Checked"
+                                         Margin="10,0,15,0"/>
+                            <RadioButton x:Name="ImperialRadio" 
+                                         Content="Imperial (mph, gal, °F)"
+                                         Checked="ImperialRadio_Checked"/>
+                        </StackPanel>
+                        
+                        <!-- Opacity Setting -->
+                        <TextBlock Text="Widget Opacity" 
+                                   FontSize="16" 
+                                   FontWeight="Bold"
+                                   Margin="0,20,0,10"/>
+                        
+                        <StackPanel Orientation="Horizontal" Margin="0,5">
+                            <Slider x:Name="OpacitySlider"
+                                    Minimum="0.1"
+                                    Maximum="1.0"
+                                    Value="0.85"
+                                    Width="400"
+                                    TickFrequency="0.05"
+                                    IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center"
+                                    ValueChanged="OpacitySlider_ValueChanged"/>
+                            <TextBlock x:Name="OpacityValueText"
+                                       Text="85%"
+                                       VerticalAlignment="Center"
+                                       Margin="15,0,0,0"
+                                       Width="50"
+                                       FontWeight="Bold"
+                                       FontSize="14"/>
+                        </StackPanel>
+                        
+                        <!-- Lock Windows Setting -->
+                        <TextBlock Text="Window Management" 
+                                   FontSize="16" 
+                                   FontWeight="Bold"
+                                   Margin="0,20,0,10"/>
+                        
+                        <CheckBox x:Name="LockWindowsCheckbox"
+                                  Content="Lock all widgets in place (prevents dragging, enables click-through)"
+                                  Margin="10,5"
+                                  Checked="LockWindows_Checked"
+                                  Unchecked="LockWindows_Unchecked"/>
+                        
+                        <!-- Widget Management -->
+                        <TextBlock Text="Widget Management" 
+                                   FontSize="16" 
+                                   FontWeight="Bold"
+                                   Margin="0,30,0,10"/>
+                        
+                        <Button x:Name="ToggleAllButton" 
+                                Content="Toggle All Widgets (F12)" 
+                                Padding="10"
+                                Margin="10,5"
+                                Click="ToggleAllButton_Click"/>
+                        
+                        <Button x:Name="RemoveAllButton" 
+                                Content="Remove All Widgets" 
+                                Padding="10"
+                                Margin="10,5"
+                                Click="RemoveAllButton_Click"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            
+            <!-- Driving Widget Configuration Tab -->
+            <TabItem Header="Driving Widget Config" x:Name="DrivingWidgetConfigTab">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <!-- Widget Activation -->
+                        <CheckBox x:Name="ActivateDrivingWidget" 
+                                  Content="Activate Driving Widget" 
+                                  FontSize="16"
+                                  FontWeight="Bold"
+                                  Margin="0,0,0,20"
+                                  Checked="ActivateDrivingWidget_Checked"
+                                  Unchecked="ActivateDrivingWidget_Unchecked"/>
+                        
+                        <Separator Margin="0,0,0,20"/>
+                        
+                        <TextBlock Text="Configure Driving Widget Sections" 
+                                   FontSize="18" 
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,20"/>
+                        
+                        <!-- Top Section -->
+                        <GroupBox Header="Top Section (Speed)" Margin="0,0,0,15" Padding="10">
                             <StackPanel>
                                 <CheckBox x:Name="ShowTopSection" Content="Show Top Section" IsChecked="True" Margin="0,5"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,10,0,5">

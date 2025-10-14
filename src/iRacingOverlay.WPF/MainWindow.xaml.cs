@@ -1,216 +1,429 @@
-﻿using System;
-using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-using Microsoft.Extensions.DependencyInjection;
-using iRacingOverlay.Core.Models;
-using iRacingOverlay.Core.Services;
+﻿using System;using System;
+
+using System.Windows;using System.Linq;
+
+using System.Windows.Controls;using System.Windows;
+
+using System.Windows.Media;using System.Windows.Controls;
+
+using Microsoft.Extensions.DependencyInjection;using System.Windows.Media;
+
+using iRacingOverlay.Core.Models;using Microsoft.Extensions.DependencyInjection;
+
+using iRacingOverlay.Core.Services;using iRacingOverlay.Core.Models;
+
+using iRacingOverlay.WPF.Services;using iRacingOverlay.Core.Services;
+
 using iRacingOverlay.WPF.Models;
-using iRacingOverlay.WPF.Services;
 
-namespace iRacingOverlay.WPF;
+namespace iRacingOverlay.WPF;using iRacingOverlay.WPF.Services;
 
-/// <summary>
-/// Main window for managing overlay widgets
-/// </summary>
-public partial class MainWindow : Window
-{
-    private readonly WidgetManager _widgetManager;
-    private readonly ITelemetryService _telemetryService;
 
-    public MainWindow(IServiceProvider services)
+
+/// <summary>namespace iRacingOverlay.WPF;
+
+/// MRT UI Main Window - Modern navigation-based interface
+
+/// </summary>/// <summary>
+
+public partial class MainWindow : Window/// Main window for managing overlay widgets
+
+{/// </summary>
+
+    private readonly WidgetManager _widgetManager;public partial class MainWindow : Window
+
+    private readonly ITelemetryService _telemetryService;{
+
+    private readonly IServiceProvider _services;    private readonly WidgetManager _widgetManager;
+
+        private readonly ITelemetryService _telemetryService;
+
+    // Track active navigation button
+
+    private Button? _activeNavButton;    public MainWindow(IServiceProvider services)
+
     {
-        InitializeComponent();
 
-        _widgetManager = services.GetRequiredService<WidgetManager>();
+    public MainWindow(IServiceProvider services)        InitializeComponent();
+
+    {
+
+        InitializeComponent();        _widgetManager = services.GetRequiredService<WidgetManager>();
+
         _telemetryService = services.GetRequiredService<ITelemetryService>();
 
-        // Subscribe to widget events
-        _widgetManager.WidgetCreated += OnWidgetCreated;
+        _services = services;
+
+        _widgetManager = services.GetRequiredService<WidgetManager>();        // Subscribe to widget events
+
+        _telemetryService = services.GetRequiredService<ITelemetryService>();        _widgetManager.WidgetCreated += OnWidgetCreated;
+
         _widgetManager.WidgetRemoved += OnWidgetRemoved;
-        
-        // Subscribe to telemetry connection status
+
+        // Subscribe to telemetry connection status        
+
+        _telemetryService.StatusChanged += OnTelemetryStatusChanged;        // Subscribe to telemetry connection status
+
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
 
-        // Set up hotkey (F12)
+        // Set up hotkey (F12 for lock/unlock - will implement later)
+
+        KeyDown += MainWindow_KeyDown;        // Set up hotkey (F12)
+
         KeyDown += MainWindow_KeyDown;
 
-        // Initialize Data Widget ComboBoxes
-        InitializeDataWidgetComboBoxes();
-        
-        // Attach real-time event handlers for Driving Widget
-        ShowTopSection.Checked += DrivingWidgetConfig_Changed;
+        // Initialize with Dashboard view
+
+        _activeNavButton = DashboardButton;        // Initialize Data Widget ComboBoxes
+
+        NavigateToDashboard();        InitializeDataWidgetComboBoxes();
+
+                
+
+        UpdateConnectionStatus();        // Attach real-time event handlers for Driving Widget
+
+    }        ShowTopSection.Checked += DrivingWidgetConfig_Changed;
+
         ShowTopSection.Unchecked += DrivingWidgetConfig_Changed;
-        ShowCenterSection.Checked += DrivingWidgetConfig_Changed;
+
+    #region Navigation        ShowCenterSection.Checked += DrivingWidgetConfig_Changed;
+
         ShowCenterSection.Unchecked += DrivingWidgetConfig_Changed;
-        ShowBottomSection.Checked += DrivingWidgetConfig_Changed;
-        ShowBottomSection.Unchecked += DrivingWidgetConfig_Changed;
-        TopSectionField.SelectionChanged += DrivingWidgetConfig_Changed;
-        CenterSectionField.SelectionChanged += DrivingWidgetConfig_Changed;
-        BottomSectionField.SelectionChanged += DrivingWidgetConfig_Changed;
+
+    private void DashboardButton_Click(object sender, RoutedEventArgs e)        ShowBottomSection.Checked += DrivingWidgetConfig_Changed;
+
+    {        ShowBottomSection.Unchecked += DrivingWidgetConfig_Changed;
+
+        NavigateToDashboard();        TopSectionField.SelectionChanged += DrivingWidgetConfig_Changed;
+
+        SetActiveButton(DashboardButton);        CenterSectionField.SelectionChanged += DrivingWidgetConfig_Changed;
+
+    }        BottomSectionField.SelectionChanged += DrivingWidgetConfig_Changed;
+
         LeftSideField.SelectionChanged += DrivingWidgetConfig_Changed;
-        RightSideField.SelectionChanged += DrivingWidgetConfig_Changed;
-        WidgetSizeSlider.ValueChanged += DrivingWidgetSize_Changed;
-        
-        // Attach real-time event handlers for Data Widget
-        DataCell1Field.SelectionChanged += DataWidgetConfig_Changed;
+
+    private void OverlayButton_Click(object sender, RoutedEventArgs e)        RightSideField.SelectionChanged += DrivingWidgetConfig_Changed;
+
+    {        WidgetSizeSlider.ValueChanged += DrivingWidgetSize_Changed;
+
+        NavigateToOverlay();        
+
+        SetActiveButton(OverlayButton);        // Attach real-time event handlers for Data Widget
+
+    }        DataCell1Field.SelectionChanged += DataWidgetConfig_Changed;
+
         DataCell2Field.SelectionChanged += DataWidgetConfig_Changed;
-        DataCell3Field.SelectionChanged += DataWidgetConfig_Changed;
-        DataCell4Field.SelectionChanged += DataWidgetConfig_Changed;
-        DataCell5Field.SelectionChanged += DataWidgetConfig_Changed;
-        DataCell6Field.SelectionChanged += DataWidgetConfig_Changed;
-        
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)        DataCell3Field.SelectionChanged += DataWidgetConfig_Changed;
+
+    {        DataCell4Field.SelectionChanged += DataWidgetConfig_Changed;
+
+        NavigateToSettings();        DataCell5Field.SelectionChanged += DataWidgetConfig_Changed;
+
+        SetActiveButton(SettingsButton);        DataCell6Field.SelectionChanged += DataWidgetConfig_Changed;
+
+    }        
+
         // Attach real-time event handlers for Fuel Widget
-        FuelWidgetSizeSlider.ValueChanged += FuelWidgetSizeSlider_ValueChanged;
 
-        UpdateStatus();
-    }
-    
-    private void InitializeDataWidgetComboBoxes()
+    private void NavigateToDashboard()        FuelWidgetSizeSlider.ValueChanged += FuelWidgetSizeSlider_ValueChanged;
+
     {
+
+        // TODO: Create DashboardView and navigate to it        UpdateStatus();
+
+        // For now, show placeholder    }
+
+        ShowPlaceholder("📊 Dashboard", "Connection status and quick stats coming soon...");    
+
+        StatusInfoText.Text = "Dashboard";    private void InitializeDataWidgetComboBoxes()
+
+    }    {
+
         // Get all telemetry field values
-        var fields = Enum.GetValues(typeof(TelemetryField)).Cast<TelemetryField>().ToList();
-        
-        // Populate all 6 cell ComboBoxes
-        DataCell1Field.ItemsSource = fields;
-        DataCell2Field.ItemsSource = fields;
-        DataCell3Field.ItemsSource = fields;
-        DataCell4Field.ItemsSource = fields;
-        DataCell5Field.ItemsSource = fields;
-        DataCell6Field.ItemsSource = fields;
-        
-        // Set default selections (None for all cells)
-        DataCell1Field.SelectedItem = TelemetryField.None;
-        DataCell2Field.SelectedItem = TelemetryField.None;
-        DataCell3Field.SelectedItem = TelemetryField.None;
-        DataCell4Field.SelectedItem = TelemetryField.None;
-        DataCell5Field.SelectedItem = TelemetryField.None;
-        DataCell6Field.SelectedItem = TelemetryField.None;
-    }
 
-    private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == System.Windows.Input.Key.F12)
+    private void NavigateToOverlay()        var fields = Enum.GetValues(typeof(TelemetryField)).Cast<TelemetryField>().ToList();
+
+    {        
+
+        // TODO: Create OverlayView and navigate to it        // Populate all 6 cell ComboBoxes
+
+        // For now, show placeholder        DataCell1Field.ItemsSource = fields;
+
+        ShowPlaceholder("🎮 Overlay Manager", "Widget management interface coming soon...");        DataCell2Field.ItemsSource = fields;
+
+        StatusInfoText.Text = "Overlay Manager";        DataCell3Field.ItemsSource = fields;
+
+    }        DataCell4Field.ItemsSource = fields;
+
+        DataCell5Field.ItemsSource = fields;
+
+    private void NavigateToSettings()        DataCell6Field.ItemsSource = fields;
+
+    {        
+
+        // TODO: Create SettingsView and navigate to it        // Set default selections (None for all cells)
+
+        // For now, show placeholder        DataCell1Field.SelectedItem = TelemetryField.None;
+
+        ShowPlaceholder("⚙️ Settings", "Global settings coming soon...");        DataCell2Field.SelectedItem = TelemetryField.None;
+
+        StatusInfoText.Text = "Settings";        DataCell3Field.SelectedItem = TelemetryField.None;
+
+    }        DataCell4Field.SelectedItem = TelemetryField.None;
+
+        DataCell5Field.SelectedItem = TelemetryField.None;
+
+    private void ShowPlaceholder(string title, string message)        DataCell6Field.SelectedItem = TelemetryField.None;
+
+    {    }
+
+        var placeholder = new Grid
+
+        {    private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+
+            Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A))    {
+
+        };        if (e.Key == System.Windows.Input.Key.F12)
+
         {
-            _widgetManager.ToggleAllWidgets();
-            UpdateStatus();
-        }
-    }
+
+        var stack = new StackPanel            _widgetManager.ToggleAllWidgets();
+
+        {            UpdateStatus();
+
+            VerticalAlignment = VerticalAlignment.Center,        }
+
+            HorizontalAlignment = HorizontalAlignment.Center    }
+
+        };
 
     private void MetricRadio_Checked(object sender, RoutedEventArgs e)
-    {
-        AppSettings.Instance.UseMetricUnits = true;
-        AppSettings.Instance.NotifyChanged();
+
+        var titleBlock = new TextBlock    {
+
+        {        AppSettings.Instance.UseMetricUnits = true;
+
+            Text = title,        AppSettings.Instance.NotifyChanged();
+
+            FontSize = 32,    }
+
+            FontWeight = FontWeights.Bold,
+
+            Foreground = new SolidColorBrush(Color.FromRgb(0x00, 0x80, 0x80)), // Teal    private void ImperialRadio_Checked(object sender, RoutedEventArgs e)
+
+            HorizontalAlignment = HorizontalAlignment.Center,    {
+
+            Margin = new Thickness(0, 0, 0, 20)        AppSettings.Instance.UseMetricUnits = false;
+
+        };        AppSettings.Instance.NotifyChanged();
+
     }
 
-    private void ImperialRadio_Checked(object sender, RoutedEventArgs e)
-    {
-        AppSettings.Instance.UseMetricUnits = false;
-        AppSettings.Instance.NotifyChanged();
-    }
+        var messageBlock = new TextBlock
 
-    private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        // Update opacity in settings
-        AppSettings.Instance.DefaultOpacity = e.NewValue;
-        AppSettings.Instance.NotifyChanged();
-        
+        {    private void OpacitySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+
+            Text = message,    {
+
+            FontSize = 18,        // Update opacity in settings
+
+            Foreground = Brushes.White,        AppSettings.Instance.DefaultOpacity = e.NewValue;
+
+            HorizontalAlignment = HorizontalAlignment.Center        AppSettings.Instance.NotifyChanged();
+
+        };        
+
         // Update the display text
-        if (OpacityValueText != null)
-        {
-            OpacityValueText.Text = $"{(int)(e.NewValue * 100)}%";
+
+        stack.Children.Add(titleBlock);        if (OpacityValueText != null)
+
+        stack.Children.Add(messageBlock);        {
+
+        placeholder.Children.Add(stack);            OpacityValueText.Text = $"{(int)(e.NewValue * 100)}%";
+
         }
+
+        ContentFrame.Content = placeholder;    }
+
     }
 
     private void LockWindows_Checked(object sender, RoutedEventArgs e)
-    {
-        _widgetManager.LockAllWidgets(true);
+
+    private void SetActiveButton(Button button)    {
+
+    {        _widgetManager.LockAllWidgets(true);
+
+        // Reset previous active button    }
+
+        if (_activeNavButton != null)
+
+        {    private void LockWindows_Unchecked(object sender, RoutedEventArgs e)
+
+            _activeNavButton.Style = (Style)FindResource("MRT.Button.Navigation");    {
+
+        }        _widgetManager.LockAllWidgets(false);
+
     }
 
-    private void LockWindows_Unchecked(object sender, RoutedEventArgs e)
-    {
-        _widgetManager.LockAllWidgets(false);
-    }
+        // Set new active button
 
-    // Driving Widget Activation Handlers
-    private void ActivateDrivingWidget_Checked(object sender, RoutedEventArgs e)
-    {
+        _activeNavButton = button;    // Driving Widget Activation Handlers
+
+        button.Style = (Style)FindResource("MRT.Button.Navigation.Active");    private void ActivateDrivingWidget_Checked(object sender, RoutedEventArgs e)
+
+    }    {
+
         try
-        {
+
+    #endregion        {
+
             if (_widgetManager.HasWidgetType(WidgetType.GearGauge))
-            {
+
+    #region Connection Status            {
+
                 // Widget already exists, just show it
-                var widgets = _widgetManager.GetWidgetsByType(WidgetType.GearGauge);
-                foreach (var widget in widgets)
-                {
-                    widget.Show();
-                }
-                return;
-            }
+
+    private void OnTelemetryStatusChanged(object? sender, ConnectionStatus status)                var widgets = _widgetManager.GetWidgetsByType(WidgetType.GearGauge);
+
+    {                foreach (var widget in widgets)
+
+        Dispatcher.Invoke(() =>                {
+
+        {                    widget.Show();
+
+            UpdateConnectionStatus();                }
+
+        });                return;
+
+    }            }
+
             
-            // Create new widget
-            _widgetManager.CreateWidget(WidgetType.GearGauge);
-            
-            // Apply current configuration immediately
-            ApplyDrivingWidgetConfiguration();
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = $"Error: {ex.Message}";
-            ActivateDrivingWidget.IsChecked = false;
-        }
-    }
-    
-    private void ActivateDrivingWidget_Unchecked(object sender, RoutedEventArgs e)
+
+    private void UpdateConnectionStatus()            // Create new widget
+
+    {            _widgetManager.CreateWidget(WidgetType.GearGauge);
+
+        var status = _telemetryService.GetStatus();            
+
+                    // Apply current configuration immediately
+
+        switch (status)            ApplyDrivingWidgetConfiguration();
+
+        {        }
+
+            case ConnectionStatus.Connected:        catch (Exception ex)
+
+                ConnectionStatusText.Text = "🟢 Connected";        {
+
+                ConnectionStatusText.Foreground = (Brush)FindResource("MRT.Status.Connected");            StatusText.Text = $"Error: {ex.Message}";
+
+                break;            ActivateDrivingWidget.IsChecked = false;
+
+            case ConnectionStatus.Connecting:        }
+
+                ConnectionStatusText.Text = "🟡 Connecting...";    }
+
+                ConnectionStatusText.Foreground = (Brush)FindResource("MRT.Status.Connecting");    
+
+                break;    private void ActivateDrivingWidget_Unchecked(object sender, RoutedEventArgs e)
+
+            case ConnectionStatus.Disconnected:    {
+
+                ConnectionStatusText.Text = "🔴 Disconnected";        var widgets = _widgetManager.GetWidgetsByType(WidgetType.GearGauge);
+
+                ConnectionStatusText.Foreground = (Brush)FindResource("MRT.Status.Disconnected");        foreach (var widget in widgets)
+
+                break;        {
+
+            default: // NotConnected            _widgetManager.RemoveWidget(widget.WidgetId);
+
+                ConnectionStatusText.Text = "🔴 Not Connected";        }
+
+                ConnectionStatusText.Foreground = (Brush)FindResource("MRT.Status.Disconnected");    }
+
+                break;    
+
+        }    // Real-time Driving Widget configuration update
+
+    }    private void DrivingWidgetConfig_Changed(object sender, EventArgs e)
+
     {
-        var widgets = _widgetManager.GetWidgetsByType(WidgetType.GearGauge);
-        foreach (var widget in widgets)
-        {
-            _widgetManager.RemoveWidget(widget.WidgetId);
-        }
+
+    #endregion        ApplyDrivingWidgetConfiguration();
+
     }
-    
-    // Real-time Driving Widget configuration update
-    private void DrivingWidgetConfig_Changed(object sender, EventArgs e)
-    {
-        ApplyDrivingWidgetConfiguration();
-    }
-    
+
+    #region Hotkeys    
+
     private void DrivingWidgetSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        // Update the label showing current size
-        if (WidgetSizeValue != null)
-        {
-            WidgetSizeValue.Text = $"{(int)e.NewValue}px";
-        }
-        
-        ApplyDrivingWidgetConfiguration();
-    }
+
+    private void MainWindow_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)    {
+
+    {        // Update the label showing current size
+
+        // F12 - Toggle lock/unlock widgets (will implement later)        if (WidgetSizeValue != null)
+
+        if (e.Key == System.Windows.Input.Key.F12)        {
+
+        {            WidgetSizeValue.Text = $"{(int)e.NewValue}px";
+
+            // TODO: Implement widget lock toggle        }
+
+            StatusInfoText.Text = "F12 pressed - Widget lock toggle (coming soon)";        
+
+        }        ApplyDrivingWidgetConfiguration();
+
+    }    }
+
     
-    private void ApplyDrivingWidgetConfiguration()
+
+    #endregion    private void ApplyDrivingWidgetConfiguration()
+
     {
-        var drivingWidgets = _widgetManager?.GetWidgetsByType(WidgetType.GearGauge);
+
+    #region Cleanup        var drivingWidgets = _widgetManager?.GetWidgetsByType(WidgetType.GearGauge);
+
         if (drivingWidgets == null || !drivingWidgets.Any())
-            return;
-        
-        foreach (var widget in drivingWidgets)
-        {
-            if (widget is Widgets.GearGaugeWidget.GearGaugeWidget drivingWidget)
-            {
-                // Apply widget size
-                double size = WidgetSizeSlider?.Value ?? 200;
-                drivingWidget.UpdateSize(size);
-                
-                // Apply section visibility
-                bool showTop = ShowTopSection?.IsChecked ?? true;
-                bool showCenter = ShowCenterSection?.IsChecked ?? true;
-                bool showBottom = ShowBottomSection?.IsChecked ?? true;
-                drivingWidget.UpdateSectionVisibility(showTop, showCenter, showBottom);
-                
+
+    protected override void OnClosed(EventArgs e)            return;
+
+    {        
+
+        // Clean up event subscriptions        foreach (var widget in drivingWidgets)
+
+        _telemetryService.StatusChanged -= OnTelemetryStatusChanged;        {
+
+                    if (widget is Widgets.GearGaugeWidget.GearGaugeWidget drivingWidget)
+
+        // Remove all widgets            {
+
+        _widgetManager.RemoveAllWidgets();                // Apply widget size
+
+                        double size = WidgetSizeSlider?.Value ?? 200;
+
+        // Disconnect telemetry service                drivingWidget.UpdateSize(size);
+
+        _ = _telemetryService.DisconnectAsync();                
+
+                        // Apply section visibility
+
+        // Ensure application exits completely                bool showTop = ShowTopSection?.IsChecked ?? true;
+
+        Application.Current.Shutdown();                bool showCenter = ShowCenterSection?.IsChecked ?? true;
+
+                        bool showBottom = ShowBottomSection?.IsChecked ?? true;
+
+        base.OnClosed(e);                drivingWidget.UpdateSectionVisibility(showTop, showCenter, showBottom);
+
+    }                
+
                 // Apply circle field selections
-                var topField = GetTelemetryFieldFromComboBox(TopSectionField);
-                var centerField = GetTelemetryFieldFromComboBox(CenterSectionField) ?? TelemetryField.Gear;
+
+    #endregion                var topField = GetTelemetryFieldFromComboBox(TopSectionField);
+
+}                var centerField = GetTelemetryFieldFromComboBox(CenterSectionField) ?? TelemetryField.Gear;
+
                 var bottomField = GetTelemetryFieldFromComboBox(BottomSectionField);
                 drivingWidget.UpdateDisplayFields(topField, centerField, bottomField);
                 
