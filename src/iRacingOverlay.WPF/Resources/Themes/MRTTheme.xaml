@@ -166,7 +166,8 @@
                 <ControlTemplate TargetType="CheckBox">
                     <StackPanel Orientation="Horizontal">
                         <!-- Toggle Switch -->
-                        <Border Width="50" Height="26" 
+                        <Border x:Name="SwitchBorder"
+                                Width="50" Height="26" 
                                 Background="{StaticResource MRT.Background.Gray}"
                                 BorderBrush="{StaticResource MRT.SilverGray}"
                                 BorderThickness="2"
@@ -184,8 +185,12 @@
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="SwitchBorder" Property="Background" Value="{StaticResource MRT.Teal}"/>
+                            <Setter TargetName="SwitchBorder" Property="BorderBrush" Value="{StaticResource MRT.Teal}"/>
                             <Setter TargetName="ThumbEllipse" Property="Canvas.Left" Value="26"/>
-                            <Setter TargetName="ThumbEllipse" Property="Fill" Value="{StaticResource MRT.Orange}"/>
+                            <Setter TargetName="ThumbEllipse" Property="Fill" Value="{StaticResource MRT.White}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

@@ -14,20 +14,16 @@
         <!-- Main Content Area -->
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="350"/>
-                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="400"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="20"/>
-                <ColumnDefinition Width="350"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left Panel: Widget List -->
             <Border Grid.Column="0" 
                     Background="{StaticResource DarkSurface}"
                     BorderBrush="{StaticResource TealPrimary}"
-                    BorderThickness="2"
-                    CornerRadius="10"
-                    Padding="15">
+                    BorderThickness="0,0,1,0"
+                    Padding="30,20,20,20">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -131,63 +127,20 @@
                 </Grid>
             </Border>
 
-            <!-- Center Panel: Live Preview Placeholder -->
-            <Border Grid.Column="2" 
-                    Background="{StaticResource DarkSurface}"
-                    BorderBrush="{StaticResource DarkBorder}"
-                    BorderThickness="2"
-                    CornerRadius="10"
-                    Padding="15">
-                <StackPanel VerticalAlignment="Center" 
-                           HorizontalAlignment="Center">
-                    <TextBlock Text="🖼️" 
-                              FontSize="64"
-                              HorizontalAlignment="Center"
-                              Opacity="0.3"
-                              Margin="0,0,0,20"/>
-                    <TextBlock Text="Live Preview" 
-                              FontSize="24"
-                              FontWeight="Bold"
-                              Foreground="{StaticResource MutedText}"
-                              HorizontalAlignment="Center"
-                              Margin="0,0,0,10"/>
-                    <TextBlock Text="Coming Soon" 
-                              FontSize="16"
-                              Foreground="{StaticResource MutedText}"
-                              HorizontalAlignment="Center"
-                              Margin="0,0,0,20"/>
-                    <TextBlock Text="Changes apply to widgets immediately" 
-                              FontSize="12"
-                              Foreground="{StaticResource MutedText}"
-                              HorizontalAlignment="Center"
-                              TextWrapping="Wrap"
-                              TextAlignment="Center"
-                              MaxWidth="300"/>
-                </StackPanel>
-            </Border>
-
             <!-- Right Panel: Widget Configuration -->
-            <Border Grid.Column="4" 
-                    Background="{StaticResource DarkSurface}"
-                    BorderBrush="{StaticResource OrangePrimary}"
-                    BorderThickness="2"
-                    CornerRadius="10"
-                    Padding="15">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
+            <ScrollViewer Grid.Column="1" 
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="40">
+                <StackPanel DataContext="{Binding SelectedWidget}">
+                    <!-- Configuration Header -->
                     <TextBlock Text="Widget Configuration" 
-                               FontSize="18" 
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource OrangePrimary}"
-                               Margin="0,0,0,20"/>
-
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <StackPanel DataContext="{Binding SelectedWidget}">
-                            <!-- Widget Info -->
+                               FontSize="22" 
+                               FontWeight="Bold"
+                               Foreground="{StaticResource TealPrimary}"
+                               Margin="0,0,0,30"/>
+                    
+                    <!-- Widget Info -->
                             <Border Background="{StaticResource DarkBackground}"
                                    BorderBrush="{StaticResource DarkBorder}"
                                    BorderThickness="1"
@@ -331,9 +284,7 @@
                                        Padding="15,8"/>
                             </StackPanel>
                         </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
+            </ScrollViewer>
         </Grid>
     </Grid>
 </UserControl>
