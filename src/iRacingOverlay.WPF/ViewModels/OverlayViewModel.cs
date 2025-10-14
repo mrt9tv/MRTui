@@ -45,7 +45,7 @@ public class OverlayViewModel : INotifyPropertyChanged
         // Initialize widget list with all available widget types
         Widgets = new ObservableCollection<WidgetItemViewModel>
         {
-            new WidgetItemViewModel("The MRT Simplicity", WidgetType.GearGauge, "🎯", _widgetManager),
+            new WidgetItemViewModel("The MRT Simplicity", WidgetType.GearGauge, "🐶", _widgetManager),
             new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
             new WidgetItemViewModel("Fuel Calculator", WidgetType.Fuel, "⛽", _widgetManager)
         };

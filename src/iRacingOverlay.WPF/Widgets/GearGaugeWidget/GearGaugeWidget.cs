@@ -75,15 +75,18 @@ public class GearGaugeWidget : WidgetBase
             TertiaryDisplayOptions = TelemetryDataMapper.GetDefaultDisplayOptions(TelemetryField.RPM)
         };
         
-        // Set window properties
+        // Set window properties (base size - will be scaled via LayoutTransform)
         Width = 200;
         Height = 200;
         Title = "Driving Widget";
         
         // Create main grid (no background - transparent)
+        // Use fixed size of 200x200 for content, then scale via LayoutTransform
         _mainGrid = new Grid
         {
-            Background = Brushes.Transparent
+            Background = Brushes.Transparent,
+            Width = 200,
+            Height = 200
         };
         
         // Create circular gauge that fills the entire window
@@ -256,6 +259,9 @@ public class GearGaugeWidget : WidgetBase
         // No border - just the content
         Content = _mainGrid;
         
+        // Subscribe to SizeChanged to update scale transform
+        SizeChanged += OnWidgetSizeChanged;
+        
         // Setup blinking timer for critical warnings (500ms interval)
         _blinkTimer = new DispatcherTimer
         {
@@ -269,6 +275,23 @@ public class GearGaugeWidget : WidgetBase
     }
     
     public override WidgetType WidgetType => WidgetType.GearGauge;
+    
+    /// <summary>
+    /// Handle widget resize by scaling the content via LayoutTransform.
+    /// This prevents content shift by maintaining relative positions of all elements.
+    /// </summary>
+    private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Calculate scale factors based on original 200x200 design
+        double scaleX = ActualWidth / 200.0;
+        double scaleY = ActualHeight / 200.0;
+        
+        // Use uniform scale (smallest of the two to maintain aspect ratio)
+        double scale = Math.Min(scaleX, scaleY);
+        
+        // Apply scale transform to the entire grid
+        _mainGrid.LayoutTransform = new ScaleTransform(scale, scale);
+    }
     
     private void OnBlinkTimerTick(object? sender, EventArgs e)
     {
