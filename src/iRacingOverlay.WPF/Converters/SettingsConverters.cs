@@ -34,9 +34,9 @@ public class TabActiveConverter : IValueConverter
     {
         if (value is string selectedTab && parameter is string tabName)
         {
-            return selectedTab == tabName ? "Active" : null;
+            return selectedTab == tabName ? "Active" : string.Empty;
         }
-        return null;
+        return string.Empty;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
