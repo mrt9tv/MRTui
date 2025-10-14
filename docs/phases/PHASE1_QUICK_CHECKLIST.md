@@ -4,7 +4,7 @@
 
 ---
 
-## 🎯 Overall Progress: 60% Complete
+## 🎯 Overall Progress: 70% Complete
 
 ### Pre-Phase Setup ✅
 - [x] Requirements analysis complete
@@ -52,13 +52,20 @@
 
 ## Week 2: Settings & Polish (Days 6-10)
 
-### Day 6-7: Settings Page ⏳
-- [ ] Create SettingsView.xaml
-- [ ] Create SettingsViewModel.cs
-- [ ] Add unit selection (Metric/Imperial)
-- [ ] Add lock widgets toggle
-- [ ] Display hotkey info
-- [ ] Test settings persist
+### Day 6-7: Settings Page ✅
+- [x] Create SettingsView.xaml (2-panel Discord-style layout)
+- [x] Create SettingsViewModel.cs with immediate save
+- [x] Add unit selection (Metric/Imperial) with immediate refresh
+- [x] Add lock widgets toggle with 🔓/🔒 visual indicator
+- [x] Display hotkey info [F12] (read-only)
+- [x] Manager opacity slider (20-100% enforced)
+- [x] Always on top toggle
+- [x] Start minimized option
+- [x] About section with version info
+- [x] Reset all settings feature
+- [x] Test settings persist
+- [x] Add AppSettings properties: ManagerOpacity, AlwaysOnTop, StartMinimized
+- [x] Create value converters for tab navigation
 
 ### Day 8: Window Management ⏳
 - [ ] Implement fullscreen (1920x1080)
@@ -127,6 +134,6 @@
 
 ---
 
-**Current Status:** 🚧 Day 1-2 Complete - Foundation & Theme Setup ✅
+**Current Status:** 🚧 Day 6-7 Complete - Settings View ✅
 
-**Next Task:** Create DashboardView.xaml (Day 3)
+**Next Task:** Window Management & Polish (Day 8)

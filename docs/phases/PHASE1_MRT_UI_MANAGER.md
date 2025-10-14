@@ -1,7 +1,7 @@
 # Phase 1: MRT UI Manager - Modern Interface Redesign
 
 **Duration:** 2 weeks (10 working days)  
-**Status:** 🚧 In Progress (40% Complete)  
+**Status:** 🚧 In Progress (70% Complete)  
 **Started:** October 14, 2025  
 **Target Completion:** October 28, 2025
 
@@ -177,57 +177,61 @@ Transform the basic tab-based configuration window into a modern, full-screen MR
 
 ## 📅 Week 2: Settings, Polish & Testing
 
-### Day 6-7: Settings View
+### Day 6-7: Settings View ✅
 **Goal:** Global settings management with clean interface
 
 #### Settings View Creation
-- [ ] Create `Views/SettingsView.xaml`
-  - [ ] Add "General Settings" section
-    - [ ] Units selection
-      - [ ] ⚪ Metric (km/h, L, °C)
-      - [ ] ⚪ Imperial (mph, gal, °F)
-    - [ ] Current unit display
+- [x] Create `Views/SettingsView.xaml`
+  - [x] Add "General Settings" section
+    - [x] Units selection
+      - [x] ⚪ Metric (km/h, L, °C)
+      - [x] ⚪ Imperial (mph, gal, °F)
+    - [x] Current unit display
   
-  - [ ] Add "Widget Controls" section
-    - [ ] Lock widgets toggle (☐ ON/OFF)
-    - [ ] Hotkey configuration
-      - [ ] Display current hotkey [F12]
-      - [ ] Button to change hotkey (Phase 1.5)
-      - [ ] Description: "Lock/unlock widget positions"
+  - [x] Add "Widget Controls" section
+    - [x] Lock widgets toggle (☐ ON/OFF)
+    - [x] Hotkey configuration
+      - [x] Display current hotkey [F12]
+      - [x] Button to change hotkey (Phase 1.5)
+      - [x] Description: "Lock/unlock widget positions"
   
-  - [ ] Add "Manager Window" section
-    - [ ] Manager window opacity slider
-    - [ ] Always on top toggle
-    - [ ] Start minimized option
+  - [x] Add "Manager Window" section
+    - [x] Manager window opacity slider
+    - [x] Always on top toggle
+    - [x] Start minimized option
   
-  - [ ] Add "About" section
-    - [ ] MRT UI version
-    - [ ] iRacing SDK version
-    - [ ] GitHub link / documentation link
+  - [x] Add "About" section
+    - [x] MRT UI version
+    - [x] iRacing SDK version
+    - [x] GitHub link / documentation link
 
 #### Settings ViewModel
-- [ ] Create `ViewModels/SettingsViewModel.cs`
-  - [ ] Bind to existing AppSettings properties
-  - [ ] Unit selection command
-  - [ ] Lock widgets toggle command
-  - [ ] Hotkey display (read-only for now)
-  - [ ] Manager opacity change handler
-  - [ ] Save settings method
-  - [ ] Reset to defaults method
+- [x] Create `ViewModels/SettingsViewModel.cs`
+  - [x] Bind to existing AppSettings properties
+  - [x] Unit selection command
+  - [x] Lock widgets toggle command
+  - [x] Hotkey display (read-only for now)
+  - [x] Manager opacity change handler
+  - [x] Save settings method
+  - [x] Reset to defaults method
 
 #### Integration
-- [ ] Wire up SettingsView to MainWindow navigation
-- [ ] Test unit switching updates widgets
-- [ ] Test lock widgets toggle
-- [ ] Verify settings save correctly
-- [ ] Build and test settings page
+- [x] Wire up SettingsView to MainWindow navigation
+- [x] Test unit switching updates widgets
+- [x] Test lock widgets toggle
+- [x] Verify settings save correctly
+- [x] Build and test settings page
 
 **Deliverables:**
-- ✅ Functional settings page
-- ✅ Unit switching (Metric/Imperial)
-- ✅ Lock widgets toggle
-- ✅ Settings persistence
+- ✅ Functional settings page with 2-panel layout (tab navigation + content)
+- ✅ Unit switching (Metric/Imperial) with immediate refresh
+- ✅ Lock widgets toggle with 🔓/🔒 visual indicator
+- ✅ Manager opacity control (20-100% enforced minimum)
+- ✅ Always on top and start minimized options
+- ✅ Settings persistence with immediate save
 - ✅ About section with version info
+- ✅ Reset all settings feature with confirmation dialog
+- ✅ Professional Discord-style tab layout
 
 ---
 

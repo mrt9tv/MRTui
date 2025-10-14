@@ -80,6 +80,21 @@ public class AppSettings
     public bool UseMetric { get; set; } = true;
     
     /// <summary>
+    /// Manager window opacity (0.2 to 1.0, enforced minimum 20%)
+    /// </summary>
+    public double ManagerOpacity { get; set; } = 0.95;
+    
+    /// <summary>
+    /// Keep manager window always on top
+    /// </summary>
+    public bool AlwaysOnTop { get; set; } = false;
+    
+    /// <summary>
+    /// Start manager window minimized to taskbar
+    /// </summary>
+    public bool StartMinimized { get; set; } = false;
+    
+    /// <summary>
     /// Event raised when settings change
     /// </summary>
     public event EventHandler? SettingsChanged;

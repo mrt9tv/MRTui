@@ -76,15 +76,10 @@ public partial class MainWindow : Window
 
     private void NavigateToSettings()
     {
-        ContentFrame.Content = new TextBlock
-        {
-            Text = "⚙️ Settings View\n\nComing soon...",
-            FontSize = 24,
-            Foreground = new SolidColorBrush(Color.FromRgb(0, 128, 128)),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextAlignment = TextAlignment.Center
-        };
+        var settings = Models.AppSettings.Instance;
+        var viewModel = new SettingsViewModel(settings, _widgetManager, this);
+        var settingsView = new SettingsView(viewModel);
+        ContentFrame.Content = settingsView;
         SetActiveButton(BtnSettings);
     }
 
