@@ -287,6 +287,50 @@
                                              IsEnabled="{Binding IsActive}"/>
                                 </StackPanel>
                                 
+                                <!-- PHASE 2: Visual Enhancements (Experimental) -->
+                                <Border BorderBrush="{StaticResource TealPrimary}"
+                                       BorderThickness="1"
+                                       CornerRadius="5"
+                                       Padding="10"
+                                       Margin="0,10,0,10"
+                                       Background="{StaticResource DarkBackground}">
+                                    <StackPanel>
+                                        <TextBlock Text="🎨 Visual Enhancements (Experimental)" 
+                                                  FontSize="12"
+                                                  FontWeight="SemiBold"
+                                                  Foreground="{StaticResource TealPrimary}"
+                                                  Margin="0,0,0,10"/>
+                                        
+                                        <!-- Gradient Background -->
+                                        <CheckBox Content="Gradient Background (ON by default)"
+                                                 IsChecked="{Binding EnableGradientBackground, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        
+                                        <!-- Shift Point Ring -->
+                                        <CheckBox Content="Animated Shift Point Ring"
+                                                 IsChecked="{Binding EnableShiftPointRing, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        
+                                        <!-- Glow Effects -->
+                                        <CheckBox Content="Glow Effects"
+                                                 IsChecked="{Binding EnableGlowEffects, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        
+                                        <TextBlock Text="⚠️ Toggle features to test. Gradient background ON by default."
+                                                  FontSize="10"
+                                                  FontStyle="Italic"
+                                                  Foreground="{StaticResource MutedText}"
+                                                  TextWrapping="Wrap"
+                                                  Margin="0,5,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                                
                                 <!-- Info: Changes apply instantly -->
                                 <TextBlock Text="✨ Changes apply instantly"
                                           FontSize="11"

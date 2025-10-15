@@ -411,6 +411,53 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         }
     }
     
+    // PHASE 2: Visual Enhancement Properties (all toggleable)
+    private bool _enableGradientBackground;
+    private bool _enableShiftPointRing;
+    private bool _enableGlowEffects;
+    
+    public bool EnableGradientBackground
+    {
+        get => _enableGradientBackground;
+        set
+        {
+            if (_enableGradientBackground != value)
+            {
+                _enableGradientBackground = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly
+            }
+        }
+    }
+    
+    public bool EnableShiftPointRing
+    {
+        get => _enableShiftPointRing;
+        set
+        {
+            if (_enableShiftPointRing != value)
+            {
+                _enableShiftPointRing = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly
+            }
+        }
+    }
+    
+    public bool EnableGlowEffects
+    {
+        get => _enableGlowEffects;
+        set
+        {
+            if (_enableGlowEffects != value)
+            {
+                _enableGlowEffects = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly
+            }
+        }
+    }
+    
     /// <summary>
     /// Whether this is the MRT One widget (shows/hides settings UI)
     /// </summary>
@@ -445,6 +492,11 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         _showBottom = true;
         _showLeft = true;
         _showRight = true;
+        
+        // PHASE 2: Initialize visual enhancement settings
+        _enableGradientBackground = true;  // ON by default
+        _enableShiftPointRing = false;
+        _enableGlowEffects = false;
     }
     
     private void ToggleActive()
@@ -509,6 +561,11 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 _showLeft = settings.ShowLeft;
                 _showRight = settings.ShowRight;
                 
+                // PHASE 2: Load visual enhancement settings
+                _enableGradientBackground = settings.EnableGradientBackground;
+                _enableShiftPointRing = settings.EnableShiftPointRing;
+                _enableGlowEffects = settings.EnableGlowEffects;
+                
                 // Notify all MRT One properties changed
                 OnPropertyChanged(nameof(TopSelectedField));
                 OnPropertyChanged(nameof(CenterSelectedField));
@@ -520,6 +577,11 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(ShowBottom));
                 OnPropertyChanged(nameof(ShowLeft));
                 OnPropertyChanged(nameof(ShowRight));
+                
+                // PHASE 2: Notify visual enhancement properties changed
+                OnPropertyChanged(nameof(EnableGradientBackground));
+                OnPropertyChanged(nameof(EnableShiftPointRing));
+                OnPropertyChanged(nameof(EnableGlowEffects));
                 
                 // Clear flag after loading complete
                 _isLoadingSettings = false;
@@ -631,7 +693,11 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                     ShowCenter = !string.IsNullOrEmpty(_centerSelectedField) && _centerSelectedField != "None",
                     ShowBottom = !string.IsNullOrEmpty(_bottomSelectedField) && _bottomSelectedField != "None",
                     ShowLeft = !string.IsNullOrEmpty(_leftSelectedField) && _leftSelectedField != "None",
-                    ShowRight = !string.IsNullOrEmpty(_rightSelectedField) && _rightSelectedField != "None"
+                    ShowRight = !string.IsNullOrEmpty(_rightSelectedField) && _rightSelectedField != "None",
+                    // PHASE 2: Visual Enhancement Settings
+                    EnableGradientBackground = _enableGradientBackground,
+                    EnableShiftPointRing = _enableShiftPointRing,
+                    EnableGlowEffects = _enableGlowEffects
                 };
                 
                 // Apply to widget (this will update UI and save to config)

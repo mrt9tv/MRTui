@@ -68,6 +68,28 @@ public class MRTOneSettings
     [JsonPropertyName("showRight")]
     public bool ShowRight { get; set; } = true;
     
+    // ============================================
+    // PHASE 2: Visual Enhancement Toggles
+    // ============================================
+    
+    /// <summary>
+    /// Enable gradient background (radial gradient for depth effect) - ON by default
+    /// </summary>
+    [JsonPropertyName("enableGradientBackground")]
+    public bool EnableGradientBackground { get; set; } = true;
+    
+    /// <summary>
+    /// Enable animated shift point ring (arc fills as RPM approaches shift point)
+    /// </summary>
+    [JsonPropertyName("enableShiftPointRing")]
+    public bool EnableShiftPointRing { get; set; } = false;
+    
+    /// <summary>
+    /// Enable glow effects (drop shadows on critical elements)
+    /// </summary>
+    [JsonPropertyName("enableGlowEffects")]
+    public bool EnableGlowEffects { get; set; } = false;
+    
     /// <summary>
     /// Create default settings
     /// </summary>
@@ -82,7 +104,11 @@ public class MRTOneSettings
         ShowCenter = true,
         ShowBottom = true,
         ShowLeft = true,
-        ShowRight = true
+        ShowRight = true,
+        // Visual enhancements
+        EnableGradientBackground = true,  // ON by default
+        EnableShiftPointRing = false,
+        EnableGlowEffects = false
     };
     
     /// <summary>

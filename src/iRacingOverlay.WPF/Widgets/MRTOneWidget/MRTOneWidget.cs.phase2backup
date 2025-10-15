@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using iRacingOverlay.Core.Models;
@@ -20,16 +19,11 @@ namespace iRacingOverlay.WPF.Widgets.MRTOneWidget;
 /// <summary>
 /// MRT One - Compact circular gauge widget showing Gear (center), Speed (top), and RPM (bottom)
 /// Racelabs-inspired design with intelligent shift point detection and theme colors
-/// Phase 2: Toggleable visual enhancements (gradient, shift ring, glow, typography, dynamic colors)
 /// </summary>
 public class MRTOneWidget : WidgetBase
 {
     private readonly Grid _mainGrid;
     private readonly Ellipse _gaugeCircle;
-    
-    // PHASE 2: Visual Enhancement Elements (all optional/toggleable)
-    private Ellipse? _rpmIndicatorBead;  // Small circle that travels on gauge showing current RPM
-    private DispatcherTimer? _rpmBeadAnimationTimer;  // Animation timer for RPM bead
     
     // Dynamic text displays for top/center/bottom
     private readonly StackPanel _topStack;
@@ -116,9 +110,6 @@ public class MRTOneWidget : WidgetBase
             Margin = new Thickness(5) // Small margin for stroke
         };
         _mainGrid.Children.Add(_gaugeCircle);
-        
-        // PHASE 2: Apply visual enhancements based on settings
-        ApplyVisualEnhancements();
         
         // Top section: Value + Label (positioned absolutely in top portion of circle)
         _topStack = new StackPanel
@@ -380,9 +371,6 @@ public class MRTOneWidget : WidgetBase
         
         // Apply visibility
         ApplyVisibilitySettings();
-        
-        // PHASE 2: Apply visual enhancements based on updated settings
-        ApplyVisualEnhancements();
         
         // Save to config
         SaveSettings();
@@ -769,11 +757,11 @@ public class MRTOneWidget : WidgetBase
             _rightLabelText.Text = GetFieldLabel(_rightField.Value);
         }
         
-        // Update gauge circle color based on RPM zone
+        // Update gauge circle color based on RPM zones
         var rpm = data.RPM;
         var zone = ShiftPointCalculator.GetRPMZone(rpm, data.Gear);
         
-        Color borderColor = zone switch
+        var rpmColor = zone switch
         {
             ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // RED - at limiter
             ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // ORANGE - optimal shift
@@ -781,7 +769,7 @@ public class MRTOneWidget : WidgetBase
             _ => _primaryColor                                          // TEAL - safe range
         };
         
-        _gaugeCircle.Stroke = new SolidColorBrush(borderColor);
+        _gaugeCircle.Stroke = new SolidColorBrush(rpmColor);
     }
     
     /// <summary>
@@ -920,257 +908,8 @@ public class MRTOneWidget : WidgetBase
         }
     }
     
-    // ============================================
-    // PHASE 2: TOGGLEABLE VISUAL ENHANCEMENTS
-    // All features can be enabled/disabled via settings
-    // Easy rollback: Set all Enable* flags to false
-    // ============================================
-    
-    /// <summary>
-    /// Apply all visual enhancements based on current settings
-    /// Call this whenever settings change to update visual features
-    /// </summary>
-    private void ApplyVisualEnhancements()
-    {
-        // Enhancement 1: Gradient Background
-        if (_settings.EnableGradientBackground)
-        {
-            ApplyGradientBackground();
-        }
-        else
-        {
-            // Revert to solid background
-            _gaugeCircle.Fill = new SolidColorBrush(Color.FromArgb(
-                (byte)(255 * _backgroundOpacity), 20, 20, 20));
-        }
-        
-        // Enhancement 2: Shift Point Ring
-        if (_settings.EnableShiftPointRing)
-        {
-            CreateShiftPointRing();
-        }
-        else
-        {
-            RemoveShiftPointRing();
-        }
-        
-        // Enhancement 3: Glow Effects
-        if (_settings.EnableGlowEffects)
-        {
-            ApplyGlowEffects();
-        }
-        else
-        {
-            RemoveGlowEffects();
-        }
-    }
-    
-    // ============================================
-    // Enhancement 1: Gradient Background
-    // ============================================
-    private void ApplyGradientBackground()
-    {
-        if (_gaugeCircle == null) return; // Guard against early call
-        
-        var gradient = new RadialGradientBrush();
-        gradient.GradientOrigin = new Point(0.5, 0.5);
-        gradient.Center = new Point(0.5, 0.5);
-        gradient.RadiusX = 0.5;
-        gradient.RadiusY = 0.5;
-        
-        // Center (lighter) to edge (darker) gradient
-        gradient.GradientStops.Add(new GradientStop(
-            Color.FromArgb((byte)(255 * _backgroundOpacity), 30, 30, 30), 0.0));
-        gradient.GradientStops.Add(new GradientStop(
-            Color.FromArgb((byte)(255 * _backgroundOpacity), 10, 10, 10), 1.0));
-        
-        _gaugeCircle.Fill = gradient;
-    }
-    
-    // ============================================
-    // Enhancement 2: Animated RPM Indicator Bead
-    // Small circle that travels ON the gauge circle showing current RPM
-    // Animates from bottom (6 o'clock) to top (12 o'clock) = 180° arc
-    // ============================================
-    private void CreateShiftPointRing()
-    {
-        // Remove existing elements if present
-        RemoveShiftPointRing();
-        
-        // Create small circular bead that travels on the gauge circle
-        // Moves from bottom (0% RPM) to top center (100% RPM)
-        _rpmIndicatorBead = new Ellipse
-        {
-            Width = 12,
-            Height = 12,
-            Fill = new SolidColorBrush(_secondaryColor),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            RenderTransform = new TranslateTransform(),
-            Visibility = Visibility.Collapsed  // Start hidden, will show after first position update
-        };
-        
-        // Add bead to grid (above gauge circle but below text)
-        _mainGrid.Children.Insert(1, _rpmIndicatorBead);
-        
-        // Create animation timer (smoother at 30 FPS)
-        _rpmBeadAnimationTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(33) // ~30 FPS for smooth animation
-        };
-        _rpmBeadAnimationTimer.Tick += UpdateShiftPointRing;
-        _rpmBeadAnimationTimer.Start();
-        
-        // Immediately update position to avoid flash at center
-        UpdateShiftPointRing(null, EventArgs.Empty);
-    }
-    
-    private void RemoveShiftPointRing()
-    {
-        if (_rpmIndicatorBead != null)
-        {
-            _mainGrid.Children.Remove(_rpmIndicatorBead);
-            _rpmIndicatorBead = null;
-        }
-        
-        if (_rpmBeadAnimationTimer != null)
-        {
-            _rpmBeadAnimationTimer.Stop();
-            _rpmBeadAnimationTimer.Tick -= UpdateShiftPointRing;
-            _rpmBeadAnimationTimer = null;
-        }
-    }
-    
-    // Update bead position based on current RPM
-    // Bead travels from bottom (90° = 0% RPM) to top center (270° = 100% RPM)
-    private void UpdateShiftPointRing(object? sender, EventArgs e)
-    {
-        if (_rpmIndicatorBead == null || _lastTelemetryData == null || _gaugeCircle == null)
-            return;
-        
-        var rpm = _lastTelemetryData.RPM;
-        var zone = ShiftPointCalculator.GetRPMZone(rpm, _lastTelemetryData.Gear);
-        
-        // Use actual engine redline from telemetry if available (most accurate)
-        // Fall back to estimated redline only if telemetry doesn't provide it
-        double redline = _lastTelemetryData.EngineRedlineRPM > 0 
-            ? _lastTelemetryData.EngineRedlineRPM 
-            : ShiftPointCalculator.GetEstimatedRedline();
-        
-        // Safety check: ensure redline is reasonable (not too low)
-        if (redline < 3000)
-        {
-            redline = 8000; // Use safe default if redline seems invalid
-        }
-        
-        // Don't show bead if we don't have valid RPM data
-        if (rpm <= 0 || redline <= 0)
-        {
-            _rpmIndicatorBead.Visibility = Visibility.Collapsed;
-            return;
-        }
-        
-        // Map 0-100% RPM to 0-100% of arc (FULL RANGE, not compressed)
-        double percentage = Math.Min(rpm / redline, 1.0);  // Clamp to 100%
-        
-        // Map percentage to angle on RIGHT HALF of circle (90° to 270°)
-        // 0% RPM = 90° (bottom), 50% RPM = 180° (right), 100% RPM = 270° (top center)
-        double angle = 90 + (percentage * 180);
-        double angleRad = angle * Math.PI / 180;
-        
-        // Position bead ON the gauge circle using RenderTransform
-        double centerX = _gaugeCircle.ActualWidth / 2;
-        double centerY = _gaugeCircle.ActualHeight / 2;
-        double gaugeRadius = (Math.Min(_gaugeCircle.ActualWidth, _gaugeCircle.ActualHeight) / 2);
-        
-        // Adjust radius slightly inward to center bead ON the stroke
-        // This prevents clipping and ensures perfect alignment
-        double adjustedRadius = gaugeRadius - (_gaugeCircle.StrokeThickness / 2);
-        
-        // Calculate bead position on circle
-        double beadX = adjustedRadius * Math.Cos(angleRad);
-        double beadY = adjustedRadius * Math.Sin(angleRad);
-        
-        // Round to nearest pixel for crisp rendering and force perfect centering at top
-        // Smoothly transition to centered as we approach top (no flickering)
-        if (angle >= 260)  // Above 94.4% RPM, start centering horizontally
-        {
-            // Gradually reduce horizontal offset as we approach 270°
-            // This prevents flickering at high RPM
-            double centeringFactor = Math.Min(1.0, (angle - 260) / 10.0);  // 0 at 260°, 1 at 270°
-            beadX = beadX * (1.0 - centeringFactor);  // Smoothly approach X=0
-            beadX = Math.Round(beadX);
-        }
-        else
-        {
-            beadX = Math.Round(beadX);
-        }
-        beadY = Math.Round(beadY);
-        
-        // Apply transform to move bead from center to calculated position
-        if (_rpmIndicatorBead.RenderTransform is TranslateTransform transform)
-        {
-            transform.X = beadX;
-            transform.Y = beadY;
-        }
-        
-        // Make bead visible after positioning (prevents flash at center on creation)
-        _rpmIndicatorBead.Visibility = Visibility.Visible;
-        
-        // Color based on zone (matches gauge circle colors)
-        Color beadColor = zone switch
-        {
-            ShiftPointCalculator.RPMZone.Danger => Colors.Red,
-            ShiftPointCalculator.RPMZone.Optimal => _secondaryColor, // Orange
-            ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,
-            _ => _primaryColor // Teal for safe zone
-        };
-        _rpmIndicatorBead.Fill = new SolidColorBrush(beadColor);
-    }
-    
-    // ============================================
-    // Enhancement 3: Glow Effects
-    // ============================================
-    private void ApplyGlowEffects()
-    {
-        // Add subtle glow to center value (gear) - with null check
-        if (_centerValueText != null)
-        {
-            _centerValueText.Effect = new DropShadowEffect
-            {
-                Color = _primaryColor,
-                BlurRadius = 15,
-                ShadowDepth = 0,
-                Opacity = 0.8
-            };
-        }
-        
-        // Add subtle glow to gauge circle border - with null check
-        if (_gaugeCircle != null)
-        {
-            _gaugeCircle.Effect = new DropShadowEffect
-            {
-                Color = _primaryColor,
-                BlurRadius = 10,
-                ShadowDepth = 0,
-                Opacity = 0.6
-            };
-        }
-    }
-    
-    private void RemoveGlowEffects()
-    {
-        if (_centerValueText != null)
-            _centerValueText.Effect = null;
-        if (_gaugeCircle != null)
-            _gaugeCircle.Effect = null;
-    }
-    
     protected override void OnClosed(EventArgs e)
     {
-        // Clean up Phase 2 resources
-        RemoveShiftPointRing();
-        
         AppSettings.Instance.SettingsChanged -= OnSettingsChanged;
         base.OnClosed(e);
     }
