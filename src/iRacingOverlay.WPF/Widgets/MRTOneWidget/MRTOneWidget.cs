@@ -67,7 +67,7 @@ public class MRTOneWidget : WidgetBase
     // Configurable opacity
     private double _backgroundOpacity = 0.85;
     
-    public MRTOneWidget(ITelemetryService telemetryService) : base(telemetryService)
+    public MRTOneWidget(ITelemetryService telemetryService, WidgetConfig? config = null) : base(telemetryService, config)
     {
         // Load theme colors from settings
         _primaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.PrimaryColor);
@@ -92,9 +92,7 @@ public class MRTOneWidget : WidgetBase
         _leftField = _settings.LeftFieldEnum;
         _rightField = _settings.RightFieldEnum;
         
-        // Set window properties (base size - will be scaled via LayoutTransform)
-        Width = 200;
-        Height = 200;
+        // Set window title (size is already set by base.ApplyConfiguration from config)
         Title = "MRT One";
         
         // Create main grid (no background - transparent)
@@ -282,6 +280,14 @@ public class MRTOneWidget : WidgetBase
         // Subscribe to SizeChanged to update scale transform
         SizeChanged += OnWidgetSizeChanged;
         
+        // Apply initial scale transform based on loaded size from config
+        // (SizeChanged event won't fire if size was set before event handler was attached)
+        if (Width > 0 && Height > 0)
+        {
+            double scale = Math.Min(Width / 200.0, Height / 200.0);
+            _mainGrid.LayoutTransform = new ScaleTransform(scale, scale);
+        }
+        
         // Setup blinking timer for critical warnings (500ms interval)
         _blinkTimer = new DispatcherTimer
         {
@@ -304,20 +310,46 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     private MRTOneSettings LoadSettings()
     {
+        var logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
         try
         {
+            var log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: Config.Settings has {Config.Settings.Count} entries";
+            System.IO.File.AppendAllText(logPath, log);
+            
             if (Config.Settings.TryGetValue("mrtone", out var settingsObj))
             {
+                log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: Found 'mrtone' entry, type: {settingsObj?.GetType().Name}";
+                System.IO.File.AppendAllText(logPath, log);
+                
                 var json = JsonSerializer.Serialize(settingsObj);
+                log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: JSON length: {json.Length}";
+                System.IO.File.AppendAllText(logPath, log);
+                log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: JSON: {json.Substring(0, Math.Min(300, json.Length))}";
+                System.IO.File.AppendAllText(logPath, log);
+                
                 var settings = JsonSerializer.Deserialize<MRTOneSettings>(json);
-                return settings ?? MRTOneSettings.Default;
+                
+                if (settings != null)
+                {
+                    log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: ✓ SUCCESS - ShiftRing={settings.EnableShiftPointRing}, Glow={settings.EnableGlowEffects}, Gradient={settings.EnableGradientBackground}";
+                    System.IO.File.AppendAllText(logPath, log);
+                    return settings;
+                }
+            }
+            else
+            {
+                log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: ✗ 'mrtone' entry NOT found in Config.Settings";
+                System.IO.File.AppendAllText(logPath, log);
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // If deserialization fails, use defaults
+            var log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: ✗ Exception: {ex.Message}";
+            System.IO.File.AppendAllText(logPath, log);
         }
         
+        var finalLog = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] LoadSettings: Returning DEFAULTS (Gradient=ON, ShiftRing=OFF, Glow=OFF)";
+        System.IO.File.AppendAllText(logPath, finalLog);
         return MRTOneSettings.Default;
     }
     
@@ -328,16 +360,14 @@ public class MRTOneWidget : WidgetBase
     {
         try
         {
+            // Serialize to JSON then deserialize to JsonElement for proper Dictionary<string,object> storage
             var json = JsonSerializer.Serialize(_settings);
-            var settingsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-            if (settingsObj != null)
-            {
-                Config.Settings["mrtone"] = settingsObj;
-            }
+            var element = JsonSerializer.Deserialize<JsonElement>(json);
+            Config.Settings["mrtone"] = element;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Silent fail - settings won't persist
+            System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
         }
     }
     
@@ -541,10 +571,11 @@ public class MRTOneWidget : WidgetBase
             TelemetryField.FuelPercent when value is float fuelPct => $"{(int)(fuelPct * 100)}%",
             
             // Fuel (NO units - they're in the label now)
+            // Force invariant culture to always use "." as decimal separator
             TelemetryField.FuelLevel when value is float fuel => 
                 AppSettings.Instance.UseMetricUnits 
-                    ? $"{fuel:F1}" 
-                    : $"{(fuel * 0.264172f):F1}",
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
             
             // Temperatures (NO units or decimals - units are in label)
             TelemetryField.WaterTemp when value is float temp => 
@@ -874,11 +905,11 @@ public class MRTOneWidget : WidgetBase
     {
         var config = base.GetConfiguration();
         
-        // Store data binding configuration in settings
-        config.Settings["PrimaryField"] = _dataBinding.PrimaryField.ToString();
-        config.Settings["SecondaryField"] = _dataBinding.SecondaryField?.ToString() ?? "Speed";
-        config.Settings["TertiaryField"] = _dataBinding.TertiaryField?.ToString() ?? "RPM";
-        config.Settings["BackgroundOpacity"] = _backgroundOpacity;
+        // Ensure latest settings are saved to Config.Settings before retrieving
+        SaveSettings();
+        
+        // The SaveSettings() method already stored MRTOneSettings in Config.Settings["mrtone"]
+        // No need to manually add individual fields - they're all in the mrtone settings object
         
         return config;
     }
@@ -932,6 +963,10 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     private void ApplyVisualEnhancements()
     {
+        var logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
+        var log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] ApplyVisualEnhancements: Gradient={_settings.EnableGradientBackground}, ShiftRing={_settings.EnableShiftPointRing}, Glow={_settings.EnableGlowEffects}";
+        System.IO.File.AppendAllText(logPath, log);
+        
         // Enhancement 1: Gradient Background
         if (_settings.EnableGradientBackground)
         {
@@ -947,6 +982,8 @@ public class MRTOneWidget : WidgetBase
         // Enhancement 2: Shift Point Ring
         if (_settings.EnableShiftPointRing)
         {
+            log = $"\n[{DateTime.Now:HH:mm:ss}] [MRTOne] Creating shift point ring...";
+            System.IO.File.AppendAllText(logPath, log);
             CreateShiftPointRing();
         }
         else

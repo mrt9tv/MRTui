@@ -47,6 +47,10 @@ public partial class MainWindow : Window
         // Load and apply saved settings
         ApplyWindowSettings();
 
+        // Load saved layout (widgets and their configurations)
+        // If no saved layout exists, user can manually create widgets via Overlay Manager
+        _widgetManager.LoadSavedLayout();
+
         // Initialize status bar with current connection status
         UpdateConnectionStatus(_telemetryService.Status);
 
@@ -147,6 +151,9 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _telemetryService.StatusChanged -= OnTelemetryStatusChanged;
+        
+        // Save current layout before closing
+        _widgetManager.SaveCurrentLayout();
         
         // Close all widget windows before shutting down
         _widgetManager.RemoveAllWidgets();

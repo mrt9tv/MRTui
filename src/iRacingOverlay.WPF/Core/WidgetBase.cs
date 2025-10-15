@@ -141,6 +141,7 @@ public abstract class WidgetBase : Window
         Top = Config.Y;
         Width = Config.Width;
         Height = Config.Height;
+        Opacity = Config.Opacity;
         
         if (Config.IsVisible)
         {
@@ -214,6 +215,7 @@ public abstract class WidgetBase : Window
         Config.Y = Top;
         Config.Width = Width;
         Config.Height = Height;
+        Config.Opacity = Opacity;
         Config.IsVisible = IsVisible;
 
         return Config;

@@ -40,6 +40,11 @@ public class WidgetConfig
     public double Height { get; set; } = 200;
 
     /// <summary>
+    /// Window opacity (0.0 to 1.0)
+    /// </summary>
+    public double Opacity { get; set; } = 1.0;
+
+    /// <summary>
     /// Widget-specific settings (different for each widget type)
     /// Example: { "showKph": true, "showMph": false, "fontSize": 24 }
     /// </summary>

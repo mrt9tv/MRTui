@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
@@ -142,15 +143,61 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 // Toggle widget on/off
                 if (value)
                 {
-                    _widgetManager.CreateWidget(Type);
+                    // Check if widget already exists
+                    var existingWidgets = _widgetManager.GetWidgetsByType(Type).ToList();
+                    
+                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
+                    
+                    if (existingWidgets.Any())
+                    {
+                        // Widget exists, just show it
+                        var log = $"\n[{DateTime.Now:HH:mm:ss}] [OverlayVM] IsActive: Widget exists, showing it";
+                        File.AppendAllText(logPath, log);
+                        
+                        foreach (var widget in existingWidgets)
+                        {
+                            widget.Show();
+                            widget.Config.IsVisible = true; // Update config to track visibility
+                        }
+                        
+                        // Save layout to persist IsVisible = true
+                        _widgetManager.SaveCurrentLayout();
+                    }
+                    else
+                    {
+                        // Widget doesn't exist, create it with saved config if available
+                        var savedConfig = _widgetManager.GetSavedWidgetConfig(Type);
+                        
+                        if (savedConfig != null)
+                        {
+                            var log = $"\n[{DateTime.Now:HH:mm:ss}] [OverlayVM] IsActive: Creating widget with saved config ({savedConfig.Settings.Count} settings)";
+                            File.AppendAllText(logPath, log);
+                            _widgetManager.CreateWidget(Type, savedConfig);
+                        }
+                        else
+                        {
+                            var log = $"\n[{DateTime.Now:HH:mm:ss}] [OverlayVM] IsActive: Creating widget with defaults";
+                            File.AppendAllText(logPath, log);
+                            _widgetManager.CreateWidget(Type);
+                        }
+                    }
                 }
                 else
                 {
+                    // Hide widgets (don't remove them to preserve settings)
+                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
+                    var log = $"\n[{DateTime.Now:HH:mm:ss}] [OverlayVM] IsActive: Hiding widgets";
+                    File.AppendAllText(logPath, log);
+                    
                     var widgets = _widgetManager.GetWidgetsByType(Type).ToList();
                     foreach (var widget in widgets)
                     {
-                        _widgetManager.RemoveWidget(widget.WidgetId);
+                        widget.Hide();
+                        widget.Config.IsVisible = false; // Update config to track visibility
                     }
+                    
+                    // Save layout to persist IsVisible = false
+                    _widgetManager.SaveCurrentLayout();
                 }
             }
         }
@@ -604,6 +651,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         {
             widget.Opacity = Opacity;
         }
+        
+        // Save layout to persist opacity changes
+        _widgetManager.SaveCurrentLayout();
     }
 
     private void ApplySize()
@@ -615,6 +665,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             widget.Width = WidgetSize;
             widget.Height = WidgetSize;
         }
+        
+        // Save layout to persist size changes
+        _widgetManager.SaveCurrentLayout();
     }
 
     private void ResetPosition()
@@ -627,6 +680,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             widget.Top = 50;
         }
         UpdateState(); // Update position display
+        
+        // Save layout to persist position changes
+        _widgetManager.SaveCurrentLayout();
     }
 
     private void ResetAll()
@@ -639,6 +695,35 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         
         // Reset position
         ResetPosition();
+        
+        // Reset MRT-1 specific settings to defaults
+        if (Type == WidgetType.MRTOne)
+        {
+            // Reset Phase 2 visual enhancements to defaults
+            EnableGradientBackground = true;  // ON by default
+            EnableShiftPointRing = false;     // OFF by default
+            EnableGlowEffects = false;        // OFF by default
+            
+            // Reset field selections to defaults
+            TopSelectedField = "Speed";
+            CenterSelectedField = "Gear";
+            BottomSelectedField = "RPM";
+            LeftSelectedField = "FuelLevel";
+            RightSelectedField = "Brake";
+            
+            // Reset field visibility to defaults (all shown)
+            ShowTop = true;
+            ShowCenter = true;
+            ShowBottom = true;
+            ShowLeft = true;
+            ShowRight = true;
+            
+            // Apply the reset settings to the widget
+            ApplySettings();
+        }
+        
+        // Save layout to persist all reset changes
+        _widgetManager.SaveCurrentLayout();
     }
 
     private void CenterHorizontally()
@@ -653,6 +738,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             widget.Left = (screenWidth - widget.Width) / 2;
         }
         UpdateState(); // Update position display
+        
+        // Save layout to persist position changes
+        _widgetManager.SaveCurrentLayout();
     }
 
     private void CenterVertically()
@@ -667,6 +755,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             widget.Top = (screenHeight - widget.Height) / 2;
         }
         UpdateState(); // Update position display
+        
+        // Save layout to persist position changes
+        _widgetManager.SaveCurrentLayout();
     }
     
     private void ApplySettings()
@@ -702,6 +793,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 
                 // Apply to widget (this will update UI and save to config)
                 mrtOneWidget.UpdateWidgetSettings(newSettings);
+                
+                // Persist layout to disk
+                _widgetManager.SaveCurrentLayout();
             }
         }
         
