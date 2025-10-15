@@ -97,6 +97,7 @@ Docs/
 6. **PROPER SEPARATION**: Keep UI logic in code-behind, domain logic in services/mappers
 7. **RESOURCE MANAGEMENT**: Dispose widgets properly, unsubscribe from events, close timers
 8. **PROGRESS TRACKING**: Update TODO/Phase checkboxes when completing tasks from lists
+9. **CRITICAL - BUILD VERIFICATION**: After EVERY build command (dotnet build, run_task, etc.), immediately check the output to verify success or failure. If build failed, read ALL error messages carefully and fix every compilation error before proceeding. Never assume build success - always verify the result explicitly.
 
 ### Domain-Specific Guidelines
 
@@ -305,9 +306,18 @@ dotnet build /t:ShowAssemblyInfo
 
 1. **Make Code Changes**: Edit .cs or .xaml files
 2. **Build Application**: `dotnet build` or F5 in Visual Studio
-3. **Test in iRacing**: Launch iRacing, join session, verify overlay behavior
-4. **Iterate**: Fix issues, rebuild, test again
-5. **Commit**: Use conventional commit format with clear scope
+3. **CRITICAL - Verify Build Result**: 
+   - **ALWAYS check if build succeeded or failed**
+   - If `run_task` was used, check the task output immediately
+   - If `run_in_terminal` was used, read the terminal output
+   - Look for "Build succeeded" or "Build FAILED"
+   - If failed, read ALL error messages line-by-line
+   - Identify the exact file, line number, and error type
+   - Fix EVERY compilation error before proceeding
+   - **NEVER assume build success** - verify explicitly
+4. **Test in iRacing**: Launch iRacing, join session, verify overlay behavior (only after successful build)
+5. **Iterate**: Fix issues, rebuild, test again
+6. **Commit**: Use conventional commit format with clear scope
 
 ## Critical Policies
 

@@ -40,19 +40,9 @@ public class AppSettings
     
     /// <summary>
     /// Custom short labels for telemetry fields (e.g., "THR" instead of "THRTL")
+    /// Note: Labels are now generated dynamically with units in GetFieldLabel()
     /// </summary>
-    public Dictionary<string, string> CustomLabels { get; set; } = new Dictionary<string, string>
-    {
-        { "Throttle", "THRTL" },
-        { "Brake", "BRAKE" },
-        { "Clutch", "CLUTCH" },
-        { "FuelLevel", "FUEL" },
-        { "WaterTemp", "WATER" },
-        { "OilTemp", "OIL" },
-        { "Speed", "SPEED" },
-        { "RPM", "RPM" },
-        { "Gear", "GEAR" }
-    };
+    public Dictionary<string, string> CustomLabels { get; set; } = new Dictionary<string, string>();
     
     // Fuel Widget Settings
     /// <summary>

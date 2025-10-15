@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -46,6 +47,9 @@ public class MRTOneWidget : WidgetBase
     private TelemetryField? _leftField = null;
     private TelemetryField? _rightField = null;
     
+    // Widget-specific settings
+    private MRTOneSettings _settings;
+    
     // Blinking timer for critical warnings
     private readonly DispatcherTimer _blinkTimer;
     private bool _blinkState = false;
@@ -64,16 +68,23 @@ public class MRTOneWidget : WidgetBase
         _secondaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.SecondaryColor);
         _backgroundOpacity = AppSettings.Instance.DefaultOpacity;
         
-        // Configure default data binding
+        // Load widget-specific settings from Config.Settings or use defaults
+        _settings = LoadSettings();
+        
+        // Configure data binding based on loaded settings
         _dataBinding = new WidgetDataBinding
         {
-            PrimaryField = TelemetryField.Gear,
-            SecondaryField = TelemetryField.Speed,
-            TertiaryField = TelemetryField.RPM,
-            PrimaryDisplayOptions = TelemetryDataMapper.GetDefaultDisplayOptions(TelemetryField.Gear),
-            SecondaryDisplayOptions = TelemetryDataMapper.GetDefaultDisplayOptions(TelemetryField.Speed),
-            TertiaryDisplayOptions = TelemetryDataMapper.GetDefaultDisplayOptions(TelemetryField.RPM)
+            PrimaryField = _settings.CenterFieldEnum ?? TelemetryField.Gear,
+            SecondaryField = _settings.TopFieldEnum,
+            TertiaryField = _settings.BottomFieldEnum,
+            PrimaryDisplayOptions = TelemetryDataMapper.GetDefaultDisplayOptions(_settings.CenterFieldEnum ?? TelemetryField.Gear),
+            SecondaryDisplayOptions = _settings.TopFieldEnum.HasValue ? TelemetryDataMapper.GetDefaultDisplayOptions(_settings.TopFieldEnum.Value) : null,
+            TertiaryDisplayOptions = _settings.BottomFieldEnum.HasValue ? TelemetryDataMapper.GetDefaultDisplayOptions(_settings.BottomFieldEnum.Value) : null
         };
+        
+        // Set left and right fields from settings
+        _leftField = _settings.LeftFieldEnum;
+        _rightField = _settings.RightFieldEnum;
         
         // Set window properties (base size - will be scaled via LayoutTransform)
         Width = 200;
@@ -189,7 +200,7 @@ public class MRTOneWidget : WidgetBase
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(10, 0, 0, 0),
+            Margin = new Thickness(30, -9, 0, 0), // 15% horizontal, -9px vertical to align value with center (label height + margin)
             Visibility = Visibility.Collapsed // Hidden by default
         };
         
@@ -197,7 +208,7 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 9,
+            FontSize = 8,  // Reduced from 9 to 8 for better fit
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -209,12 +220,12 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "--",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 14,
+            FontSize = 13,  // Reduced from 14 to 13 for better proportions
             FontWeight = FontWeights.Bold,
             Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 2, 0, 0)
+            Margin = new Thickness(0, 1, 0, 0)  // Reduced gap from 2 to 1
         };
         _leftBox.Children.Add(_leftValueText);
         
@@ -225,7 +236,7 @@ public class MRTOneWidget : WidgetBase
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 0, 10, 0),
+            Margin = new Thickness(0, -9, 30, 0), // 15% horizontal, -9px vertical to align value with center (label height + margin)
             Visibility = Visibility.Collapsed // Hidden by default
         };
         
@@ -233,7 +244,7 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 9,
+            FontSize = 8,  // Reduced from 9 to 8 for better fit
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -245,12 +256,12 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "--",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = 14,
+            FontSize = 13,  // Reduced from 14 to 13 for better proportions
             FontWeight = FontWeights.Bold,
             Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 2, 0, 0)
+            Margin = new Thickness(0, 1, 0, 0)  // Reduced gap from 2 to 1
         };
         _rightBox.Children.Add(_rightValueText);
         
@@ -272,9 +283,112 @@ public class MRTOneWidget : WidgetBase
         
         // Subscribe to settings changes
         AppSettings.Instance.SettingsChanged += OnSettingsChanged;
+        
+        // Apply visibility settings
+        ApplyVisibilitySettings();
     }
     
     public override WidgetType WidgetType => WidgetType.MRTOne;
+    
+    /// <summary>
+    /// Load MRTOneSettings from Config.Settings dictionary, or return defaults
+    /// </summary>
+    private MRTOneSettings LoadSettings()
+    {
+        try
+        {
+            if (Config.Settings.TryGetValue("mrtone", out var settingsObj))
+            {
+                var json = JsonSerializer.Serialize(settingsObj);
+                var settings = JsonSerializer.Deserialize<MRTOneSettings>(json);
+                return settings ?? MRTOneSettings.Default;
+            }
+        }
+        catch (Exception)
+        {
+            // If deserialization fails, use defaults
+        }
+        
+        return MRTOneSettings.Default;
+    }
+    
+    /// <summary>
+    /// Save current settings to Config.Settings dictionary
+    /// </summary>
+    private void SaveSettings()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(_settings);
+            var settingsObj = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+            if (settingsObj != null)
+            {
+                Config.Settings["mrtone"] = settingsObj;
+            }
+        }
+        catch (Exception)
+        {
+            // Silent fail - settings won't persist
+        }
+    }
+    
+    /// <summary>
+    /// Apply visibility settings to UI sections
+    /// </summary>
+    private void ApplyVisibilitySettings()
+    {
+        _topStack.Visibility = _settings.ShowTop ? Visibility.Visible : Visibility.Collapsed;
+        _centerValueText.Visibility = _settings.ShowCenter ? Visibility.Visible : Visibility.Collapsed;
+        _bottomStack.Visibility = _settings.ShowBottom ? Visibility.Visible : Visibility.Collapsed;
+        _leftBox.Visibility = (_settings.ShowLeft && _leftField.HasValue) ? Visibility.Visible : Visibility.Collapsed;
+        _rightBox.Visibility = (_settings.ShowRight && _rightField.HasValue) ? Visibility.Visible : Visibility.Collapsed;
+        
+        // Adjust center font size based on whether side boxes are visible
+        UpdateCenterFontSize();
+    }
+    
+    /// <summary>
+    /// Update widget settings (called from OverlayViewModel)
+    /// </summary>
+    public void UpdateWidgetSettings(MRTOneSettings newSettings)
+    {
+        _settings = newSettings;
+        
+        // Update data binding fields
+        _dataBinding.SecondaryField = _settings.TopFieldEnum;  // Top
+        _dataBinding.PrimaryField = _settings.CenterFieldEnum ?? TelemetryField.None;  // Center
+        _dataBinding.TertiaryField = _settings.BottomFieldEnum; // Bottom
+        
+        // Update side fields
+        _leftField = _settings.LeftFieldEnum;
+        _rightField = _settings.RightFieldEnum;
+        
+        // Update labels for side boxes
+        if (_leftField.HasValue)
+            _leftLabelText.Text = GetFieldLabel(_leftField.Value);
+        if (_rightField.HasValue)
+            _rightLabelText.Text = GetFieldLabel(_rightField.Value);
+        
+        // Apply visibility
+        ApplyVisibilitySettings();
+        
+        // Save to config
+        SaveSettings();
+        
+        // Force immediate UI refresh
+        if (_lastTelemetryData != null)
+        {
+            UpdateUI(_lastTelemetryData);
+        }
+    }
+    
+    /// <summary>
+    /// Get current widget settings (called from OverlayViewModel)
+    /// </summary>
+    public MRTOneSettings GetCurrentSettings()
+    {
+        return _settings;
+    }
     
     /// <summary>
     /// Handle widget resize by scaling the content via LayoutTransform.
@@ -369,18 +483,37 @@ public class MRTOneWidget : WidgetBase
             return customLabel;
         }
         
-        // Fallback to default labels
+        // Fallback to short, clean labels with units where appropriate
         return field switch
         {
+            // Engine & Controls
             TelemetryField.Throttle => "THRTL",
             TelemetryField.Brake => "BRAKE",
             TelemetryField.Clutch => "CLUTCH",
-            TelemetryField.FuelLevel => "FUEL",
-            TelemetryField.WaterTemp => "WATER",
-            TelemetryField.OilTemp => "OIL",
-            TelemetryField.Speed => "SPEED",
             TelemetryField.RPM => "RPM",
             TelemetryField.Gear => "GEAR",
+            
+            // Fuel (include units in label)
+            TelemetryField.FuelLevel => AppSettings.Instance.UseMetricUnits ? "FUEL (L)" : "FUEL (gal)",
+            TelemetryField.FuelPercent => "FUEL%",
+            
+            // Temperatures (include units in label)
+            TelemetryField.WaterTemp => AppSettings.Instance.UseMetricUnits ? "H₂O (°C)" : "H₂O (°F)",
+            TelemetryField.OilTemp => AppSettings.Instance.UseMetricUnits ? "OIL (°C)" : "OIL (°F)",
+            TelemetryField.AirTemp => AppSettings.Instance.UseMetricUnits ? "AIR (°C)" : "AIR (°F)",
+            TelemetryField.TrackTemp => AppSettings.Instance.UseMetricUnits ? "TRACK (°C)" : "TRACK (°F)",
+            
+            // Speed
+            TelemetryField.Speed => AppSettings.Instance.UseMetricUnits ? "km/h" : "mph",
+            
+            // Timing
+            TelemetryField.LapNumber => "LAP",
+            TelemetryField.Position => "POS",
+            TelemetryField.ClassPosition => "P/C",
+            TelemetryField.LastLapTime => "LAST",
+            TelemetryField.BestLapTime => "BEST",
+            TelemetryField.CurrentLapTime => "CUR",
+            
             _ => field.ToString().ToUpper()
         };
     }
@@ -389,28 +522,71 @@ public class MRTOneWidget : WidgetBase
     {
         return field switch
         {
+            // Percentages (0-1 scale → 0-100%)
             TelemetryField.Throttle when value is float throttle => $"{(int)(throttle * 100)}%",
             TelemetryField.Brake when value is float brake => $"{(int)(brake * 100)}%",
             TelemetryField.Clutch when value is float clutch => $"{(int)(clutch * 100)}%",
+            TelemetryField.FuelPercent when value is float fuelPct => $"{(int)(fuelPct * 100)}%",
+            
+            // Fuel (NO units - they're in the label now)
             TelemetryField.FuelLevel when value is float fuel => 
                 AppSettings.Instance.UseMetricUnits 
-                    ? $"{fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} L" 
-                    : $"{(fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)} gal",
+                    ? $"{fuel:F1}" 
+                    : $"{(fuel * 0.264172f):F1}",
+            
+            // Temperatures (NO units or decimals - units are in label)
             TelemetryField.WaterTemp when value is float temp => 
-                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}°C" : $"{(int)(temp * 9 / 5 + 32)}°F",
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)(temp * 9 / 5 + 32)}",
             TelemetryField.OilTemp when value is float temp => 
-                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}°C" : $"{(int)(temp * 9 / 5 + 32)}°F",
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)(temp * 9 / 5 + 32)}",
+            TelemetryField.AirTemp when value is float temp => 
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)(temp * 9 / 5 + 32)}",
+            TelemetryField.TrackTemp when value is float temp => 
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)(temp * 9 / 5 + 32)}",
+            
+            // Speed (no units needed - handled by label)
             TelemetryField.Speed when value is float speedMs =>
                 AppSettings.Instance.UseMetricUnits ? $"{(int)(speedMs * 3.6f)}" : $"{(int)(speedMs * 2.23694f)}",
+            
+            // RPM (no units needed - handled by label)
             TelemetryField.RPM when value is float rpm => $"{(int)rpm}",
+            
+            // Gear (special handling)
             TelemetryField.Gear => data.Gear switch
             {
                 -1 => "R",
                 0 => "N",
                 _ => data.Gear.ToString()
             },
+            
+            // Position (with "P" prefix, +1 offset since iRacing uses 0-based indexing)
+            TelemetryField.Position when value is int pos => $"P{pos + 1}",
+            TelemetryField.ClassPosition when value is int pos => $"P{pos + 1}",
+            
+            // Lap times (formatted as mm:ss.xxx)
+            TelemetryField.LastLapTime when value is float time => FormatLapTime(time),
+            TelemetryField.BestLapTime when value is float time => FormatLapTime(time),
+            TelemetryField.CurrentLapTime when value is float time => FormatLapTime(time),
+            
+            // Lap numbers
+            TelemetryField.LapNumber when value is int lap => $"{lap}",
+            
+            // Default fallback
             _ => value?.ToString() ?? "-"
         };
+    }
+    
+    /// <summary>
+    /// Format lap time as mm:ss.xxx
+    /// </summary>
+    private string FormatLapTime(float seconds)
+    {
+        if (seconds <= 0) return "--:--.---";
+        
+        int minutes = (int)(seconds / 60);
+        float remainingSeconds = seconds % 60;
+        // Use invariant culture to ensure period (.) separator instead of comma (,)
+        return $"{minutes}:{remainingSeconds.ToString("00.000", System.Globalization.CultureInfo.InvariantCulture)}";
     }
     
     private System.Windows.Media.Color GetValueColor(TelemetryField field, object value, TelemetryData data)
@@ -477,10 +653,9 @@ public class MRTOneWidget : WidgetBase
         _topStack.Margin = new Thickness(0, margin, 0, 0);
         _bottomStack.Margin = new Thickness(0, 0, 0, margin);
         
-        // Scale side box margins (default 20px = 10% of 200px)
-        double sideMargin = size * 0.10;
-        _leftBox.Margin = new Thickness(sideMargin, 0, 0, 0);
-        _rightBox.Margin = new Thickness(0, 0, sideMargin, 0);
+        // Scale side box margins (match top/bottom: 15% of size)
+        _leftBox.Margin = new Thickness(margin, 0, 0, 0);
+        _rightBox.Margin = new Thickness(0, 0, margin, 0);
         
         // Scale font sizes proportionally
         // Top/Bottom values: default 18px
@@ -546,7 +721,10 @@ public class MRTOneWidget : WidgetBase
         }
         
         // Update CENTER section (PrimaryField - typically Gear)
-        UpdateSection(_centerValueText, null, _dataBinding.PrimaryField, data);
+        if (_dataBinding.PrimaryField != TelemetryField.None)
+        {
+            UpdateSection(_centerValueText, null, _dataBinding.PrimaryField, data);
+        }
         
         // Dynamically adjust center font size based on content length
         UpdateCenterFontSize();
@@ -563,6 +741,9 @@ public class MRTOneWidget : WidgetBase
             var leftValue = TelemetryDataMapper.GetValue(_leftField.Value, data) ?? 0;
             _leftValueText.Text = FormatFieldValue(_leftField.Value, leftValue, data);
             _leftValueText.Foreground = new SolidColorBrush(GetValueColor(_leftField.Value, leftValue, data));
+            
+            // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
+            _leftLabelText.Text = GetFieldLabel(_leftField.Value);
         }
         
         // Update RIGHT side box
@@ -571,6 +752,9 @@ public class MRTOneWidget : WidgetBase
             var rightValue = TelemetryDataMapper.GetValue(_rightField.Value, data) ?? 0;
             _rightValueText.Text = FormatFieldValue(_rightField.Value, rightValue, data);
             _rightValueText.Foreground = new SolidColorBrush(GetValueColor(_rightField.Value, rightValue, data));
+            
+            // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
+            _rightLabelText.Text = GetFieldLabel(_rightField.Value);
         }
         
         // Update gauge circle color based on RPM zones
@@ -590,100 +774,56 @@ public class MRTOneWidget : WidgetBase
     
     /// <summary>
     /// Update a section (value + label) dynamically based on field type
+    /// Uses consistent formatting with side boxes
     /// </summary>
     private void UpdateSection(TextBlock valueText, TextBlock? labelText, TelemetryField field, TelemetryData data)
     {
         var value = TelemetryDataMapper.GetValue(field, data);
         
-        switch (field)
+        // Use consistent formatting functions
+        valueText.Text = FormatFieldValue(field, value ?? 0, data);
+        
+        // Special color handling for Gear (R=Red, N=Gray, forward gears=Teal)
+        if (field == TelemetryField.Gear && value is int gear)
         {
-            case TelemetryField.Gear:
-                if (value is int gear)
-                {
-                    valueText.Text = gear switch
-                    {
-                        -1 => "R",
-                        0 => "N",
-                        _ => gear.ToString()
-                    };
-                    
-                    // Change color based on gear
-                    var color = gear switch
-                    {
-                        -1 => Colors.Red,           // Red for reverse
-                        0 => Colors.Gray,           // Gray for neutral
-                        _ => _primaryColor          // Teal for forward gears
-                    };
-                    valueText.Foreground = new SolidColorBrush(color);
-                }
-                // Gear doesn't need a label
-                if (labelText != null)
-                    labelText.Visibility = Visibility.Collapsed;
-                break;
-                
-            case TelemetryField.Speed:
-                if (value is float speedMs)
-                {
-                    // Speed from iRacing is in m/s
-                    if (AppSettings.Instance.UseMetricUnits)
-                    {
-                        float speedKmh = speedMs * 3.6f;
-                        valueText.Text = $"{(int)speedKmh}";
-                        if (labelText != null)
-                        {
-                            labelText.Text = "km/h";
-                            labelText.Visibility = Visibility.Visible;
-                        }
-                    }
-                    else
-                    {
-                        float speedMph = speedMs * 2.23694f;
-                        valueText.Text = $"{(int)speedMph}";
-                        if (labelText != null)
-                        {
-                            labelText.Text = "MPH";
-                            labelText.Visibility = Visibility.Visible;
-                        }
-                    }
-                    valueText.Foreground = new SolidColorBrush(_primaryColor);
-                }
-                break;
-                
-            case TelemetryField.RPM:
-                if (value is float rpm)
-                {
-                    valueText.Text = ((int)rpm).ToString();
-                    
-                    // Get RPM zone from shift point calculator
-                    var zone = ShiftPointCalculator.GetRPMZone(rpm, data.Gear);
-                    
-                    var rpmColor = zone switch
-                    {
-                        ShiftPointCalculator.RPMZone.Danger => Colors.Red,
-                        ShiftPointCalculator.RPMZone.Optimal => _secondaryColor, // Orange
-                        ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,
-                        _ => _primaryColor // Teal
-                    };
-                    
-                    valueText.Foreground = new SolidColorBrush(rpmColor);
-                    
-                    // Show "RPM" label
-                    if (labelText != null)
-                    {
-                        labelText.Text = "RPM";
-                        labelText.Foreground = new SolidColorBrush(_primaryColor);
-                        labelText.Visibility = Visibility.Visible;
-                    }
-                }
-                break;
-                
-            default:
-                // For other fields, format value and hide label
-                valueText.Text = value?.ToString() ?? "--";
-                valueText.Foreground = new SolidColorBrush(_primaryColor);
-                if (labelText != null)
-                    labelText.Visibility = Visibility.Collapsed;
-                break;
+            valueText.Foreground = new SolidColorBrush(gear switch
+            {
+                -1 => Colors.Red,           // Reverse
+                0 => Colors.Gray,           // Neutral
+                _ => _primaryColor          // Forward gears (Teal)
+            });
+        }
+        // Special color handling for RPM (shift point zones)
+        else if (field == TelemetryField.RPM && value is float rpm)
+        {
+            var zone = ShiftPointCalculator.GetRPMZone(rpm, data.Gear);
+            valueText.Foreground = new SolidColorBrush(zone switch
+            {
+                ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // At limiter
+                ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // Optimal shift (Orange)
+                ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,     // Approaching shift
+                _ => _primaryColor                                          // Safe range (Teal)
+            });
+        }
+        else
+        {
+            valueText.Foreground = new SolidColorBrush(GetValueColor(field, value ?? 0, data));
+        }
+        
+        // Update label if present
+        if (labelText != null)
+        {
+            // Gear doesn't need a label (just shows R, N, 1, 2, etc.)
+            if (field == TelemetryField.Gear)
+            {
+                labelText.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                labelText.Text = GetFieldLabel(field);
+                labelText.Foreground = new SolidColorBrush(_primaryColor);
+                labelText.Visibility = Visibility.Visible;
+            }
         }
     }
     

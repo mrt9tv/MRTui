@@ -121,31 +121,41 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="40">
-                <StackPanel DataContext="{Binding SelectedWidget}" MaxWidth="600" HorizontalAlignment="Left">
+                <StackPanel DataContext="{Binding SelectedWidget}" MaxWidth="900" HorizontalAlignment="Left">
                     <!-- Activate/Deactivate Button -->
                     <Button Command="{Binding ToggleActiveCommand}"
                            Height="50"
                            Margin="0,0,0,25">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource MRT.Button.Primary}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                <Setter Property="Background" Value="#D32F2F"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsActive}" Value="False">
-                                                <Setter Property="Background" Value="#388E3C"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                                <Button.Content>
-                                    <TextBlock Text="{Binding ActivateButtonText}" 
-                                              FontSize="16"
-                                              FontWeight="SemiBold"
-                                              HorizontalAlignment="Center"/>
-                                </Button.Content>
-                            </Button>
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MRT.Button.Primary}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter Property="Background" Value="#D32F2F"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                        <Setter Property="Background" Value="#388E3C"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <Button.Content>
+                            <TextBlock Text="{Binding ActivateButtonText}" 
+                                      FontSize="16"
+                                      FontWeight="SemiBold"
+                                      HorizontalAlignment="Center"/>
+                        </Button.Content>
+                    </Button>
 
+                    <!-- Sliders and Widget Configuration Side-by-Side -->
+                    <Grid Margin="0,0,0,25">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="300"/>
+                            <ColumnDefinition Width="30"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left Column: Opacity and Size Sliders -->
+                        <StackPanel Grid.Column="0">
                             <!-- Opacity Slider -->
                             <StackPanel Margin="0,0,0,25">
                                 <Grid Margin="0,0,0,10">
@@ -178,7 +188,7 @@
                             </StackPanel>
 
                             <!-- Size Slider -->
-                            <StackPanel Margin="0,0,0,25">
+                            <StackPanel>
                                 <Grid Margin="0,0,0,10">
                                     <TextBlock Text="Size" 
                                               FontSize="14"
@@ -207,26 +217,86 @@
                                               HorizontalAlignment="Right"/>
                                 </Grid>
                             </StackPanel>
+                        </StackPanel>
 
-                            <!-- Widget-Specific Settings Placeholder -->
-                            <Border Background="{StaticResource DarkBackground}"
-                                   BorderBrush="{StaticResource DarkBorder}"
-                                   BorderThickness="1"
-                                   CornerRadius="8"
-                                   Padding="15"
-                                   Margin="0,0,0,20">
-                                <StackPanel>
-                                    <TextBlock Text="Widget-Specific Settings" 
-                                              FontSize="14"
-                                              FontWeight="SemiBold"
-                                              Foreground="{StaticResource MutedText}"
-                                              Margin="0,0,0,10"/>
-                                    <TextBlock Text="Coming in Phase 1.5" 
+                        <!-- Right Column: MRT One Widget Configuration -->
+                        <Border Grid.Column="2"
+                               Background="{StaticResource DarkSurface}"
+                               CornerRadius="10"
+                               Padding="20"
+                               Visibility="{Binding IsMRTOneWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="Widget Configuration" 
+                                          FontSize="14"
+                                          FontWeight="SemiBold"
+                                          Foreground="{StaticResource LightText}"
+                                          Margin="0,0,0,15"/>
+                                
+                                <!-- Top Section -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Top Section" 
                                               FontSize="12"
-                                              Foreground="{StaticResource MutedText}"
-                                              TextWrapping="Wrap"/>
+                                              Foreground="{StaticResource LightText}"
+                                              Margin="0,0,0,5"/>
+                                    <ComboBox ItemsSource="{Binding AvailableTelemetryFields}"
+                                             SelectedItem="{Binding TopSelectedField, Mode=TwoWay}"
+                                             IsEnabled="{Binding IsActive}"/>
                                 </StackPanel>
-                            </Border>
+                                
+                                <!-- Center Section -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Center Section (Large)" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource LightText}"
+                                              Margin="0,0,0,5"/>
+                                    <ComboBox ItemsSource="{Binding AvailableTelemetryFields}"
+                                             SelectedItem="{Binding CenterSelectedField, Mode=TwoWay}"
+                                             IsEnabled="{Binding IsActive}"/>
+                                </StackPanel>
+                                
+                                <!-- Bottom Section -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Bottom Section" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource LightText}"
+                                              Margin="0,0,0,5"/>
+                                    <ComboBox ItemsSource="{Binding AvailableTelemetryFields}"
+                                             SelectedItem="{Binding BottomSelectedField, Mode=TwoWay}"
+                                             IsEnabled="{Binding IsActive}"/>
+                                </StackPanel>
+                                
+                                <!-- Left Side Box -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Left Side Box" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource LightText}"
+                                              Margin="0,0,0,5"/>
+                                    <ComboBox ItemsSource="{Binding AvailableSideBoxFields}"
+                                             SelectedItem="{Binding LeftSelectedField, Mode=TwoWay}"
+                                             IsEnabled="{Binding IsActive}"/>
+                                </StackPanel>
+                                
+                                <!-- Right Side Box -->
+                                <StackPanel Margin="0,0,0,10">
+                                    <TextBlock Text="Right Side Box" 
+                                              FontSize="12"
+                                              Foreground="{StaticResource LightText}"
+                                              Margin="0,0,0,5"/>
+                                    <ComboBox ItemsSource="{Binding AvailableSideBoxFields}"
+                                             SelectedItem="{Binding RightSelectedField, Mode=TwoWay}"
+                                             IsEnabled="{Binding IsActive}"/>
+                                </StackPanel>
+                                
+                                <!-- Info: Changes apply instantly -->
+                                <TextBlock Text="✨ Changes apply instantly"
+                                          FontSize="11"
+                                          FontStyle="Italic"
+                                          Foreground="{StaticResource MutedText}"
+                                          HorizontalAlignment="Center"
+                                          Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
 
                             <!-- Action Buttons -->
                             <StackPanel Margin="0,0,0,15">

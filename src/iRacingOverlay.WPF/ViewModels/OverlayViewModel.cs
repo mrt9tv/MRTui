@@ -214,6 +214,207 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     public ICommand ResetAllCommand { get; }
     public ICommand CenterHorizontallyCommand { get; }
     public ICommand CenterVerticallyCommand { get; }
+    public ICommand ApplySettingsCommand { get; }
+    
+    // MRT One Widget Settings (only applicable when Type == WidgetType.MRTOne)
+    private string? _topSelectedField;
+    private string? _centerSelectedField;
+    private string? _bottomSelectedField;
+    private string? _leftSelectedField;
+    private string? _rightSelectedField;
+    private bool _showTop;
+    private bool _showCenter;
+    private bool _showBottom;
+    private bool _showLeft;
+    private bool _showRight;
+    private bool _isLoadingSettings; // Flag to prevent applying settings during load
+    
+    /// <summary>
+    /// Available telemetry fields for dropdown selection (includes "None" for hiding sections)
+    /// </summary>
+    public List<string> AvailableTelemetryFields { get; } = new List<string>
+    {
+        "None",  // Special option to hide section
+        "Speed",
+        "RPM",
+        "Gear",
+        "Throttle",
+        "Brake",
+        "Clutch",
+        "FuelLevel",
+        "FuelPercent",
+        "WaterTemp",
+        "OilTemp",
+        "LapNumber",
+        "Position",
+        "LastLapTime",
+        "BestLapTime"
+    };
+    
+    /// <summary>
+    /// Available telemetry fields for side boxes (excludes lap times for better formatting)
+    /// </summary>
+    public List<string> AvailableSideBoxFields { get; } = new List<string>
+    {
+        "None",  // Special option to hide section
+        "Speed",
+        "RPM",
+        "Gear",
+        "Throttle",
+        "Brake",
+        "Clutch",
+        "FuelLevel",
+        "FuelPercent",
+        "WaterTemp",
+        "OilTemp",
+        "LapNumber",
+        "Position"
+    };
+    
+    public string? TopSelectedField
+    {
+        get => _topSelectedField;
+        set
+        {
+            if (_topSelectedField != value)
+            {
+                _topSelectedField = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public string? CenterSelectedField
+    {
+        get => _centerSelectedField;
+        set
+        {
+            if (_centerSelectedField != value)
+            {
+                _centerSelectedField = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public string? BottomSelectedField
+    {
+        get => _bottomSelectedField;
+        set
+        {
+            if (_bottomSelectedField != value)
+            {
+                _bottomSelectedField = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public string? LeftSelectedField
+    {
+        get => _leftSelectedField;
+        set
+        {
+            if (_leftSelectedField != value)
+            {
+                _leftSelectedField = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public string? RightSelectedField
+    {
+        get => _rightSelectedField;
+        set
+        {
+            if (_rightSelectedField != value)
+            {
+                _rightSelectedField = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public bool ShowTop
+    {
+        get => _showTop;
+        set
+        {
+            if (_showTop != value)
+            {
+                _showTop = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public bool ShowCenter
+    {
+        get => _showCenter;
+        set
+        {
+            if (_showCenter != value)
+            {
+                _showCenter = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public bool ShowBottom
+    {
+        get => _showBottom;
+        set
+        {
+            if (_showBottom != value)
+            {
+                _showBottom = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public bool ShowLeft
+    {
+        get => _showLeft;
+        set
+        {
+            if (_showLeft != value)
+            {
+                _showLeft = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    public bool ShowRight
+    {
+        get => _showRight;
+        set
+        {
+            if (_showRight != value)
+            {
+                _showRight = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly when user changes
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Whether this is the MRT One widget (shows/hides settings UI)
+    /// </summary>
+    public bool IsMRTOneWidget => Type == WidgetType.MRTOne;
 
     public WidgetItemViewModel(string name, WidgetType type, string icon, WidgetManager widgetManager)
     {
@@ -231,6 +432,19 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         ResetAllCommand = new RelayCommand(ResetAll);
         CenterHorizontallyCommand = new RelayCommand(CenterHorizontally);
         CenterVerticallyCommand = new RelayCommand(CenterVertically);
+        ApplySettingsCommand = new RelayCommand(ApplySettings);
+        
+        // Initialize MRT One settings with defaults
+        _topSelectedField = "Speed";
+        _centerSelectedField = "Gear";
+        _bottomSelectedField = "RPM";
+        _leftSelectedField = "FuelLevel";
+        _rightSelectedField = "Brake";
+        _showTop = true;
+        _showCenter = true;
+        _showBottom = true;
+        _showLeft = true;
+        _showRight = true;
     }
     
     private void ToggleActive()
@@ -274,6 +488,41 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 _opacity = widget.Opacity;
                 OnPropertyChanged(nameof(Opacity));
                 OnPropertyChanged(nameof(OpacityPercentage));
+            }
+            
+            // Load MRT One specific settings if applicable
+            if (Type == WidgetType.MRTOne && widget is Widgets.MRTOneWidget.MRTOneWidget mrtOneWidget)
+            {
+                var settings = mrtOneWidget.GetCurrentSettings();
+                
+                // Set flag to prevent ApplySettings during load
+                _isLoadingSettings = true;
+                
+                _topSelectedField = settings.TopField;
+                _centerSelectedField = settings.CenterField;
+                _bottomSelectedField = settings.BottomField;
+                _leftSelectedField = settings.LeftField;
+                _rightSelectedField = settings.RightField;
+                _showTop = settings.ShowTop;
+                _showCenter = settings.ShowCenter;
+                _showBottom = settings.ShowBottom;
+                _showLeft = settings.ShowLeft;
+                _showRight = settings.ShowRight;
+                
+                // Notify all MRT One properties changed
+                OnPropertyChanged(nameof(TopSelectedField));
+                OnPropertyChanged(nameof(CenterSelectedField));
+                OnPropertyChanged(nameof(BottomSelectedField));
+                OnPropertyChanged(nameof(LeftSelectedField));
+                OnPropertyChanged(nameof(RightSelectedField));
+                OnPropertyChanged(nameof(ShowTop));
+                OnPropertyChanged(nameof(ShowCenter));
+                OnPropertyChanged(nameof(ShowBottom));
+                OnPropertyChanged(nameof(ShowLeft));
+                OnPropertyChanged(nameof(ShowRight));
+                
+                // Clear flag after loading complete
+                _isLoadingSettings = false;
             }
         }
         else
@@ -356,6 +605,42 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             widget.Top = (screenHeight - widget.Height) / 2;
         }
         UpdateState(); // Update position display
+    }
+    
+    private void ApplySettings()
+    {
+        // Only apply if this is the MRT One widget
+        if (Type != WidgetType.MRTOne || !IsActive)
+            return;
+        
+        var widgets = _widgetManager.GetWidgetsByType(Type);
+        foreach (var widget in widgets)
+        {
+            if (widget is Widgets.MRTOneWidget.MRTOneWidget mrtOneWidget)
+            {
+                // Create new settings from ViewModel properties
+                // "None" selections hide sections, otherwise show them
+                var newSettings = new MRTOneSettings
+                {
+                    TopField = (_topSelectedField == "None" || string.IsNullOrEmpty(_topSelectedField)) ? null : _topSelectedField,
+                    CenterField = (_centerSelectedField == "None" || string.IsNullOrEmpty(_centerSelectedField)) ? null : _centerSelectedField,
+                    BottomField = (_bottomSelectedField == "None" || string.IsNullOrEmpty(_bottomSelectedField)) ? null : _bottomSelectedField,
+                    LeftField = (_leftSelectedField == "None" || string.IsNullOrEmpty(_leftSelectedField)) ? null : _leftSelectedField,
+                    RightField = (_rightSelectedField == "None" || string.IsNullOrEmpty(_rightSelectedField)) ? null : _rightSelectedField,
+                    ShowTop = !string.IsNullOrEmpty(_topSelectedField) && _topSelectedField != "None",
+                    ShowCenter = !string.IsNullOrEmpty(_centerSelectedField) && _centerSelectedField != "None",
+                    ShowBottom = !string.IsNullOrEmpty(_bottomSelectedField) && _bottomSelectedField != "None",
+                    ShowLeft = !string.IsNullOrEmpty(_leftSelectedField) && _leftSelectedField != "None",
+                    ShowRight = !string.IsNullOrEmpty(_rightSelectedField) && _rightSelectedField != "None"
+                };
+                
+                // Apply to widget (this will update UI and save to config)
+                mrtOneWidget.UpdateWidgetSettings(newSettings);
+            }
+        }
+        
+        // Refresh state to show updated values
+        UpdateState();
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

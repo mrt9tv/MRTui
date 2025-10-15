@@ -147,6 +147,13 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _telemetryService.StatusChanged -= OnTelemetryStatusChanged;
+        
+        // Close all widget windows before shutting down
+        _widgetManager.RemoveAllWidgets();
+        
+        // Ensure application shuts down completely
+        System.Windows.Application.Current.Shutdown();
+        
         base.OnClosed(e);
     }
 
