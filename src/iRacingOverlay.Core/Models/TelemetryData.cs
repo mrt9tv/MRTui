@@ -59,6 +59,18 @@ public class TelemetryData
     /// Current position in race
     /// </summary>
     public int Position { get; set; }
+    
+    /// <summary>
+    /// Player's car index in the session (0-63)
+    /// Used to identify player in CarIdx arrays
+    /// </summary>
+    public int PlayerCarIdx { get; set; }
+    
+    /// <summary>
+    /// Player's car class ID
+    /// Used for class filtering in proximity detection
+    /// </summary>
+    public int PlayerCarClass { get; set; }
 
     /// <summary>
     /// Timestamp when data was received
@@ -196,6 +208,90 @@ public class TelemetryData
     /// Track name
     /// </summary>
     public string TrackName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Track length in meters (parsed from YAML SessionInfo)
+    /// </summary>
+    public float TrackLength { get; set; }
+    
+    // ===== PHASE 1: 4-Way Proximity Radar =====
+    
+    /// <summary>
+    /// Lateral spotter enum: 0=Clear, 1=CarLeft, 2=CarRight, 3=CarBothSides
+    /// This is the same data the in-game spotter uses for left/right warnings.
+    /// </summary>
+    public int CarLeftRight { get; set; }
+    
+    /// <summary>
+    /// Track position percentage for each car (0.0-1.0). Array of 64 cars.
+    /// Index corresponds to CarIdx. -1 or values outside 0-1 indicate car not on track.
+    /// </summary>
+    public float[]? CarIdxLapDistPct { get; set; }
+    
+    /// <summary>
+    /// Pit road status for each car. Array of 64 bools.
+    /// </summary>
+    public bool[]? CarIdxOnPitRoad { get; set; }
+    
+    /// <summary>
+    /// Track surface type for each car (enum). Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxTrackSurface { get; set; }
+    
+    /// <summary>
+    /// Car class ID for each car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxClass { get; set; }
+    
+    /// <summary>
+    /// Lap number for each car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxLap { get; set; }
+    
+    /// <summary>
+    /// Overall race position for each car (1st, 2nd, etc). Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxPosition { get; set; }
+    
+    /// <summary>
+    /// Class position for each car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxClassPosition { get; set; }
+    
+    /// <summary>
+    /// Current gear for each car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxGear { get; set; }
+    
+    /// <summary>
+    /// Engine RPM for each car. Array of 64 floats.
+    /// </summary>
+    public float[]? CarIdxRPM { get; set; }
+    
+    /// <summary>
+    /// Estimated time to reach position for each car. Array of 64 floats.
+    /// </summary>
+    public float[]? CarIdxEstTime { get; set; }
+    
+    /// <summary>
+    /// Time behind leader for each car. Array of 64 floats.
+    /// </summary>
+    public float[]? CarIdxF2Time { get; set; }
+    
+    /// <summary>
+    /// Last lap time for each car in seconds. Array of 64 floats.
+    /// </summary>
+    public float[]? CarIdxLastLapTime { get; set; }
+    
+    /// <summary>
+    /// Player heading angle in radians (yaw around Z-axis)
+    /// </summary>
+    public float Yaw { get; set; }
+    
+    /// <summary>
+    /// Rate of heading change in radians per second
+    /// </summary>
+    public float YawRate { get; set; }
 
     /// <summary>
     /// Speed in km/h (calculated from m/s)

@@ -19,6 +19,8 @@ namespace iRacingOverlay.Core.Services;
     "Lap",             // Current lap number
     "LapDistPct",      // 0-1 percentage around track
     "PlayerCarClassPosition", // Position in class
+    "PlayerCarIdx",    // Player's car index (0-63)
+    "PlayerCarClass",  // Player's car class ID
     
     // MVP 2 - Critical race data
     "FuelLevel",       // liters
@@ -71,7 +73,35 @@ namespace iRacingOverlay.Core.Services;
     
     // Session info
     "SessionTime",     // Session time elapsed (seconds)
-    "SessionNum"       // Current session number
+    "SessionNum",      // Current session number
+    
+    // ===== PHASE 1: 4-Way Proximity Radar =====
+    
+    // Lateral Spotter (Left/Right Detection)
+    // CRITICAL: SDK enum is 0=Off, 1=Clear, 2=CarLeft, 3=CarRight, 4=CarBothSides, 5=TwoCarsLeft, 6=TwoCarsRight
+    "CarLeftRight",    // Enum: 0=Off, 1=Clear, 2=Left, 3=Right, 4=Both, 5=TwoLeft, 6=TwoRight - Spotter system
+    
+    // Multi-Car Position Arrays (CarIdx[64])
+    "CarIdxLapDistPct",      // float[64] - Track position % for each car
+    "CarIdxOnPitRoad",       // bool[64]  - Pit road status
+    "CarIdxTrackSurface",    // int[64]   - Track surface type (enum)
+    "CarIdxClass",           // int[64]   - Car class ID
+    "CarIdxLap",             // int[64]   - Lap number for each car
+    "CarIdxPosition",        // int[64]   - Overall race position
+    "CarIdxClassPosition",   // int[64]   - Class position
+    
+    // Car Performance Indicators
+    "CarIdxGear",            // int[64]   - Current gear
+    "CarIdxRPM",             // float[64] - Engine RPM
+    
+    // Timing Arrays
+    "CarIdxEstTime",         // float[64] - Estimated time to reach position
+    "CarIdxF2Time",          // float[64] - Time behind leader
+    "CarIdxLastLapTime",     // float[64] - Last lap time
+    
+    // Player Orientation (for future enhancements)
+    "Yaw",                   // float - Player heading angle (radians)
+    "YawRate"                // float - Rate of heading change (rad/s)
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -90,6 +120,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _driverName = "";
     private string _carNumber = "";
     private string _trackName = "";
+    private float _trackLength = 0f;
     private bool _sessionInfoParsed = false;
 
     public ConnectionStatus Status
@@ -216,39 +247,26 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 return;
             }
             
-            // The SDK client should have a GetSessionInfoString or similar method
-            // Try to access it via reflection if not directly available
+            // The SDK exposes session info via GetRawTelemetrySessionInfoYaml() method
             var clientType = _client.GetType();
-            _logger.LogDebug("Client type: {ClientType}", clientType.FullName);
-            
-            // List all available methods and properties for debugging
-            var methods = clientType.GetMethods().Select(m => m.Name).ToList();
-            var properties = clientType.GetProperties().Select(p => p.Name).ToList();
-            _logger.LogDebug("Available methods: {Methods}", string.Join(", ", methods));
-            _logger.LogDebug("Available properties: {Properties}", string.Join(", ", properties));
-            
-            var getSessionInfoMethod = clientType.GetMethod("GetSessionInfoString") 
-                                    ?? clientType.GetMethod("GetSessionInfo")
-                                    ?? clientType.GetProperty("SessionInfo")?.GetMethod;
+            var getSessionInfoMethod = clientType.GetMethod("GetRawTelemetrySessionInfoYaml");
             
             if (getSessionInfoMethod != null)
             {
-                _logger.LogDebug("Found SessionInfo method: {MethodName}", getSessionInfoMethod.Name);
                 var sessionInfo = getSessionInfoMethod.Invoke(_client, null) as string;
                 if (!string.IsNullOrEmpty(sessionInfo))
                 {
-                    _logger.LogDebug("SessionInfo YAML length: {Length} characters", sessionInfo.Length);
-                    _logger.LogDebug("First 200 chars of YAML: {Preview}", sessionInfo.Substring(0, Math.Min(200, sessionInfo.Length)));
+                    _logger.LogDebug("SessionInfo YAML received: {Length} characters", sessionInfo.Length);
                     ParseSessionInfo(sessionInfo);
                 }
                 else
                 {
-                    _logger.LogWarning("SessionInfo is empty or null");
+                    _logger.LogDebug("SessionInfo YAML is empty (may not be available yet)");
                 }
             }
             else
             {
-                _logger.LogWarning("Could not find SessionInfo method on telemetry client. Session info will not be available.");
+                _logger.LogWarning("Could not find GetRawTelemetrySessionInfoYaml method on telemetry client");
             }
         }
         catch (Exception ex)
@@ -262,10 +280,15 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         try
         {
             // Try to parse session info if not yet parsed (might not be available immediately on connect)
-            if (!_sessionInfoParsed)
+            // Keep trying until we successfully get TrackLength, since it's critical for distance calculations
+            if (!_sessionInfoParsed || _trackLength <= 0)
             {
                 TryParseSessionInfo();
-                _sessionInfoParsed = true; // Only try once to avoid repeated reflection calls
+                // Only mark as parsed once we have track length
+                if (_trackLength > 0)
+                {
+                    _sessionInfoParsed = true;
+                }
             }
             
             // Detect lap change and reset lap timer
@@ -309,6 +332,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 Lap = sdkData.Lap,
                 LapDistPct = sdkData.LapDistPct,
                 Position = sdkData.PlayerCarClassPosition,
+                PlayerCarIdx = sdkData.PlayerCarIdx,
+                PlayerCarClass = sdkData.PlayerCarClass,
                 Timestamp = DateTime.UtcNow,
                 
                 // MVP 2 - Critical race data
@@ -372,8 +397,42 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // Session info (populated from SessionInfo YAML parsing)
                 DriverName = _driverName,
                 CarNumber = _carNumber,
-                TrackName = _trackName
+                TrackName = _trackName,
+                TrackLength = _trackLength,
+                
+                // ===== PHASE 1: 4-Way Proximity Radar =====
+                
+                // Lateral Spotter (Left/Right Detection) - Cast enum to int
+                // DEBUG: Log raw SDK value to diagnose false positives
+                CarLeftRight = (int)sdkData.CarLeftRight,
+                
+                // Multi-Car Position Arrays (CarIdx[64])
+                CarIdxLapDistPct = sdkData.CarIdxLapDistPct,
+                CarIdxOnPitRoad = sdkData.CarIdxOnPitRoad,
+                CarIdxTrackSurface = sdkData.CarIdxTrackSurface?.Select(t => (int)t).ToArray(), // Cast enum array
+                CarIdxClass = sdkData.CarIdxClass,
+                CarIdxLap = sdkData.CarIdxLap,
+                CarIdxPosition = sdkData.CarIdxPosition,
+                CarIdxClassPosition = sdkData.CarIdxClassPosition,
+                CarIdxGear = sdkData.CarIdxGear,
+                CarIdxRPM = sdkData.CarIdxRPM,
+                CarIdxEstTime = sdkData.CarIdxEstTime,
+                CarIdxF2Time = sdkData.CarIdxF2Time,
+                CarIdxLastLapTime = sdkData.CarIdxLastLapTime,
+                
+                // Player Orientation
+                Yaw = sdkData.Yaw,
+                YawRate = sdkData.YawRate
             };
+            
+            // DEBUG: Log CarLeftRight changes to diagnose SDK behavior
+            LogLateralSpotterData(sdkData, data);
+            
+            // Log proximity radar data on first few updates for verification
+            if (sdkData.Lap <= 2) // Only log first 2 laps to avoid spam
+            {
+                LogProximityRadarData(sdkData);
+            }
 
             // Fire our telemetry event
             TelemetryUpdated?.Invoke(this, data);
@@ -425,6 +484,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             bool inDriversArray = false;
             bool isPlayerDriver = false;
             int currentDriverCarIdx = -1;
+            bool foundTrackLength = false;
             
             foreach (var line in lines)
             {
@@ -445,6 +505,21 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     {
                         _trackName = ExtractYamlValue(trimmed);
                         _logger.LogInformation("Parsed track name: {TrackName}", _trackName);
+                    }
+                    else if (trimmed.StartsWith("TrackLength:"))
+                    {
+                        // TrackLength comes as string like "3.5652 km"
+                        var lengthStr = ExtractYamlValue(trimmed);
+                        if (ParseTrackLength(lengthStr, out float lengthMeters))
+                        {
+                            _trackLength = lengthMeters;
+                            foundTrackLength = true;
+                            _logger.LogInformation("Parsed track length: {TrackLength}m ({LengthStr})", _trackLength, lengthStr);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Failed to parse track length from: {LengthStr}", lengthStr);
+                        }
                     }
                 }
                 else if (currentSection == "DriverInfo")
@@ -483,6 +558,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     }
                 }
             }
+            
+            // Log if TrackLength was not found in YAML
+            if (!foundTrackLength)
+            {
+                _logger.LogWarning("TrackLength field not found in SessionInfo YAML. This may indicate the field name is different or not available yet.");
+            }
         }
         catch (Exception ex)
         {
@@ -500,6 +581,225 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             return string.Empty;
         
         return line.Substring(colonIndex + 1).Trim();
+    }
+    
+    /// <summary>
+    /// Parse track length from YAML string format (e.g., "3.5652 km" or "2.5 mi")
+    /// Converts to meters for consistent distance calculations.
+    /// </summary>
+    private static bool ParseTrackLength(string lengthStr, out float lengthMeters)
+    {
+        lengthMeters = 0f;
+        
+        if (string.IsNullOrWhiteSpace(lengthStr))
+            return false;
+        
+        // Remove quotes if present
+        lengthStr = lengthStr.Trim('"', '\'').Trim();
+        
+        // Split into value and unit (e.g., "3.5652 km" -> ["3.5652", "km"])
+        var parts = lengthStr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 1)
+            return false;
+        
+        // Parse numeric value using INVARIANT CULTURE (dot as decimal separator)
+        // iRacing YAML always uses dot notation regardless of system locale
+        if (!float.TryParse(parts[0], System.Globalization.NumberStyles.Float, 
+            System.Globalization.CultureInfo.InvariantCulture, out float value))
+            return false;
+        
+        // Convert to meters based on unit (default to km if no unit specified)
+        string unit = parts.Length > 1 ? parts[1].ToLowerInvariant() : "km";
+        lengthMeters = unit switch
+        {
+            "km" => value * 1000f,      // kilometers to meters
+            "m" => value,                // already in meters
+            "mi" => value * 1609.34f,   // miles to meters
+            _ => value * 1000f           // default to km
+        };
+        
+        return lengthMeters > 0;
+    }
+    
+    // Track last CarLeftRight value to only log changes
+    private int _lastCarLeftRight = -1;
+    
+    /// <summary>
+    /// Log CarLeftRight value changes to diagnose SDK false positives.
+    /// Logs to same file as widget (radar_debug.log) for correlation.
+    /// </summary>
+    private void LogLateralSpotterData(SVappsLAB.iRacingTelemetrySDK.TelemetryData sdkData, Models.TelemetryData data)
+    {
+        try
+        {
+            int currentValue = (int)sdkData.CarLeftRight;
+            
+            // Only log when value changes
+            if (currentValue != _lastCarLeftRight)
+            {
+                _lastCarLeftRight = currentValue;
+                
+                var logPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), 
+                    "MRT-UI", 
+                    "radar_debug.log");
+                
+                var log = new System.Text.StringBuilder();
+                log.AppendLine($"\n[{DateTime.Now:HH:mm:ss.fff}] ===== SDK CarLeftRight CHANGED =====");
+                log.AppendLine($"SDK RAW VALUE: {currentValue} ({GetLateralDescription(currentValue)})");
+                log.AppendLine($"Player Speed: {sdkData.Speed:F1} m/s ({sdkData.Speed * 3.6f:F1} km/h)");
+                log.AppendLine($"Player Position: Pct={sdkData.LapDistPct:F4}, Lap={sdkData.Lap}");
+                
+                // Log nearby cars to see if SDK is detecting something we're not
+                if (sdkData.CarIdxLapDistPct != null && data.TrackLength > 0)
+                {
+                    var nearbyCars = new List<string>();
+                    for (int i = 0; i < sdkData.CarIdxLapDistPct.Length; i++)
+                    {
+                        if (i == data.PlayerCarIdx) continue;
+                        
+                        float pct = sdkData.CarIdxLapDistPct[i];
+                        if (pct < 0 || pct > 1) continue;
+                        
+                        float diff = pct - sdkData.LapDistPct;
+                        if (diff < -0.5f) diff += 1.0f;
+                        if (diff > 0.5f) diff -= 1.0f;
+                        
+                        float distMeters = diff * data.TrackLength;
+                        float absDist = Math.Abs(distMeters);
+                        
+                        // Only log cars within 30m
+                        if (absDist < 30.0f)
+                        {
+                            string direction = diff > 0 ? "AHEAD" : "BEHIND";
+                            nearbyCars.Add($"   Car#{i}: {direction} {absDist:F1}m @ Pct={pct:F4}");
+                        }
+                    }
+                    
+                    if (nearbyCars.Any())
+                    {
+                        log.AppendLine($"Cars within 30m ({nearbyCars.Count}):");
+                        foreach (var car in nearbyCars)
+                        {
+                            log.AppendLine(car);
+                        }
+                    }
+                    else
+                    {
+                        log.AppendLine("No cars within 30m of player");
+                    }
+                }
+                
+                log.AppendLine($"========================================\n");
+                
+                System.IO.File.AppendAllText(logPath, log.ToString());
+            }
+        }
+        catch
+        {
+            // Ignore logging errors
+        }
+    }
+    
+    private string GetLateralDescription(int value)
+    {
+        return value switch
+        {
+            0 => "Off",               // Spotter system disabled
+            1 => "Clear",             // No cars beside (THE KEY VALUE!)
+            2 => "CarLeft",           // Car on left
+            3 => "CarRight",          // Car on right
+            4 => "CarBothSides",      // Cars both sides
+            5 => "TwoCarsLeft",       // Two cars on left
+            6 => "TwoCarsRight",      // Two cars on right
+            _ => $"Unknown({value})"
+        };
+    }
+    
+    /// <summary>
+    /// Log proximity radar telemetry data for verification during initial laps.
+    /// This helps confirm that CarLeftRight enum and CarIdx arrays are working correctly.
+    /// </summary>
+    private void LogProximityRadarData(SVappsLAB.iRacingTelemetrySDK.TelemetryData sdkData)
+    {
+        try
+        {
+            // Log CarLeftRight enum value (lateral spotter) - Cast to int for comparison
+            int lateralValue = (int)sdkData.CarLeftRight;
+            string lateralStatus = lateralValue switch
+            {
+                0 => "Clear (no cars beside)",
+                1 => "Car on LEFT",
+                2 => "Car on RIGHT",
+                3 => "Cars on BOTH SIDES",
+                _ => $"Unknown ({lateralValue})"
+            };
+            _logger.LogInformation("🎯 CarLeftRight: {Status}", lateralStatus);
+            
+            // Count cars on track from CarIdxLapDistPct array
+            if (sdkData.CarIdxLapDistPct != null)
+            {
+                var carsOnTrack = sdkData.CarIdxLapDistPct
+                    .Where(pct => pct >= 0 && pct <= 1)
+                    .Count();
+                _logger.LogInformation("📊 Cars on track: {Count}/64", carsOnTrack);
+                
+                // Log top 5 closest cars ahead/behind
+                var playerPct = sdkData.LapDistPct;
+                var playerLap = sdkData.Lap;
+                
+                var otherCars = sdkData.CarIdxLapDistPct
+                    .Select((pct, idx) => new { Idx = idx, Pct = pct })
+                    .Where(c => c.Pct >= 0 && c.Pct <= 1) // Valid position
+                    .Where(c => c.Idx != 0) // Not the player (usually idx 0, but check)
+                    .Select(c => new
+                    {
+                        c.Idx,
+                        c.Pct,
+                        Position = sdkData.CarIdxPosition?[c.Idx] ?? -1,
+                        Distance = CalculateRelativeDistance(playerPct, c.Pct)
+                    })
+                    .OrderBy(c => Math.Abs(c.Distance))
+                    .Take(5)
+                    .ToList();
+                
+                if (otherCars.Any())
+                {
+                    _logger.LogInformation("🚗 Closest cars:");
+                    foreach (var car in otherCars)
+                    {
+                        string direction = car.Distance > 0 ? "AHEAD" : "BEHIND";
+                        _logger.LogInformation("   P{Pos} @ {Pct:F3} ({Dir}, {Dist:F3} track %)", 
+                            car.Position, car.Pct, direction, Math.Abs(car.Distance));
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ CarIdxLapDistPct array is NULL");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error logging proximity radar data");
+        }
+    }
+    
+    /// <summary>
+    /// Calculate relative distance between player and another car on track.
+    /// Positive = car is ahead, Negative = car is behind.
+    /// LAP-INDEPENDENT - uses circular track logic (shortest path).
+    /// </summary>
+    private float CalculateRelativeDistance(float playerPct, float carPct)
+    {
+        float diff = carPct - playerPct;
+        
+        // Handle circular track wrap-around - always use shortest path
+        // Track is circular: 0% -> 100% -> 0%
+        if (diff < -0.5f) diff += 1.0f;  // Car closer going forward
+        if (diff > 0.5f) diff -= 1.0f;   // Car closer going backward
+        
+        return diff; // Positive = ahead, negative = behind
     }
 
     public async Task DisconnectAsync()

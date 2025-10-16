@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -9,9 +11,10 @@ namespace iRacingOverlay.WPF.Models;
 /// <summary>
 /// Global application settings for all widgets
 /// </summary>
-public class AppSettings
+public class AppSettings : INotifyPropertyChanged
 {
     private static AppSettings? _instance;
+    private bool _enableLateralSpotter = true;
     
     /// <summary>
     /// Singleton instance
@@ -116,8 +119,33 @@ public class AppSettings
     /// </summary>
     public bool WindowMaximized { get; set; } = false;
     
+    // ===== PHASE 1: 4-Way Proximity Radar Settings =====
+    
+    /// <summary>
+    /// Enable 4-way radar spotter around MRT One circle.
+    /// Shows simple colored squares for cars in all 4 directions:
+    /// - LEFT/RIGHT: Red (car present) / Green (clear) based on CarLeftRight enum
+    /// - FRONT/BACK: Red (car close) / Green (clear) based on CarIdxLapDistPct
+    /// When disabled, hides all radar indicators.
+    /// </summary>
+    public bool EnableLateralSpotter
+    {
+        get => _enableLateralSpotter;
+        set
+        {
+            if (_enableLateralSpotter != value)
+            {
+                _enableLateralSpotter = value;
+                OnPropertyChanged();
+                Save(); // Auto-save when changed
+                NotifyChanged();
+            }
+        }
+    }
+    
     // Note: Events cannot be serialized and don't need [JsonIgnore] attribute
     public event EventHandler? SettingsChanged;
+    public event PropertyChangedEventHandler? PropertyChanged;
     
     /// <summary>
     /// Settings file path
@@ -169,6 +197,14 @@ public class AppSettings
             // Log error but don't crash the app
             System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
         }
+    }
+    
+    /// <summary>
+    /// Raise PropertyChanged event
+    /// </summary>
+    protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
     
     /// <summary>

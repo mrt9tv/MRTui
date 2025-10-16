@@ -1,12 +1,13 @@
 # 🚀 iRacing Telemetry Overlay - Development Roadmap
 **Created:** October 14, 2025  
-**Last Updated:** October 15, 2025  
-**Current Version:** v0.5.2 [STABLE]  
-**Target:** v1.0
+**Last Updated:** October 15, 2025 (Evening)  
+**Current Version:** v0.6.1 [STABLE]  
+**Target:** v1.0  
+**GitHub:** https://github.com/mrt9tv/MRTui.git
 
 ---
 
-## 📍 Current State (v0.5.2 [STABLE])
+## 📍 Current State (v0.6.1 [STABLE])
 
 ### ✅ What Works Now
 - **4 Widget Types**: Speed, MRT One (formerly GearGauge), Data (2x3 grid), Fuel Calculator
@@ -15,11 +16,21 @@
   - "None" option to hide sections
   - Units in labels architecture (FUEL (L), OIL (°C))
   - Unified formatting with special color handling (Gear colors, RPM shift points)
+- **Phase 2 Visual Enhancements** (v0.6.0):
+  - Gradient background with radial 3D depth
+  - Animated shift point ring with color zones
+  - Glow effects on center value and border
+- **Complete Settings Persistence** (v0.6.1):
+  - Layout.json saves all widget configs (position, size, opacity, visibility, settings)
+  - Hide/show widget lifecycle (not create/destroy)
+  - LoadSavedLayout() on app startup for instant restore
+  - Reset All returns everything to defaults
 - **Modern Manager UI**: Dashboard (connection monitoring), Overlay (widget management), Settings
 - **Telemetry Service**: Real-time iRacing SDK integration (25-60 Hz)
-- **Settings System**: JSON persistence with metric/imperial units, window state, manager preferences
+- **Settings System**: Dual JSON persistence (settings.json + layout.json)
 - **Color Scheme**: Professional teal/orange MRT theme with status indicators
 - **Widget Architecture**: WidgetBase abstract class, WidgetManager lifecycle, instant updates
+- **GitHub Integration**: Private repository with version tracking
 
 ### 🏗️ Architecture Strengths
 - **Clean Separation**: Core (telemetry) ↔ WPF (UI)
@@ -30,18 +41,22 @@
 - **Production-Ready**: 0 errors, 0 warnings, comprehensive testing complete
 - **Well-Documented**: Stability guidelines, release notes, testing verified
 
-### 🎯 Achieved in v0.5.0-v0.5.2
-1. ✅ **Modern Manager UI** - Professional 3-page navigation (was: basic tabs)
-2. ✅ **Real-time Monitoring** - Dashboard with connection status and system stats
-3. ✅ **Enhanced Widget Management** - Per-field configuration system
-4. ✅ **Window Management** - State persistence, start minimized, position restore
-5. ✅ **Production Quality** - STABLE designation, all bugs fixed
+### 🎯 Achieved in v0.5.0-v0.6.1
+1. ✅ **Modern Manager UI** (v0.5.0) - Professional 3-page navigation (was: basic tabs)
+2. ✅ **Real-time Monitoring** (v0.5.0) - Dashboard with connection status and system stats
+3. ✅ **Enhanced Widget Management** (v0.5.2) - Per-field configuration system
+4. ✅ **Window Management** (v0.5.2) - State persistence, start minimized, position restore
+5. ✅ **Phase 2 Visual Enhancements** (v0.6.0) - Gradient, shift ring, glow effects
+6. ✅ **Complete Settings Persistence** (v0.6.1) - Layout.json with hide/show lifecycle
+7. ✅ **GitHub Integration** (v0.6.1) - Private repository with version tracking
+8. ✅ **Production Quality** - STABLE designation, 9 bugs fixed, comprehensive testing
 
 ### 🔜 Remaining Opportunities
-1. **Widget Positioning**: Manual positioning only (no snap-to-grid)
-2. **Additional Widgets**: Only 4 types (timing, relative, track map could be added)
-3. **No Profiles**: Single layout only (no multi-car/track configs)
+1. **Widget Positioning**: Manual positioning only (no snap-to-grid or alignment tools)
+2. **Additional Widgets**: Only 4 types (timing, relative, track map, inputs could be added)
+3. **No Profiles**: Single layout only (no multi-car/track configs or layout templates)
 4. **Live Preview**: Configuration preview visualization not yet implemented
+5. **Table Widget**: Placeholder exists but not fully implemented
 
 ---
 

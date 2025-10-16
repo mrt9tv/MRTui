@@ -1,34 +1,41 @@
 # 🏁 iRacing Telemetry Overlay - Project Summary
 
-## Current Status: MVP 1 COMPLETE ✅
+## Current Status: v0.6.1 [STABLE] - Settings Persistence Complete ✅
 
-**Your application is WORKING and TESTED with real iRacing data!**
+**Production-ready overlay system with modern manager UI and complete settings persistence!**
+
+**Latest:** Complete settings persistence layer with layout.json, widget lifecycle improvements, and Phase 2 visual enhancements fully integrated.
 
 ---
 
 ## What You Have Right Now
 
 ### 🎯 Working Application
-- **Console telemetry display** showing live iRacing data
-- **Real-time connection** to iRacing simulator
-- **25-60 Hz update rate** from iRacing SDK
-- **Performance:** <2% CPU, ~45MB RAM
-- **Stability:** Tested and verified
+- **Modern MRT UI Manager** with Dashboard, Overlay, and Settings pages
+- **4 Widget Types** with advanced per-field configuration
+- **Phase 2 Visual Enhancements** (gradient, shift point ring, glow effects)
+- **Complete Settings Persistence** (layout.json + settings.json)
+- **Real-time connection** to iRacing simulator (25-60 Hz)
+- **Performance:** <2% CPU, ~80MB RAM
+- **Stability:** Production-ready with comprehensive testing
+- **GitHub Repository:** Private repo at https://github.com/mrt9tv/MRTui.git
 
 ### 📂 Files to Use
 
 **For Running:**
 ```
-START_TELEMETRY.bat          ← Double-click this to run
-build/iRacingOverlay.Core.exe ← Standalone executable
-README_USER.md                ← User guide (simple)
+START_OVERLAY.bat            ← Double-click this to launch Manager UI
+START_TELEMETRY.bat          ← Console telemetry display (legacy)
+README_USER.md               ← User guide (simple)
 ```
 
 **For Understanding:**
 ```
-QUICKSTART.md                      ← Detailed usage guide
-docs/MVP1_COMPLETION_REPORT.md     ← Complete technical report
-docs/phases/MVP1_Basic_Connection.md ← Implementation guide
+QUICKSTART.md                                    ← Detailed usage guide
+docs/phases/PHASE1_MRT_UI_MANAGER.md             ← Phase 1 implementation (v0.5.0-v0.5.2)
+docs/phases/PHASE2_VISUAL_ENHANCEMENTS_SUMMARY.md ← Phase 2 features (v0.6.0)
+SETTINGS_PERSISTENCE_FIX.md                      ← v0.6.1 changelog
+docs/reference/PHASE_8_V0.5.2_COMPLETE.md        ← Advanced configuration reference
 ```
 
 ---

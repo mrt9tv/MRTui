@@ -27,6 +27,17 @@ public class MRTOneWidget : WidgetBase
     private readonly Grid _mainGrid;
     private readonly Ellipse _gaugeCircle;
     
+    // PHASE 1: 4-Way Radar Spotter Squares (outside circle)
+    private readonly Rectangle _radarFront;   // Top (cars ahead)
+    private readonly Rectangle _radarBack;    // Bottom (cars behind)
+    private readonly Rectangle _radarLeft;    // Left (cars on left)
+    private readonly Rectangle _radarRight;   // Right (cars on right)
+    
+    // PHASE 1: Proximity detection services
+    private readonly ProximityCalculator _proximityCalculator;
+    private readonly LateralSpotter _lateralSpotter;
+    private string _lastRadarDebugState = ""; // Track radar state changes for debug logging
+    
     // PHASE 2: Visual Enhancement Elements (all optional/toggleable)
     private Ellipse? _rpmIndicatorBead;  // Small circle that travels on gauge showing current RPM
     private DispatcherTimer? _rpmBeadAnimationTimer;  // Animation timer for RPM bead
@@ -56,9 +67,15 @@ public class MRTOneWidget : WidgetBase
     // Widget-specific settings
     private MRTOneSettings _settings;
     
-    // Blinking timer for critical warnings
-    private readonly DispatcherTimer _blinkTimer;
+    // Blinking timers for critical warnings
+    private readonly DispatcherTimer _blinkTimer;           // 250ms for fuel (slow blink)
+    private readonly DispatcherTimer _radarBlinkTimer;      // 125ms for radar (fast blink)
     private bool _blinkState = false;
+    private bool _radarBlinkState = false;
+    
+    // Track radar zone states for blinking critical warnings
+    private ProximityZone _currentFrontZone = ProximityZone.Clear;
+    private ProximityZone _currentRearZone = ProximityZone.Clear;
     
     // Theme colors
     private System.Windows.Media.Color _primaryColor;   // Teal #008080
@@ -69,6 +86,10 @@ public class MRTOneWidget : WidgetBase
     
     public MRTOneWidget(ITelemetryService telemetryService, WidgetConfig? config = null) : base(telemetryService, config)
     {
+        // Initialize proximity detection services
+        _proximityCalculator = new ProximityCalculator();
+        _lateralSpotter = new LateralSpotter();
+        
         // Load theme colors from settings
         _primaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.PrimaryColor);
         _secondaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.SecondaryColor);
@@ -95,6 +116,14 @@ public class MRTOneWidget : WidgetBase
         // Set window title (size is already set by base.ApplyConfiguration from config)
         Title = "MRT One";
         
+        // Create outer canvas to hold everything (allows positioning radar outside grid)
+        var outerCanvas = new Canvas
+        {
+            Background = Brushes.Transparent,
+            Width = 220, // Extra 20px for radar squares (10px each side)
+            Height = 220
+        };
+        
         // Create main grid (no background - transparent)
         // Use fixed size of 200x200 for content, then scale via LayoutTransform
         _mainGrid = new Grid
@@ -103,6 +132,11 @@ public class MRTOneWidget : WidgetBase
             Width = 200,
             Height = 200
         };
+        
+        // Position main grid centered in canvas (10px offset for radar space)
+        Canvas.SetLeft(_mainGrid, 10);
+        Canvas.SetTop(_mainGrid, 10);
+        outerCanvas.Children.Add(_mainGrid);
         
         // Create circular gauge that fills the entire window
         _gaugeCircle = new Ellipse
@@ -114,6 +148,75 @@ public class MRTOneWidget : WidgetBase
             Margin = new Thickness(5) // Small margin for stroke
         };
         _mainGrid.Children.Add(_gaugeCircle);
+        
+        // PHASE 1: Create 4-way radar spotter squares (positioned OUTSIDE circle on canvas)
+        // Canvas is 220x220, grid is 200x200 centered (10px offset)
+        // Circle has 5px margin, so radius ~95px, center at (110, 110) in canvas coords
+        // Position squares just outside circle boundary
+        
+        // Front radar (top - cars ahead)
+        _radarFront = new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            Fill = Brushes.Green, // Default: clear/far
+            Stroke = new SolidColorBrush(_primaryColor),
+            StrokeThickness = 1,
+            RadiusX = 2, // Slight rounding
+            RadiusY = 2,
+            Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
+        };
+        Canvas.SetLeft(_radarFront, 104); // Center horizontally (110 - 6)
+        Canvas.SetTop(_radarFront, 2);    // Top, outside circle
+        outerCanvas.Children.Add(_radarFront);
+        
+        // Back radar (bottom - cars behind)
+        _radarBack = new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            Fill = Brushes.Green, // Default: clear/far
+            Stroke = new SolidColorBrush(_primaryColor),
+            StrokeThickness = 1,
+            RadiusX = 2,
+            RadiusY = 2,
+            Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
+        };
+        Canvas.SetLeft(_radarBack, 104);  // Center horizontally
+        Canvas.SetTop(_radarBack, 206);   // Bottom, outside circle
+        outerCanvas.Children.Add(_radarBack);
+        
+        // Left radar (left side - cars on left)
+        _radarLeft = new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            Fill = Brushes.Green, // Default: clear
+            Stroke = new SolidColorBrush(_primaryColor),
+            StrokeThickness = 1,
+            RadiusX = 2,
+            RadiusY = 2,
+            Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
+        };
+        Canvas.SetLeft(_radarLeft, 2);    // Left, outside circle
+        Canvas.SetTop(_radarLeft, 104);   // Center vertically (110 - 6)
+        outerCanvas.Children.Add(_radarLeft);
+        
+        // Right radar (right side - cars on right)
+        _radarRight = new Rectangle
+        {
+            Width = 12,
+            Height = 12,
+            Fill = Brushes.Green, // Default: clear
+            Stroke = new SolidColorBrush(_primaryColor),
+            StrokeThickness = 1,
+            RadiusX = 2,
+            RadiusY = 2,
+            Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
+        };
+        Canvas.SetLeft(_radarRight, 206); // Right, outside circle
+        Canvas.SetTop(_radarRight, 104);  // Center vertically
+        outerCanvas.Children.Add(_radarRight);
         
         // PHASE 2: Apply visual enhancements based on settings
         ApplyVisualEnhancements();
@@ -274,8 +377,8 @@ public class MRTOneWidget : WidgetBase
         
         _mainGrid.Children.Add(_rightBox);
         
-        // No border - just the content
-        Content = _mainGrid;
+        // No border - just the content (outer canvas with radar squares)
+        Content = outerCanvas;
         
         // Subscribe to SizeChanged to update scale transform
         SizeChanged += OnWidgetSizeChanged;
@@ -284,17 +387,25 @@ public class MRTOneWidget : WidgetBase
         // (SizeChanged event won't fire if size was set before event handler was attached)
         if (Width > 0 && Height > 0)
         {
-            double scale = Math.Min(Width / 200.0, Height / 200.0);
-            _mainGrid.LayoutTransform = new ScaleTransform(scale, scale);
+            double scale = Math.Min(Width / 220.0, Height / 220.0); // Changed from 200 to 220
+            outerCanvas.LayoutTransform = new ScaleTransform(scale, scale);
         }
         
-        // Setup blinking timer for critical warnings (500ms interval)
+        // Setup blinking timer for fuel warnings (250ms interval = slower blink)
         _blinkTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(500)
+            Interval = TimeSpan.FromMilliseconds(250)
         };
         _blinkTimer.Tick += OnBlinkTimerTick;
         _blinkTimer.Start();
+        
+        // Setup radar blinking timer for front/back critical proximity (125ms interval = faster blink)
+        _radarBlinkTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(125)
+        };
+        _radarBlinkTimer.Tick += OnRadarBlinkTimerTick;
+        _radarBlinkTimer.Start();
         
         // Subscribe to settings changes
         AppSettings.Instance.SettingsChanged += OnSettingsChanged;
@@ -438,15 +549,18 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Calculate scale factors based on original 200x200 design
-        double scaleX = ActualWidth / 200.0;
-        double scaleY = ActualHeight / 200.0;
+        // Calculate scale factors based on original 220x220 design (200 + 20 for radar)
+        double scaleX = ActualWidth / 220.0;
+        double scaleY = ActualHeight / 220.0;
         
         // Use uniform scale (smallest of the two to maintain aspect ratio)
         double scale = Math.Min(scaleX, scaleY);
         
-        // Apply scale transform to the entire grid
-        _mainGrid.LayoutTransform = new ScaleTransform(scale, scale);
+        // Apply scale transform to the outer canvas
+        if (Content is Canvas canvas)
+        {
+            canvas.LayoutTransform = new ScaleTransform(scale, scale);
+        }
     }
     
     private void OnBlinkTimerTick(object? sender, EventArgs e)
@@ -471,6 +585,31 @@ public class MRTOneWidget : WidgetBase
         else
         {
             _rightValueText.Opacity = 1.0;
+        }
+    }
+    
+    private void OnRadarBlinkTimerTick(object? sender, EventArgs e)
+    {
+        _radarBlinkState = !_radarBlinkState;
+        
+        // Apply FAST blink effect to FRONT radar square if VeryClose (<4m)
+        if (_currentFrontZone == ProximityZone.VeryClose)
+        {
+            _radarFront.Opacity = _radarBlinkState ? 1.0 : 0.3;
+        }
+        else
+        {
+            _radarFront.Opacity = 1.0;
+        }
+        
+        // Apply FAST blink effect to REAR radar square if VeryClose (<4m)
+        if (_currentRearZone == ProximityZone.VeryClose)
+        {
+            _radarBack.Opacity = _radarBlinkState ? 1.0 : 0.3;
+        }
+        else
+        {
+            _radarBack.Opacity = 1.0;
         }
     }
     
@@ -813,6 +952,12 @@ public class MRTOneWidget : WidgetBase
         };
         
         _gaugeCircle.Stroke = new SolidColorBrush(borderColor);
+        
+        // PHASE 1: Update 4-way radar spotter squares
+        if (AppSettings.Instance.EnableLateralSpotter)
+        {
+            UpdateRadarSquares(data);
+        }
     }
     
     /// <summary>
@@ -870,6 +1015,161 @@ public class MRTOneWidget : WidgetBase
         }
     }
     
+    /// <summary>
+    /// PHASE 1: Update 4-way radar spotter squares based on proximity detection
+    /// </summary>
+    private void UpdateRadarSquares(TelemetryData data)
+    {
+        // Update LEFT/RIGHT squares using LateralSpotter
+        // TRUST THE SDK: CarLeftRight uses 3D position data we don't have access to
+        // It knows true lateral positioning (left/right), whereas LapDistPct only knows ahead/behind
+        // The SDK internally validates when cars are truly BESIDE the player (not ahead/behind)
+        // We should NOT second-guess this with our own distance validation
+        //
+        // CRITICAL FIX: SDK enum is 0=Off, 1=Clear, 2=CarLeft, 3=CarRight, 4=CarBothSides, 5=TwoCarsLeft, 6=TwoCarsRight
+        // (NOT 0=Clear as originally assumed!)
+        var lateralPosition = _lateralSpotter.GetLateralPosition(data);
+        
+        // Set left/right based on SDK lateral position (includes single and double car detections)
+        bool hasLeft = lateralPosition == LateralPosition.CarLeft || 
+                       lateralPosition == LateralPosition.CarBothSides ||
+                       lateralPosition == LateralPosition.TwoCarsLeft;
+        
+        bool hasRight = lateralPosition == LateralPosition.CarRight || 
+                        lateralPosition == LateralPosition.CarBothSides ||
+                        lateralPosition == LateralPosition.TwoCarsRight;
+        
+        _radarLeft.Fill = hasLeft
+            ? Brushes.Red    // Car(s) present on left
+            : Brushes.Green; // Clear on left
+        
+        _radarRight.Fill = hasRight
+            ? Brushes.Red    // Car(s) present on right
+            : Brushes.Green; // Clear on right
+        
+        // Update FRONT/BACK squares using ProximityCalculator
+        var frontZone = _proximityCalculator.GetFrontZone(data);
+        var rearZone = _proximityCalculator.GetRearZone(data);
+        
+        // Track current zones for blinking animation
+        _currentFrontZone = frontZone;
+        _currentRearZone = rearZone;
+        
+        // DEBUG: Get detailed info about what ProximityCalculator sees
+        var allNearbyCars = _proximityCalculator.GetNearbyCars(data, maxCars: 20, sameClassOnly: false);
+        var carsAhead = allNearbyCars.Where(c => c.RelativeDistance > 0).ToList();
+        var carsBehind = allNearbyCars.Where(c => c.RelativeDistance < 0).ToList();
+        
+        _radarFront.Fill = GetZoneColor(frontZone);
+        _radarBack.Fill = GetZoneColor(rearZone);
+        
+        // DEBUG: Log detailed information when values change
+        string currentState = $"L:{lateralPosition}|F:{frontZone}|R:{rearZone}";
+        if (currentState != _lastRadarDebugState)
+        {
+            _lastRadarDebugState = currentState;
+            
+            // Log to file so user can see it (Console.WriteLine not visible in running app)
+            var logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "radar_debug.log");
+            var logDir = System.IO.Path.GetDirectoryName(logPath);
+            if (!string.IsNullOrEmpty(logDir) && !System.IO.Directory.Exists(logDir))
+            {
+                System.IO.Directory.CreateDirectory(logDir);
+            }
+            
+            var log = new System.Text.StringBuilder();
+            log.AppendLine($"\n[{DateTime.Now:HH:mm:ss.fff}] ===== RADAR STATE CHANGE =====");
+            log.AppendLine($"CarLeftRight SDK Raw: {data.CarLeftRight} → Interpreted as: {lateralPosition}");
+            log.AppendLine($"Display State: Left={hasLeft} (RED={hasLeft}), Right={hasRight} (RED={hasRight})");
+            log.AppendLine($"FrontZone={frontZone}, RearZone={rearZone}");
+            log.AppendLine($"ProximityCalculator: TotalNearby={allNearbyCars.Count}, Ahead={carsAhead.Count}, Behind={carsBehind.Count}");
+            if (carsAhead.Any())
+            {
+                var closest = carsAhead.First();
+                log.AppendLine($"  Closest AHEAD: Car#{closest.CarIdx} at {closest.RelativeDistance:F0}m (Zone={closest.Zone})");
+            }
+            if (carsBehind.Any())
+            {
+                var closest = carsBehind.First();
+                log.AppendLine($"  Closest BEHIND: Car#{closest.CarIdx} at {Math.Abs(closest.RelativeDistance):F0}m (Zone={closest.Zone})");
+            }
+            log.AppendLine($"Player: Idx={data.PlayerCarIdx}, Pct={data.LapDistPct:F4}, Lap={data.Lap}, Speed={data.Speed:F1}m/s");
+            log.AppendLine($"Track Length: {data.TrackLength:F1}m");
+            
+            // NEW: Show nearby cars and their status to diagnose false detections
+            if (data.CarIdxLapDistPct != null && data.CarIdxOnPitRoad != null)
+            {
+                var nearbyCars = new List<string>();
+                for (int i = 0; i < data.CarIdxLapDistPct.Length; i++)
+                {
+                    if (i == data.PlayerCarIdx) continue; // Skip player
+                    
+                    float pct = data.CarIdxLapDistPct[i];
+                    if (pct < 0 || pct > 1) continue; // Invalid position
+                    
+                    // Calculate distance from player
+                    float playerPct = data.LapDistPct;
+                    float diff = pct - playerPct;
+                    if (diff < -0.5f) diff += 1.0f;
+                    if (diff > 0.5f) diff -= 1.0f;
+                    float absDiff = Math.Abs(diff) * 100; // Convert to percentage
+                    
+                    // Only show cars within 15% of track (nearby)
+                    if (absDiff < 15.0f)
+                    {
+                        bool onPit = data.CarIdxOnPitRoad[i];
+                        string direction = diff > 0 ? "AHEAD" : "BEHIND";
+                        string pitStatus = onPit ? " [IN PIT]" : "";
+                        
+                        // Calculate actual meters if track length available
+                        float distMeters = diff * data.TrackLength;
+                        nearbyCars.Add($"   Car#{i}: {direction} {absDiff:F1}% ({Math.Abs(distMeters):F0}m) @ Pct={pct:F3}{pitStatus}");
+                    }
+                }
+                
+                if (nearbyCars.Any())
+                {
+                    log.AppendLine($"Nearby Cars ({nearbyCars.Count}):");
+                    foreach (var car in nearbyCars)
+                    {
+                        log.AppendLine(car);
+                    }
+                }
+                else
+                {
+                    log.AppendLine($"No cars within 15% of player position");
+                }
+            }
+            
+            log.AppendLine($"===============================\n");
+            
+            try
+            {
+                System.IO.File.AppendAllText(logPath, log.ToString());
+            }
+            catch
+            {
+                // Ignore file write errors
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Get color for proximity zone (RACING-TIGHT thresholds)
+    /// </summary>
+    private Brush GetZoneColor(ProximityZone zone)
+    {
+        return zone switch
+        {
+            ProximityZone.VeryClose => Brushes.Red,      // <4m - CRITICAL (will blink)
+            ProximityZone.Close => Brushes.Red,          // 4-7m - WARNING (solid red)
+            ProximityZone.Near => Brushes.Orange,        // 7-12m - CAUTION
+            ProximityZone.Careful => Brushes.Yellow,     // 12-16m - CAREFUL
+            ProximityZone.Far => Brushes.Green,          // >16m - SAFE
+            _ => Brushes.Green                           // Clear (no cars detected)
+        };
+    }
+    
     protected override void OnConnectionStatusChanged(ConnectionStatus status)
     {
         // Update circle stroke color based on connection status
@@ -893,6 +1193,13 @@ public class MRTOneWidget : WidgetBase
         // Update circle fill opacity
         _gaugeCircle.Fill = new SolidColorBrush(Color.FromArgb(
             (byte)(255 * _backgroundOpacity), 20, 20, 20));
+        
+        // PHASE 1: Update radar squares visibility based on EnableLateralSpotter setting
+        var radarVisibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed;
+        _radarFront.Visibility = radarVisibility;
+        _radarBack.Visibility = radarVisibility;
+        _radarLeft.Visibility = radarVisibility;
+        _radarRight.Visibility = radarVisibility;
         
         // Force UI refresh with last telemetry data
         if (_lastTelemetryData != null)
@@ -1205,6 +1512,10 @@ public class MRTOneWidget : WidgetBase
     
     protected override void OnClosed(EventArgs e)
     {
+        // Clean up timers
+        _blinkTimer?.Stop();
+        _radarBlinkTimer?.Stop();
+        
         // Clean up Phase 2 resources
         RemoveShiftPointRing();
         

@@ -90,4 +90,30 @@ _ReSharper*/
 .DS_Store
 Thumbs.db
 
+# Test/Debug artifacts (generated during testing)
+test-*.ps1
+debug-*.ps1
+final-test.ps1
+
+# User settings/layouts (these are in Documents folder, not tracked)
+# But if any get copied to project root, ignore them
+settings.json
+layout.json
+debug.log
+
+# Backup files
+*.backup
+*.bak
+
+# Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
 .fake

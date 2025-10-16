@@ -1,24 +1,25 @@
 # Phase 2: MRT One Visual Enhancements - Implementation Summary
 
 **Date:** October 15, 2025  
-**Status:** ✅ **IMPLEMENTATION COMPLETE** - Ready for Testing  
-**Version:** v0.5.3-preview (Phase 2)
+**Status:** ✅ **COMPLETE & RELEASED** - v0.6.0 (Features) + v0.6.1 (Persistence)  
+**Version:** v0.6.1 [STABLE]  
+**GitHub:** https://github.com/mrt9tv/MRTui.git
 
 ---
 
 ## 🎯 Overview
 
-Phase 2 adds **5 toggleable visual enhancements** to the MRT One widget. All features can be enabled/disabled individually for testing and easy rollback.
+Phase 2 adds **3 toggleable visual enhancements** to the MRT One widget (released v0.6.0), followed by complete settings persistence (v0.6.1). All features can be enabled/disabled individually with full persistence across app restarts.
 
 ---
 
-## ✅ Implemented Features
+## ✅ Implemented Features (v0.6.0)
 
 ### 1. **Gradient Background** ✅
 - **What:** Radial gradient from center (lighter) to edge (darker)
 - **Effect:** Adds subtle 3D depth to the gauge
-- **Toggle:** `EnableGradientBackground` (default: OFF)
-- **Rollback:** Reverts to solid dark gray background
+- **Toggle:** `EnableGradientBackground` (default: ON)
+- **Status:** Released, fully tested
 
 ### 2. **Animated Shift Point Ring** ✅
 - **What:** Colored arc that fills around gauge as RPM approaches shift point
@@ -29,7 +30,7 @@ Phase 2 adds **5 toggleable visual enhancements** to the MRT One widget. All fea
   - Red: Danger zone (at limiter)
 - **Toggle:** `EnableShiftPointRing` (default: OFF)
 - **Performance:** 20 FPS animation (50ms update interval)
-- **Rollback:** Ring removed, timer stopped
+- **Status:** Released, fully tested
 
 ### 3. **Glow Effects** ✅
 - **What:** DropShadow effects on center value and gauge border
@@ -38,48 +39,96 @@ Phase 2 adds **5 toggleable visual enhancements** to the MRT One widget. All fea
   - Center gear value: 15px blur, teal glow
   - Gauge border: 10px blur, teal glow
 - **Toggle:** `EnableGlowEffects` (default: OFF)
-- **Rollback:** Effects removed (null)
+- **Status:** Released, fully tested
 
-### 4. **Enhanced Typography** ✅
-- **What:** Better font (Segoe UI) and text rendering (ClearType)
-- **Effect:** Smoother, more modern text appearance
-- **Toggle:** `EnableEnhancedTypography` (default: OFF)
-- **Rollback:** Reverts to Consolas with default rendering
+---
 
-### 5. **Dynamic Border Colors** ✅
-- **What:** Border color changes based on critical conditions
-- **Colors:**
-  - Red: Overheating (water >100°C, oil >120°C) or low fuel (<5L)
-  - Orange: Optimal shift zone (RPM)
-  - Yellow: Approaching shift zone
-  - Teal: Normal/safe range
-- **Toggle:** `EnableDynamicBorderColors` (default: OFF)
-- **Rollback:** Uses original RPM-only color logic
+## ✅ v0.6.1 - Complete Settings Persistence
+
+### Settings Architecture (4 Layers)
+1. **AppSettings** → `settings.json` (global app settings)
+2. **MRTOneSettings** → Phase 2 toggles in settings.json
+3. **WidgetConfig** → Per-widget config (position, size, opacity, Settings dictionary)
+4. **LayoutConfig** → Complete layout → `layout.json`
+
+### Persistence Features ✅
+- ✅ SaveCurrentLayout() saves to `Documents\MRT-UI\layout.json`
+- ✅ LoadSavedLayout() restores on app startup
+- ✅ Widget hide/show lifecycle (not create/destroy)
+- ✅ Opacity property added to WidgetConfig
+- ✅ Size properly loads and visually applies
+- ✅ Phase 2 settings persist across restarts
+- ✅ Reset All resets everything to defaults
+- ✅ JsonStringEnumConverter for proper enum serialization
+
+### Bug Fixes (9 total) ✅
+1. Empty widgets array (RemoveWidget saved after removing)
+2. Widget X closes (clicking X deleted config)
+3. Empty settings {} (Dictionary serialization)
+4. JSON enum deserialization (WidgetType string→enum)
+5. Deactivate/Reactivate resets (lifecycle changed)
+6. Reset All incomplete (Phase 2 settings not reset)
+7. Opacity not persisting (property added)
+8. Size not loading (hardcoded values removed)
+9. Size visual not applied (LayoutTransform calculation added)
+
+---
+
+## 🗑️ Removed Features
+The following features were planned but removed during implementation:
+
+### ~~4. Enhanced Typography~~ ❌ REMOVED
+- **Why Removed:** Minimal visual impact, added complexity
+- **Decision:** Keep default Consolas font for consistency
+
+### ~~5. Dynamic Border Colors~~ ❌ REMOVED
+- **Why Removed:** Replaced with RPM-based color coding
+- **Decision:** Existing RPM shift zone colors sufficient
 
 ---
 
 ## 📁 Files Modified
 
-### Core Implementation
+### Core Implementation (v0.6.0)
 ```
 src/iRacingOverlay.WPF/
 ├── Models/
-│   └── MRTOneSettings.cs                    [MODIFIED] +5 properties
+│   └── MRTOneSettings.cs                    [MODIFIED] +3 properties (was +5)
 ├── Widgets/
 │   └── MRTOneWidget/
-│       ├── MRTOneWidget.cs                  [MODIFIED] +~300 lines
-│       └── MRTOneWidget.cs.phase2backup     [CREATED] Backup
+│       └── MRTOneWidget.cs                  [MODIFIED] +visual enhancements
 ├── ViewModels/
-│   └── OverlayViewModel.cs                  [MODIFIED] +5 properties
+│   └── OverlayViewModel.cs                  [MODIFIED] +3 properties (was +5)
 └── Views/
     └── OverlayView.xaml                     [MODIFIED] +UI panel
 ```
 
+### Persistence Layer (v0.6.1)
+```
+src/iRacingOverlay.WPF/
+├── Models/
+│   ├── WidgetConfig.cs                      [MODIFIED] +Opacity property
+│   └── LayoutConfig.cs                      [EXISTING] Now persisted
+├── Core/
+│   └── WidgetBase.cs                        [MODIFIED] +opacity handling
+├── Services/
+│   └── WidgetManager.cs                     [MODIFIED] +SaveCurrentLayout/LoadSavedLayout
+├── Widgets/
+│   └── MRTOneWidget.cs                      [MODIFIED] +config constructor, size fix
+├── ViewModels/
+│   └── OverlayViewModel.cs                  [MODIFIED] +hide/show lifecycle
+└── MainWindow.xaml.cs                       [MODIFIED] +LoadSavedLayout on startup
+```
+
 ### Changes Summary
-- **MRTOneSettings.cs**: Added 5 bool properties for toggles
-- **MRTOneWidget.cs**: Added visual enhancement methods (~300 lines)
-- **OverlayViewModel.cs**: Added binding properties and apply logic
-- **OverlayView.xaml**: Added "Visual Enhancements (Experimental)" panel with 5 checkboxes
+- **MRTOneSettings.cs**: Added 3 bool properties (EnableGradientBackground, EnableShiftPointRing, EnableGlowEffects)
+- **MRTOneWidget.cs**: Added visual enhancement methods, config constructor, removed hardcoded size
+- **OverlayViewModel.cs**: Added binding properties, hide/show lifecycle, SaveCurrentLayout calls
+- **OverlayView.xaml**: Added "Visual Enhancements (Phase 2)" panel with 3 checkboxes
+- **WidgetConfig.cs**: Added Opacity property for persistence
+- **WidgetManager.cs**: Added SaveCurrentLayout()/LoadSavedLayout() methods (~180 lines)
+- **WidgetBase.cs**: Updated ApplyConfiguration()/GetConfiguration() for opacity
+- **MainWindow.xaml.cs**: Calls LoadSavedLayout() on startup
 
 ---
 
@@ -116,38 +165,135 @@ Visual Changes Applied
 - GetDynamicBorderColor()             // Feature 5
 ```
 
-### Settings Persistence
-All settings are saved to:
+### Settings Persistence (v0.6.1)
+All settings are saved to TWO locations:
+
+**1. Global Settings:**
 ```
 Documents\MRT-UI\settings.json
 ```
-
 Structure:
 ```json
 {
+  "units": "Metric",
+  "lockWidgets": false,
   "mrtone": {
-    "enableGradientBackground": false,
+    "enableGradientBackground": true,
     "enableShiftPointRing": false,
-    "enableGlowEffects": false,
-    "enableEnhancedTypography": false,
-    "enableDynamicBorderColors": false
+    "enableGlowEffects": false
   }
+}
+```
+
+**2. Layout Configuration:**
+```
+Documents\MRT-UI\layout.json
+```
+Structure:
+```json
+{
+  "widgets": [
+    {
+      "id": "...",
+      "type": "MRTOne",
+      "x": 100,
+      "y": 100,
+      "width": 200,
+      "height": 200,
+      "opacity": 1.0,
+      "isVisible": true,
+      "settings": {
+        "mrtone": {
+          "enableGradientBackground": true,
+          "enableShiftPointRing": false,
+          "enableGlowEffects": false,
+          "selectedFields": { ... }
+        }
+      }
+    }
+  ]
 }
 ```
 
 ---
 
-## 🧪 Testing Checklist
+## ✅ Testing Complete
 
-### Build Status
+### Build Status ✅
 - [x] Clean build (0 errors, 0 warnings)
-- [x] Backup created (MRTOneWidget.cs.phase2backup)
+- [x] Release configuration tested
+- [x] Git commit created (v0.6.1)
+- [x] Git tag created and pushed to GitHub
 
-### Feature Testing (Pending)
-- [ ] **Gradient Background**
-  - [ ] Toggle ON: See gradient effect
-  - [ ] Toggle OFF: Revert to solid background
-  - [ ] No visual artifacts
+### Feature Testing ✅
+- [x] **Gradient Background**
+  - [x] Toggle ON: See gradient effect
+  - [x] Toggle OFF: Revert to solid background
+  - [x] No visual artifacts
+  - [x] Persists across restarts
+
+- [x] **Shift Point Ring**
+  - [x] Toggle ON: Ring appears
+  - [x] Ring animates with RPM changes
+  - [x] Color transitions (yellow→orange→red)
+  - [x] Toggle OFF: Ring removed, animation stopped
+  - [x] No performance impact
+  - [x] Persists across restarts
+
+- [x] **Glow Effects**
+  - [x] Toggle ON: See glow on center value and border
+  - [x] Toggle OFF: Effects removed
+  - [x] No visual artifacts
+  - [x] Persists across restarts
+
+### Persistence Testing ✅
+- [x] **Settings Save**
+  - [x] Phase 2 toggles save to settings.json
+  - [x] Widget config saves to layout.json
+  - [x] Position, size, opacity all persist
+  - [x] Field selections persist
+
+- [x] **Settings Load**
+  - [x] App startup loads layout.json
+  - [x] All widgets restore with correct settings
+  - [x] Visual enhancements apply on load
+  - [x] Size visually applies (LayoutTransform fix)
+
+- [x] **Widget Lifecycle**
+  - [x] Deactivate hides widget (not destroy)
+  - [x] Activate shows existing widget
+  - [x] Settings maintained through hide/show
+  - [x] Reset All resets everything to defaults
+
+### Stability Testing ✅
+- [x] Multiple app restarts
+- [x] Fast toggle on/off cycles
+- [x] All widgets active simultaneously
+- [x] No memory leaks
+- [x] No CPU spikes
+- [x] Clean shutdown
+
+---
+
+## 🎉 Release Summary
+
+### v0.6.0 - Phase 2 Visual Enhancements
+**Released:** October 15, 2025 (Afternoon)
+- 3 visual enhancement toggles
+- Professional MRT One widget appearance
+- No breaking changes
+
+### v0.6.1 [STABLE] - Complete Settings Persistence
+**Released:** October 15, 2025 (Evening)
+- Complete layout.json persistence layer
+- 9 bug fixes for persistence system
+- Hide/show widget lifecycle
+- Opacity, size, position all persist
+- Reset All comprehensive functionality
+- Production-ready, all testing complete
+- **GitHub:** Pushed to https://github.com/mrt9tv/MRTui.git
+
+**Status:** Production-ready, no known issues, comprehensive testing complete
 - [ ] **Shift Point Ring**
   - [ ] Toggle ON: Ring appears when approaching shift point
   - [ ] Ring color changes (Yellow → Orange → Red)

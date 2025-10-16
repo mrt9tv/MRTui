@@ -315,12 +315,12 @@
                                                  Margin="0,0,0,5"
                                                  IsEnabled="{Binding IsActive}"/>
                                         
-                                        <!-- Glow Effects -->
-                                        <CheckBox Content="Glow Effects"
-                                                 IsChecked="{Binding EnableGlowEffects, Mode=TwoWay}"
+                                        <!-- PHASE 1: 4-Way Spotter (Radar) -->
+                                        <CheckBox Content="Enable Spotter (Radar)"
+                                                 IsChecked="{Binding Settings.EnableLateralSpotter, Mode=TwoWay}"
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
-                                                 IsEnabled="{Binding IsActive}"/>
+                                                 ToolTip="Show 4-way radar indicators (left/right/front/back) around MRT One circle"/>
                                         
                                         <TextBlock Text="⚠️ Toggle features to test. Gradient background ON by default."
                                                   FontSize="10"
