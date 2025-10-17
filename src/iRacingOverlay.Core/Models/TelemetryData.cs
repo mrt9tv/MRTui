@@ -61,6 +61,12 @@ public class TelemetryData
     public float Brake { get; set; }
 
     /// <summary>
+    /// ABS (Anti-lock Braking System) active indicator
+    /// True when ABS is actively preventing wheel lock
+    /// </summary>
+    public bool BrakeABSactive { get; set; }
+
+    /// <summary>
     /// Clutch input (0.0 to 1.0)
     /// </summary>
     public float Clutch { get; set; }

@@ -14,6 +14,7 @@ namespace iRacingOverlay.Core.Services;
     "Gear",            // Current gear (-1=R, 0=N, 1+=gears)
     "Throttle",        // 0-1
     "Brake",           // 0-1
+    "BrakeABSactive",  // bool - ABS system active
     "Clutch",          // 0-1
     "SteeringWheelAngle", // radians
     "Lap",             // Current lap number
@@ -129,6 +130,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private DateTime _lastUpdateRateCalculation = DateTime.UtcNow;
     private double _updateRate = 0.0;
     private const int UPDATE_RATE_CALCULATION_INTERVAL_MS = 1000; // Calculate Hz every 1 second
+
+    // Diagnostic: Variable dumper
+    private bool _variablesDumped = false;
     
     // Session info caching (populated from SessionInfo YAML)
     private string _driverName = "";
@@ -241,11 +245,35 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         };
 
         Status = newStatus;
-        
+
         // Parse session info when we connect
         if (newStatus == ConnectionStatus.Connected)
         {
             TryParseSessionInfo();
+
+            // Diagnostic: Dump all available variables once
+            if (!_variablesDumped && _client != null)
+            {
+                _variablesDumped = true;
+                try
+                {
+                    var outputPath = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                        "MRT-UI",
+                        "available_variables.txt");
+
+                    var dumperLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TelemetryVariableDumper>.Instance;
+                    var dumper = new TelemetryVariableDumper(dumperLogger);
+                    dumper.DumpAllVariables(_client, outputPath);
+                    dumper.DumpUsingSDKMethod(_client, outputPath.Replace(".txt", "_methods.txt"));
+
+                    _logger.LogInformation("Variable dump saved to: {OutputPath}", outputPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to dump variables (non-critical): {Message}", ex.Message);
+                }
+            }
         }
     }
     
@@ -361,6 +389,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 Gear = sdkData.Gear,
                 Throttle = sdkData.Throttle,
                 Brake = sdkData.Brake,
+                BrakeABSactive = sdkData.BrakeABSactive,
                 Clutch = sdkData.Clutch,
                 SteeringWheelAngle = sdkData.SteeringWheelAngle,
                 Lap = sdkData.Lap,

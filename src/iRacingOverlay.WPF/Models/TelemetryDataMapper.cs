@@ -26,6 +26,7 @@ public static class TelemetryDataMapper
             TelemetryField.Gear => data.Gear,
             TelemetryField.Throttle => data.Throttle,
             TelemetryField.Brake => data.Brake,
+            TelemetryField.ABSActive => data.BrakeABSactive ? 1 : 0, // Convert bool to 0/1 for display
             TelemetryField.Clutch => data.Clutch,
             
             // Temperature
@@ -211,6 +212,16 @@ public static class TelemetryDataMapper
                 DecimalPlaces = 0,
                 FontSize = 18,
                 NormalColor = "#00FF00"
+            },
+            TelemetryField.ABSActive => new DisplayOptions
+            {
+                Unit = "",
+                DecimalPlaces = 0,
+                FontSize = 18,
+                NormalColor = "#00BCD4",  // Teal when inactive (0)
+                WarningThreshold = 0.5f,  // Yellow when active (1)
+                WarningColor = "#FFFF00", // Explicit yellow color
+                DangerThreshold = 1.5f    // Never reaches this (bool is 0 or 1)
             },
             TelemetryField.WaterTemp or TelemetryField.OilTemp or 
             TelemetryField.AirTemp or TelemetryField.TrackTemp => new DisplayOptions

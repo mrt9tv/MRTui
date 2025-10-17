@@ -80,15 +80,18 @@
                                Text="🤌 Disconnected" 
                                FontSize="14"
                                Foreground="#888888"
+                               VerticalAlignment="Center"
                                Margin="0,0,30,0"/>
                     <TextBlock Text="Update Rate: " 
                                FontSize="12"
                                Foreground="{StaticResource MutedText}"
+                               VerticalAlignment="Center"
                                Margin="0,0,5,0"/>
                     <TextBlock x:Name="UpdateRateText" 
                                Text="0 Hz" 
                                FontSize="12"
-                               Foreground="{StaticResource TealPrimary}"/>
+                               Foreground="{StaticResource TealPrimary}"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
                 
                 <StackPanel Orientation="Horizontal" 
@@ -97,7 +100,8 @@
                     <TextBlock x:Name="HotkeysText" 
                                Text="Ctrl+L Lock | Ctrl+H Show/Hide" 
                                FontSize="12"
-                               Foreground="{StaticResource MutedText}"/>
+                               Foreground="{StaticResource MutedText}"
+                               VerticalAlignment="Center"/>
                 </StackPanel>
             </Grid>
         </Border>

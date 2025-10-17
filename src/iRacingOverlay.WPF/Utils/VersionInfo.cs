@@ -10,7 +10,7 @@ public static class VersionInfo
     /// Current application version.
     /// Update this constant when releasing new versions.
     /// </summary>
-    public const string APP_VERSION = "0.6.3";
+    public const string APP_VERSION = "0.6.4";
 
     /// <summary>
     /// Formatted version string with 'v' prefix for display.

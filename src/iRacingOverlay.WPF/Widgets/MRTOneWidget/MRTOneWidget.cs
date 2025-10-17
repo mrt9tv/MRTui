@@ -670,6 +670,7 @@ public class MRTOneWidget : WidgetBase
             // Engine & Controls
             TelemetryField.Throttle => "THRTL",
             TelemetryField.Brake => "BRAKE",
+            TelemetryField.ABSActive => "ABS",
             TelemetryField.Clutch => "CLUTCH",
             TelemetryField.RPM => "RPM",
             TelemetryField.Gear => "GEAR",
@@ -706,6 +707,7 @@ public class MRTOneWidget : WidgetBase
             // Percentages (0-1 scale → 0-100%)
             TelemetryField.Throttle when value is float throttle => $"{(int)(throttle * 100)}%",
             TelemetryField.Brake when value is float brake => $"{(int)(brake * 100)}%",
+            TelemetryField.ABSActive when value is int abs => "ACTIVE",
             TelemetryField.Clutch when value is float clutch => $"{(int)(clutch * 100)}%",
             TelemetryField.FuelPercent when value is float fuelPct => $"{(int)(fuelPct * 100)}%",
             
@@ -773,6 +775,12 @@ public class MRTOneWidget : WidgetBase
     
     private System.Windows.Media.Color GetValueColor(TelemetryField field, object value, TelemetryData data)
     {
+        // Handle ABS (int value: 0 or 1)
+        if (field == TelemetryField.ABSActive && value is int absValue)
+        {
+            return absValue == 1 ? Colors.Yellow : _primaryColor; // Yellow when ON, Teal when OFF
+        }
+        
         if (value is not float floatValue)
             return _primaryColor; // Default to teal
         

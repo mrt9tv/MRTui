@@ -15,6 +15,7 @@ public enum TelemetryField
     Gear,
     Throttle,
     Brake,
+    ABSActive,       // ABS system active indicator
     Clutch,
     
     // Temperatures
