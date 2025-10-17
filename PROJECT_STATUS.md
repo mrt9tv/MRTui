@@ -1,10 +1,10 @@
 # 🏁 iRacing Telemetry Overlay - Project Summary
 
-## Current Status: v0.6.1 [STABLE] - Settings Persistence Complete ✅
+## Current Status: v0.6.5 [STABLE] - RPM Buffer Optimization ✅
 
-**Production-ready overlay system with modern manager UI and complete settings persistence!**
+**Production-ready overlay system with optimized shift point indicators!**
 
-**Latest:** Complete settings persistence layer with layout.json, widget lifecycle improvements, and Phase 2 visual enhancements fully integrated.
+**Latest:** Asymmetric hybrid buffer (2.0% before + 0.5% after optimal) for improved shift zone visibility and safety.
 
 ---
 

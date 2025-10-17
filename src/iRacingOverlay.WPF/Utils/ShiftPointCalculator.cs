@@ -152,19 +152,23 @@ public static class ShiftPointCalculator
         // These are car-specific and based on actual engine physics/torque curves
         if (shiftOptimalRPM > 0 && shiftBlinkRPM > 0)
         {
-            // SMART PERCENTAGE-BASED BUFFERING: Create visual zones around SDK shift points
-            // Some cars (like Street Stock) have ShiftRPM == LastRPM, leaving no orange window
-            // Solution: Use 0.5% buffer for tight visual precision (preserves SDK engineering)
-            // Examples: Street Stock (6500 RPM) = ±33 RPM, GT3 (8500 RPM) = ±43 RPM, Formula (15000 RPM) = ±75 RPM
-            // NOTE: If 0.5% feels too narrow/flickery, increase to 1.0% (±65/±85/±150 RPM respectively)
+            // ASYMMETRIC HYBRID BUFFERING: Larger buffer before optimal (early shift forgiveness), smaller after (safety)
+            // This approach provides:
+            // - Large early shift window: 2.0% before optimal = 130-300 RPM forgiveness for early shifts
+            // - Conservative extension: 0.5% after optimal = 33-75 RPM maximum past optimal (safe from blink zone)
+            // - Edge case protection: Handles cars where ShiftRPM ≈ LastRPM without encroaching on danger zones
+            // Examples: Street Stock (6500 RPM) = -130/+33 RPM, GT3 (8500 RPM) = -170/+43 RPM, Formula (15000 RPM) = -300/+75 RPM
             
-            const float OPTIMAL_BUFFER_PERCENT = 0.005f; // 0.5% buffer around optimal shift point (tight precision)
-            float optimalBufferRPM = shiftOptimalRPM * OPTIMAL_BUFFER_PERCENT;
+            const float OPTIMAL_BUFFER_BEFORE_PERCENT = 0.02f;  // 2.0% buffer before optimal (early shift window)
+            const float OPTIMAL_BUFFER_AFTER_PERCENT = 0.005f;  // 0.5% buffer after optimal (conservative extension)
             
-            // Calculate zone thresholds with intelligent buffering:
+            float optimalBufferBefore = shiftOptimalRPM * OPTIMAL_BUFFER_BEFORE_PERCENT;
+            float optimalBufferAfter = shiftOptimalRPM * OPTIMAL_BUFFER_AFTER_PERCENT;
+            
+            // Calculate zone thresholds with asymmetric intelligent buffering:
             float warningStart = shiftFirstRPM;                      // Yellow starts when shift lights illuminate
-            float optimalStart = shiftOptimalRPM - optimalBufferRPM;   // Orange starts 0.5% before optimal
-            float optimalEnd = Math.Max(shiftOptimalRPM + optimalBufferRPM, shiftLastRPM); // Orange extends 0.5% past optimal OR to LastRPM
+            float optimalStart = shiftOptimalRPM - optimalBufferBefore;   // Orange starts 2.0% before optimal
+            float optimalEnd = Math.Max(shiftOptimalRPM + optimalBufferAfter, shiftLastRPM); // Orange extends 0.5% past optimal OR to LastRPM
             float dangerStart = optimalEnd;                          // Red starts after orange window
             
             // Professional-grade zones with smart buffering:
