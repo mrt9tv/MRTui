@@ -1,10 +1,10 @@
 # 🏁 iRacing Telemetry Overlay - Project Summary
 
-## Current Status: v0.6.5 [STABLE] - RPM Buffer Optimization ✅
+## Current Status: v0.7.0 [STABLE] - ABS Indicator Enhancement ✅
 
-**Production-ready overlay system with optimized shift point indicators!**
+**Production-ready overlay system with refined ABS visual feedback!**
 
-**Latest:** Asymmetric hybrid buffer (2.0% before + 0.5% after optimal) for improved shift zone visibility and safety.
+**Latest:** ABS indicator with opacity fading (0.3 inactive, 1.0 active) and fixed fuel blink conflicts.
 
 ---
 

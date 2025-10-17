@@ -77,6 +77,10 @@ public class MRTOneWidget : WidgetBase
     private ProximityZone _currentFrontZone = ProximityZone.Clear;
     private ProximityZone _currentRearZone = ProximityZone.Clear;
     
+    // ABS state tracking to prevent flicker (initialized to -1 to force initial opacity set)
+    private int _lastLeftABSValue = -1;
+    private int _lastRightABSValue = -1;
+    
     // Theme colors
     private System.Windows.Media.Color _primaryColor;   // Teal #008080
     private System.Windows.Media.Color _secondaryColor; // Orange #FF8000
@@ -572,7 +576,7 @@ public class MRTOneWidget : WidgetBase
         {
             _leftValueText.Opacity = _blinkState ? 1.0 : 0.3;
         }
-        else
+        else if (_leftField != TelemetryField.ABSActive) // Don't reset ABS opacity - managed in UpdateUI
         {
             _leftValueText.Opacity = 1.0;
         }
@@ -582,7 +586,7 @@ public class MRTOneWidget : WidgetBase
         {
             _rightValueText.Opacity = _blinkState ? 1.0 : 0.3;
         }
-        else
+        else if (_rightField != TelemetryField.ABSActive) // Don't reset ABS opacity - managed in UpdateUI
         {
             _rightValueText.Opacity = 1.0;
         }
@@ -641,6 +645,32 @@ public class MRTOneWidget : WidgetBase
         _leftBox.Visibility = _leftField.HasValue ? Visibility.Visible : Visibility.Collapsed;
         _rightBox.Visibility = _rightField.HasValue ? Visibility.Visible : Visibility.Collapsed;
         
+        // Initialize ABS opacity to inactive state (0.3) when field is assigned
+        // This ensures correct initial display before first telemetry update
+        if (_leftField == TelemetryField.ABSActive)
+        {
+            _leftValueText.Opacity = 0.3; // Start dimmed (inactive state)
+            _leftLabelText.Opacity = 0.3;
+            _lastLeftABSValue = -1; // Reset cache to force update on first telemetry
+        }
+        else
+        {
+            _leftValueText.Opacity = 1.0; // Normal opacity for other fields
+            _leftLabelText.Opacity = 1.0;
+        }
+        
+        if (_rightField == TelemetryField.ABSActive)
+        {
+            _rightValueText.Opacity = 0.3; // Start dimmed (inactive state)
+            _rightLabelText.Opacity = 0.3;
+            _lastRightABSValue = -1; // Reset cache to force update on first telemetry
+        }
+        else
+        {
+            _rightValueText.Opacity = 1.0; // Normal opacity for other fields
+            _rightLabelText.Opacity = 1.0;
+        }
+        
         // Update labels
         if (_leftField.HasValue)
             _leftLabelText.Text = GetFieldLabel(_leftField.Value);
@@ -670,7 +700,7 @@ public class MRTOneWidget : WidgetBase
             // Engine & Controls
             TelemetryField.Throttle => "THRTL",
             TelemetryField.Brake => "BRAKE",
-            TelemetryField.ABSActive => "ABS",
+            TelemetryField.ABSActive => "", // No label - "ABS" is the value itself
             TelemetryField.Clutch => "CLUTCH",
             TelemetryField.RPM => "RPM",
             TelemetryField.Gear => "GEAR",
@@ -707,7 +737,7 @@ public class MRTOneWidget : WidgetBase
             // Percentages (0-1 scale → 0-100%)
             TelemetryField.Throttle when value is float throttle => $"{(int)(throttle * 100)}%",
             TelemetryField.Brake when value is float brake => $"{(int)(brake * 100)}%",
-            TelemetryField.ABSActive when value is int abs => "ACTIVE",
+            TelemetryField.ABSActive when value is int abs => "ABS", // Display "ABS" as the value (no label)
             TelemetryField.Clutch when value is float clutch => $"{(int)(clutch * 100)}%",
             TelemetryField.FuelPercent when value is float fuelPct => $"{(int)(fuelPct * 100)}%",
             
@@ -743,9 +773,9 @@ public class MRTOneWidget : WidgetBase
                 _ => data.Gear.ToString()
             },
             
-            // Position (with "P" prefix, +1 offset since iRacing uses 0-based indexing)
-            TelemetryField.Position when value is int pos => $"P{pos + 1}",
-            TelemetryField.ClassPosition when value is int pos => $"P{pos + 1}",
+            // Position (with "P" prefix - LivePosition is already 1-based)
+            TelemetryField.Position when value is int pos => $"P{pos}",
+            TelemetryField.ClassPosition when value is int pos => $"P{pos}",
             
             // Lap times (formatted as mm:ss.xxx)
             TelemetryField.LastLapTime when value is float time => FormatLapTime(time),
@@ -932,6 +962,26 @@ public class MRTOneWidget : WidgetBase
             _leftValueText.Text = FormatFieldValue(_leftField.Value, leftValue, data);
             _leftValueText.Foreground = new SolidColorBrush(GetValueColor(_leftField.Value, leftValue, data));
             
+            // ABS special handling: Fade to background when inactive, bright when active
+            // Only update opacity if ABS state actually changed (prevents flicker from rapid SDK updates)
+            if (_leftField.Value == TelemetryField.ABSActive && leftValue is int absValue)
+            {
+                if (absValue != _lastLeftABSValue)
+                {
+                    _leftValueText.Opacity = absValue == 1 ? 1.0 : 0.3; // Bright when ON, dim when OFF
+                    _leftLabelText.Opacity = absValue == 1 ? 1.0 : 0.3; // Sync label opacity
+                    _lastLeftABSValue = absValue; // Cache state to prevent redundant updates
+                }
+                // Note: If state hasn't changed, keep current opacity (don't reset)
+            }
+            else if (_leftField.Value != TelemetryField.ABSActive && _leftField.Value != TelemetryField.FuelLevel)
+            {
+                // Only reset opacity for fields that don't have special blink handling
+                // (FuelLevel has blink timer, ABSActive has state-based opacity)
+                _leftValueText.Opacity = 1.0;
+                _leftLabelText.Opacity = 1.0;
+            }
+            
             // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
             _leftLabelText.Text = GetFieldLabel(_leftField.Value);
         }
@@ -942,6 +992,26 @@ public class MRTOneWidget : WidgetBase
             var rightValue = TelemetryDataMapper.GetValue(_rightField.Value, data) ?? 0;
             _rightValueText.Text = FormatFieldValue(_rightField.Value, rightValue, data);
             _rightValueText.Foreground = new SolidColorBrush(GetValueColor(_rightField.Value, rightValue, data));
+            
+            // ABS special handling: Fade to background when inactive, bright when active
+            // Only update opacity if ABS state actually changed (prevents flicker from rapid SDK updates)
+            if (_rightField.Value == TelemetryField.ABSActive && rightValue is int absValue)
+            {
+                if (absValue != _lastRightABSValue)
+                {
+                    _rightValueText.Opacity = absValue == 1 ? 1.0 : 0.3; // Bright when ON, dim when OFF
+                    _rightLabelText.Opacity = absValue == 1 ? 1.0 : 0.3; // Sync label opacity
+                    _lastRightABSValue = absValue; // Cache state to prevent redundant updates
+                }
+                // Note: If state hasn't changed, keep current opacity (don't reset)
+            }
+            else if (_rightField.Value != TelemetryField.ABSActive && _rightField.Value != TelemetryField.FuelLevel)
+            {
+                // Only reset opacity for fields that don't have special blink handling
+                // (FuelLevel has blink timer, ABSActive has state-based opacity)
+                _rightValueText.Opacity = 1.0;
+                _rightLabelText.Opacity = 1.0;
+            }
             
             // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
             _rightLabelText.Text = GetFieldLabel(_rightField.Value);
