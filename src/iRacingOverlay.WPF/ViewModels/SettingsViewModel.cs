@@ -33,9 +33,39 @@ public class SettingsViewModel : INotifyPropertyChanged
         SelectTabCommand = new RelayCommand<string>(OnSelectTab);
         ResetAllCommand = new RelayCommand(OnResetAll);
 
+        // Subscribe to AppSettings property changes to keep UI in sync
+        _settings.PropertyChanged += OnSettingsPropertyChanged;
+
+        // Subscribe to widget visibility changes to update checkbox
+        _widgetManager.WidgetVisibilityChanged += OnWidgetVisibilityChanged;
+
         // Apply current manager settings to window
         _mainWindow.Opacity = 1.0; // Always 100% opacity
         _mainWindow.Topmost = _settings.AlwaysOnTop;
+    }
+
+    /// <summary>
+    /// Handle widget visibility changes (e.g., when hotkey toggles visibility)
+    /// </summary>
+    private void OnWidgetVisibilityChanged(object? sender, EventArgs e)
+    {
+        // Update the ShowWidgets property to reflect current state
+        OnPropertyChanged(nameof(ShowWidgets));
+        OnPropertyChanged(nameof(VisibilityStatusIcon));
+    }
+
+    /// <summary>
+    /// Handle property changes from AppSettings (e.g., when hotkey toggles lock)
+    /// </summary>
+    private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // When LockWindows changes in AppSettings, update our UI binding
+        // (Widget lock is applied directly by MainWindow hotkey handler)
+        if (e.PropertyName == nameof(AppSettings.LockWindows))
+        {
+            OnPropertyChanged(nameof(LockWidgets));
+            OnPropertyChanged(nameof(LockStatusIcon));
+        }
     }
 
     #region Properties
@@ -108,9 +138,113 @@ public class SettingsViewModel : INotifyPropertyChanged
     public string LockStatusIcon => LockWidgets ? "🔒" : "🔓";
 
     /// <summary>
-    /// Hotkey for toggling widget lock (currently read-only F12)
+    /// Show/Hide widgets toggle
     /// </summary>
-    public string Hotkey => "F12";
+    public bool ShowWidgets
+    {
+        get
+        {
+            // Check if any widgets are visible
+            return _widgetManager.ActiveWidgets.Any(w => w.Value.IsVisible);
+        }
+        set
+        {
+            if (value)
+            {
+                _widgetManager.ShowAllWidgets();
+            }
+            else
+            {
+                _widgetManager.HideAllWidgets();
+            }
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(VisibilityStatusIcon));
+        }
+    }
+
+    /// <summary>
+    /// Visibility status icon (👁️ visible, 👁️‍🗨️ hidden)
+    /// </summary>
+    public string VisibilityStatusIcon => ShowWidgets ? "👁️" : "🚫";
+
+    /// <summary>
+    /// Modifier key for toggle lock hotkey (Ctrl, Alt, Shift, or None)
+    /// </summary>
+    public string ToggleLockModifier
+    {
+        get => _settings.ToggleLockModifier;
+        set
+        {
+            if (_settings.ToggleLockModifier != value)
+            {
+                _settings.ToggleLockModifier = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HotkeyDisplayText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Main key for toggle lock hotkey
+    /// </summary>
+    public string ToggleLockKey
+    {
+        get => _settings.ToggleLockKey;
+        set
+        {
+            if (_settings.ToggleLockKey != value)
+            {
+                _settings.ToggleLockKey = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(HotkeyDisplayText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Formatted hotkey display text
+    /// </summary>
+    public string HotkeyDisplayText
+    {
+        get
+        {
+            if (ToggleLockModifier == "None")
+                return ToggleLockKey;
+            return $"{ToggleLockModifier} + {ToggleLockKey}";
+        }
+    }
+
+    /// <summary>
+    /// Modifier key for toggle visibility hotkey (Ctrl, Alt, Shift, or None)
+    /// </summary>
+    public string ToggleVisibilityModifier
+    {
+        get => _settings.ToggleVisibilityModifier;
+        set
+        {
+            if (_settings.ToggleVisibilityModifier != value)
+            {
+                _settings.ToggleVisibilityModifier = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Main key for toggle visibility hotkey
+    /// </summary>
+    public string ToggleVisibilityKey
+    {
+        get => _settings.ToggleVisibilityKey;
+        set
+        {
+            if (_settings.ToggleVisibilityKey != value)
+            {
+                _settings.ToggleVisibilityKey = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 
     /// <summary>
     /// Keep manager window always on top
@@ -202,6 +336,20 @@ public class SettingsViewModel : INotifyPropertyChanged
     #endregion
 
     #region Helper Methods
+
+    /// <summary>
+    /// Called when hotkey is changed via HotkeyCapture control
+    /// </summary>
+    public void OnHotkeyChanged()
+    {
+        SaveAndNotify();
+
+        // Re-register global hotkeys with new bindings
+        if (_mainWindow is MainWindow mainWindow)
+        {
+            mainWindow.ReregisterGlobalHotkeys();
+        }
+    }
 
     /// <summary>
     /// Save settings and notify listeners

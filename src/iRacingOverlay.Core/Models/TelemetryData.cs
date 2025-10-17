@@ -19,6 +19,31 @@ public class TelemetryData
     /// Car's redline RPM (from car setup/info if available)
     /// </summary>
     public float EngineRedlineRPM { get; set; }
+    
+    // ===== PROFESSIONAL SHIFT LIGHT TELEMETRY =====
+    // iRacing SDK provides professional-grade, car-specific shift points
+    // based on actual engine physics and torque curves
+    
+    /// <summary>
+    /// RPM when shift lights START illuminating (professional grade, car-specific)
+    /// </summary>
+    public float PlayerCarSLFirstRPM { get; set; }
+    
+    /// <summary>
+    /// OPTIMAL SHIFT POINT RPM (professional grade, car-specific)
+    /// This is THE KEY VALUE - iRacing's calculated optimal shift point
+    /// </summary>
+    public float PlayerCarSLShiftRPM { get; set; }
+    
+    /// <summary>
+    /// RPM when shift lights are FULLY LIT (professional grade, car-specific)
+    /// </summary>
+    public float PlayerCarSLLastRPM { get; set; }
+    
+    /// <summary>
+    /// RPM when shift lights BLINK (over-rev warning, professional grade, car-specific)
+    /// </summary>
+    public float PlayerCarSLBlinkRPM { get; set; }
 
     /// <summary>
     /// Current gear (-1 = Reverse, 0 = Neutral, 1+ = Forward gears)

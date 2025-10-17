@@ -36,13 +36,22 @@ public abstract class WidgetBase : Window
     /// </summary>
     private bool _isLocked = false;
 
+    /// <summary>
+    /// Whether the widget should be visible based on user configuration
+    /// (separate from connection state)
+    /// </summary>
+    private bool _userWantsVisible = true;
+
     protected WidgetBase(ITelemetryService telemetryService, WidgetConfig? config = null)
     {
         _telemetryService = telemetryService ?? throw new ArgumentNullException(nameof(telemetryService));
-        
+
         // Use provided config or create new one
         Config = config ?? new WidgetConfig { Type = WidgetType };
         WidgetId = Config.Id;
+
+        // Track user's visibility preference
+        _userWantsVisible = Config.IsVisible;
 
         // Set up transparent overlay window
         InitializeWindowProperties();
@@ -53,8 +62,15 @@ public abstract class WidgetBase : Window
         // Enable dragging
         EnableDragging();
 
-        // Apply saved position and size
-        ApplyConfiguration();
+        // Apply saved position and size (but NOT visibility yet - wait for connection)
+        ApplyConfigurationWithoutVisibility();
+
+        // Apply visibility based on current connection state
+        UpdateVisibilityBasedOnConnection(_telemetryService.Status);
+
+        // Apply current lock state from global settings
+        var appSettings = Models.AppSettings.Instance;
+        SetLocked(appSettings.LockWindows);
     }
 
     /// <summary>
@@ -142,15 +158,24 @@ public abstract class WidgetBase : Window
         Width = Config.Width;
         Height = Config.Height;
         Opacity = Config.Opacity;
-        
-        if (Config.IsVisible)
-        {
-            Show();
-        }
-        else
-        {
-            Hide();
-        }
+
+        _userWantsVisible = Config.IsVisible;
+
+        // Only show if user wants visible AND telemetry is connected
+        UpdateVisibilityBasedOnConnection(_telemetryService.Status);
+    }
+
+    /// <summary>
+    /// Apply configuration without changing visibility
+    /// Used during initialization to avoid showing before connection check
+    /// </summary>
+    private void ApplyConfigurationWithoutVisibility()
+    {
+        Left = Config.X;
+        Top = Config.Y;
+        Width = Config.Width;
+        Height = Config.Height;
+        Opacity = Config.Opacity;
     }
 
     /// <summary>
@@ -201,8 +226,28 @@ public abstract class WidgetBase : Window
     /// <param name="status">New connection status</param>
     protected virtual void OnConnectionStatusChanged(ConnectionStatus status)
     {
-        // Default: do nothing
-        // Derived classes can override to show connection indicators
+        // Update visibility based on connection state
+        UpdateVisibilityBasedOnConnection(status);
+
+        // Derived classes can override to show additional connection indicators
+    }
+
+    /// <summary>
+    /// Update widget visibility based on connection state
+    /// Only show widget if user wants it visible AND telemetry is connected
+    /// </summary>
+    private void UpdateVisibilityBasedOnConnection(ConnectionStatus status)
+    {
+        bool shouldBeVisible = _userWantsVisible && status == ConnectionStatus.Connected;
+
+        if (shouldBeVisible && !IsVisible)
+        {
+            Show();
+        }
+        else if (!shouldBeVisible && IsVisible)
+        {
+            Hide();
+        }
     }
 
     /// <summary>
@@ -231,20 +276,29 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
-    /// Toggle widget visibility
+    /// Toggle widget visibility (user preference)
+    /// Actual visibility also depends on connection state
     /// </summary>
     public void ToggleVisibility()
     {
-        if (IsVisible)
-        {
-            Hide();
-            Config.IsVisible = false;
-        }
-        else
-        {
-            Show();
-            Config.IsVisible = true;
-        }
+        _userWantsVisible = !_userWantsVisible;
+        Config.IsVisible = _userWantsVisible;
+
+        // Update visibility based on both user preference and connection state
+        UpdateVisibilityBasedOnConnection(_telemetryService.Status);
+    }
+
+    /// <summary>
+    /// Set user visibility preference
+    /// Actual visibility also depends on connection state
+    /// </summary>
+    public void SetUserVisibility(bool visible)
+    {
+        _userWantsVisible = visible;
+        Config.IsVisible = visible;
+
+        // Update visibility based on both user preference and connection state
+        UpdateVisibilityBasedOnConnection(_telemetryService.Status);
     }
 
     /// <summary>

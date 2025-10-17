@@ -25,6 +25,7 @@ public class WidgetManager
 
     public event EventHandler<WidgetBase>? WidgetCreated;
     public event EventHandler<Guid>? WidgetRemoved;
+    public event EventHandler? WidgetVisibilityChanged;
 
     public WidgetManager(ITelemetryService telemetryService, ILogger<WidgetManager> logger)
     {
@@ -73,10 +74,8 @@ public class WidgetManager
         config ??= new WidgetConfig { Type = type };
 
         // Create widget using factory
+        // Widget will handle its own visibility based on connection state
         var widget = factory(_telemetryService, config);
-        
-        // Explicitly show the widget
-        widget.Show();
 
         // Track the widget
         _activeWidgets[widget.WidgetId] = widget;
@@ -151,7 +150,7 @@ public class WidgetManager
     }
 
     /// <summary>
-    /// Show all widgets
+    /// Show all widgets (sets user preference, actual visibility depends on connection)
     /// </summary>
     public void ShowAllWidgets()
     {
@@ -159,13 +158,17 @@ public class WidgetManager
 
         foreach (var widget in _activeWidgets.Values)
         {
-            widget.Show();
-            widget.Config.IsVisible = true;
+            // Set user preference to visible
+            // Widget will only actually show if telemetry is connected
+            widget.SetUserVisibility(true);
         }
+
+        // Notify listeners that visibility changed
+        WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
-    /// Hide all widgets
+    /// Hide all widgets (sets user preference to hidden)
     /// </summary>
     public void HideAllWidgets()
     {
@@ -173,9 +176,11 @@ public class WidgetManager
 
         foreach (var widget in _activeWidgets.Values)
         {
-            widget.Hide();
-            widget.Config.IsVisible = false;
+            widget.SetUserVisibility(false);
         }
+
+        // Notify listeners that visibility changed
+        WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

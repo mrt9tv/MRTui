@@ -321,13 +321,6 @@
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
                                                  ToolTip="Show 4-way radar indicators (left/right/front/back) around MRT One circle"/>
-                                        
-                                        <TextBlock Text="⚠️ Toggle features to test. Gradient background ON by default."
-                                                  FontSize="10"
-                                                  FontStyle="Italic"
-                                                  Foreground="{StaticResource MutedText}"
-                                                  TextWrapping="Wrap"
-                                                  Margin="0,5,0,0"/>
                                     </StackPanel>
                                 </Border>
                                 

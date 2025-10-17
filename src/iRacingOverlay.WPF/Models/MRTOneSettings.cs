@@ -12,7 +12,7 @@ public class MRTOneSettings
     /// Telemetry field to display in top section
     /// </summary>
     [JsonPropertyName("topField")]
-    public string? TopField { get; set; } = "Speed";
+    public string? TopField { get; set; } = "RPM";
     
     /// <summary>
     /// Telemetry field to display in center section (large)
@@ -24,7 +24,7 @@ public class MRTOneSettings
     /// Telemetry field to display in bottom section
     /// </summary>
     [JsonPropertyName("bottomField")]
-    public string? BottomField { get; set; } = "RPM";
+    public string? BottomField { get; set; } = "Speed";
     
     /// <summary>
     /// Telemetry field to display in left side box
@@ -95,9 +95,9 @@ public class MRTOneSettings
     /// </summary>
     public static MRTOneSettings Default => new()
     {
-        TopField = "Speed",
+        TopField = "RPM",
         CenterField = "Gear",
-        BottomField = "RPM",
+        BottomField = "Speed",
         LeftField = "FuelLevel",
         RightField = "Brake",
         ShowTop = true,

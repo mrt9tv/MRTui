@@ -2,6 +2,8 @@ namespace iRacingOverlay.WPF.Utils;
 
 /// <summary>
 /// Calculates optimal shift points and RPM color zones based on telemetry data
+/// PHASE 1 UPDATE: Now uses iRacing's professional shift light telemetry as primary source
+/// Falls back to learning system only when SDK values unavailable
 /// </summary>
 public static class ShiftPointCalculator
 {
@@ -93,6 +95,7 @@ public static class ShiftPointCalculator
     
     /// <summary>
     /// Get the RPM zone for color coding
+    /// LEGACY METHOD: Uses learning system only (kept for backward compatibility)
     /// </summary>
     public static RPMZone GetRPMZone(float currentRPM, int gear)
     {
@@ -125,6 +128,76 @@ public static class ShiftPointCalculator
         {
             return RPMZone.Safe;    // TEAL - 0-89% safe operating range
         }
+    }
+    
+    /// <summary>
+    /// Get the RPM zone for color coding using iRacing's professional shift light telemetry
+    /// PHASE 1: Primary method - uses SDK shift points when available, falls back to learning system
+    /// </summary>
+    /// <param name="currentRPM">Current engine RPM</param>
+    /// <param name="gear">Current gear</param>
+    /// <param name="shiftFirstRPM">SDK: When shift lights START (PlayerCarSLFirstRPM)</param>
+    /// <param name="shiftOptimalRPM">SDK: OPTIMAL shift point (PlayerCarSLShiftRPM)</param>
+    /// <param name="shiftLastRPM">SDK: When shift lights FULLY LIT (PlayerCarSLLastRPM)</param>
+    /// <param name="shiftBlinkRPM">SDK: When shift lights BLINK (PlayerCarSLBlinkRPM)</param>
+    public static RPMZone GetRPMZone(float currentRPM, int gear, float shiftFirstRPM, float shiftOptimalRPM, float shiftLastRPM, float shiftBlinkRPM)
+    {
+        // Neutral or reverse - always safe
+        if (gear <= 0)
+        {
+            return RPMZone.Safe;
+        }
+        
+        // PHASE 1: Use iRacing's professional shift light values if available
+        // These are car-specific and based on actual engine physics/torque curves
+        if (shiftOptimalRPM > 0 && shiftBlinkRPM > 0)
+        {
+            // SMART PERCENTAGE-BASED BUFFERING: Create visual zones around SDK shift points
+            // Some cars (like Street Stock) have ShiftRPM == LastRPM, leaving no orange window
+            // Solution: Use 0.5% buffer for tight visual precision (preserves SDK engineering)
+            // Examples: Street Stock (6500 RPM) = ±33 RPM, GT3 (8500 RPM) = ±43 RPM, Formula (15000 RPM) = ±75 RPM
+            // NOTE: If 0.5% feels too narrow/flickery, increase to 1.0% (±65/±85/±150 RPM respectively)
+            
+            const float OPTIMAL_BUFFER_PERCENT = 0.005f; // 0.5% buffer around optimal shift point (tight precision)
+            float optimalBufferRPM = shiftOptimalRPM * OPTIMAL_BUFFER_PERCENT;
+            
+            // Calculate zone thresholds with intelligent buffering:
+            float warningStart = shiftFirstRPM;                      // Yellow starts when shift lights illuminate
+            float optimalStart = shiftOptimalRPM - optimalBufferRPM;   // Orange starts 0.5% before optimal
+            float optimalEnd = Math.Max(shiftOptimalRPM + optimalBufferRPM, shiftLastRPM); // Orange extends 0.5% past optimal OR to LastRPM
+            float dangerStart = optimalEnd;                          // Red starts after orange window
+            
+            // Professional-grade zones with smart buffering:
+            // - Safe: Below shift light start
+            // - Warning: Shift lights starting (FirstRPM to OptimalStart)
+            // - Optimal: Best shift window (OptimalStart to OptimalEnd) - SHIFT NOW
+            // - Danger: Over-rev zone (OptimalEnd to BlinkRPM and beyond)
+            
+            if (currentRPM >= shiftBlinkRPM)
+            {
+                return RPMZone.Danger;  // RED - Over-rev warning (blink zone)
+            }
+            else if (currentRPM >= dangerStart)
+            {
+                return RPMZone.Danger;  // RED - Past optimal window, approaching blink
+            }
+            else if (currentRPM >= optimalStart)
+            {
+                return RPMZone.Optimal; // ORANGE - Optimal shift window (SHIFT NOW)
+            }
+            else if (currentRPM >= warningStart)
+            {
+                return RPMZone.Warning; // YELLOW - Shift lights starting (prepare to shift)
+            }
+            else
+            {
+                return RPMZone.Safe;    // TEAL - Safe operating range
+            }
+        }
+        
+        // FALLBACK: Use learning system if SDK shift light values not available
+        // This handles edge cases where SDK might not provide shift light data
+        return GetRPMZone(currentRPM, gear);
     }
     
     /// <summary>

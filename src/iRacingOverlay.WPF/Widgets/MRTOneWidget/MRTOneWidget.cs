@@ -120,8 +120,8 @@ public class MRTOneWidget : WidgetBase
         var outerCanvas = new Canvas
         {
             Background = Brushes.Transparent,
-            Width = 220, // Extra 20px for radar squares (10px each side)
-            Height = 220
+            Width = 228, // Extra 28px for radar squares (14px each side for 4px spacing + 12px box - 2px overlap)
+            Height = 228
         };
         
         // Create main grid (no background - transparent)
@@ -133,9 +133,9 @@ public class MRTOneWidget : WidgetBase
             Height = 200
         };
         
-        // Position main grid centered in canvas (10px offset for radar space)
-        Canvas.SetLeft(_mainGrid, 10);
-        Canvas.SetTop(_mainGrid, 10);
+        // Position main grid centered in canvas (14px offset for radar space)
+        Canvas.SetLeft(_mainGrid, 14);
+        Canvas.SetTop(_mainGrid, 14);
         outerCanvas.Children.Add(_mainGrid);
         
         // Create circular gauge that fills the entire window
@@ -150,9 +150,9 @@ public class MRTOneWidget : WidgetBase
         _mainGrid.Children.Add(_gaugeCircle);
         
         // PHASE 1: Create 4-way radar spotter squares (positioned OUTSIDE circle on canvas)
-        // Canvas is 220x220, grid is 200x200 centered (10px offset)
-        // Circle has 5px margin, so radius ~95px, center at (110, 110) in canvas coords
-        // Position squares just outside circle boundary
+        // Canvas is 228x228, grid is 200x200 centered (14px offset)
+        // Circle has 5px margin, so radius ~95px, center at (114, 114) in canvas coords
+        // Position squares 4px further outside circle boundary for better visibility
         
         // Front radar (top - cars ahead)
         _radarFront = new Rectangle
@@ -166,8 +166,8 @@ public class MRTOneWidget : WidgetBase
             RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarFront, 104); // Center horizontally (110 - 6)
-        Canvas.SetTop(_radarFront, 2);    // Top, outside circle
+        Canvas.SetLeft(_radarFront, 108); // Center horizontally (114 - 6)
+        Canvas.SetTop(_radarFront, 2);    // Top, 4px further out from edge
         outerCanvas.Children.Add(_radarFront);
         
         // Back radar (bottom - cars behind)
@@ -182,8 +182,8 @@ public class MRTOneWidget : WidgetBase
             RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarBack, 104);  // Center horizontally
-        Canvas.SetTop(_radarBack, 206);   // Bottom, outside circle
+        Canvas.SetLeft(_radarBack, 108);  // Center horizontally
+        Canvas.SetTop(_radarBack, 214);   // Bottom, 4px further out from edge
         outerCanvas.Children.Add(_radarBack);
         
         // Left radar (left side - cars on left)
@@ -198,8 +198,8 @@ public class MRTOneWidget : WidgetBase
             RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarLeft, 2);    // Left, outside circle
-        Canvas.SetTop(_radarLeft, 104);   // Center vertically (110 - 6)
+        Canvas.SetLeft(_radarLeft, 2);    // Left, 4px further out from edge
+        Canvas.SetTop(_radarLeft, 108);   // Center vertically (114 - 6)
         outerCanvas.Children.Add(_radarLeft);
         
         // Right radar (right side - cars on right)
@@ -214,8 +214,8 @@ public class MRTOneWidget : WidgetBase
             RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarRight, 206); // Right, outside circle
-        Canvas.SetTop(_radarRight, 104);  // Center vertically
+        Canvas.SetLeft(_radarRight, 214); // Right, 4px further out from edge
+        Canvas.SetTop(_radarRight, 108);  // Center vertically
         outerCanvas.Children.Add(_radarRight);
         
         // PHASE 2: Apply visual enhancements based on settings
@@ -387,7 +387,7 @@ public class MRTOneWidget : WidgetBase
         // (SizeChanged event won't fire if size was set before event handler was attached)
         if (Width > 0 && Height > 0)
         {
-            double scale = Math.Min(Width / 220.0, Height / 220.0); // Changed from 200 to 220
+            double scale = Math.Min(Width / 228.0, Height / 228.0); // Canvas size with radar boxes
             outerCanvas.LayoutTransform = new ScaleTransform(scale, scale);
         }
         
@@ -549,9 +549,9 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Calculate scale factors based on original 220x220 design (200 + 20 for radar)
-        double scaleX = ActualWidth / 220.0;
-        double scaleY = ActualHeight / 220.0;
+        // Calculate scale factors based on original 228x228 design (200 + 28 for radar boxes)
+        double scaleX = ActualWidth / 228.0;
+        double scaleY = ActualHeight / 228.0;
         
         // Use uniform scale (smallest of the two to maintain aspect ratio)
         double scale = Math.Min(scaleX, scaleY);
@@ -941,7 +941,13 @@ public class MRTOneWidget : WidgetBase
         
         // Update gauge circle color based on RPM zone
         var rpm = data.RPM;
-        var zone = ShiftPointCalculator.GetRPMZone(rpm, data.Gear);
+        var zone = ShiftPointCalculator.GetRPMZone(
+            rpm, 
+            data.Gear, 
+            data.PlayerCarSLFirstRPM, 
+            data.PlayerCarSLShiftRPM, 
+            data.PlayerCarSLLastRPM, 
+            data.PlayerCarSLBlinkRPM);
         
         Color borderColor = zone switch
         {
@@ -984,7 +990,13 @@ public class MRTOneWidget : WidgetBase
         // Special color handling for RPM (shift point zones)
         else if (field == TelemetryField.RPM && value is float rpm)
         {
-            var zone = ShiftPointCalculator.GetRPMZone(rpm, data.Gear);
+            var zone = ShiftPointCalculator.GetRPMZone(
+                rpm, 
+                data.Gear, 
+                data.PlayerCarSLFirstRPM, 
+                data.PlayerCarSLShiftRPM, 
+                data.PlayerCarSLLastRPM, 
+                data.PlayerCarSLBlinkRPM);
             valueText.Foreground = new SolidColorBrush(zone switch
             {
                 ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // At limiter
@@ -1201,6 +1213,10 @@ public class MRTOneWidget : WidgetBase
         _radarLeft.Visibility = radarVisibility;
         _radarRight.Visibility = radarVisibility;
         
+        // CRITICAL FIX: Reload MRTOne-specific settings and reapply visual enhancements
+        _settings = LoadSettings();
+        ApplyVisualEnhancements();
+        
         // Force UI refresh with last telemetry data
         if (_lastTelemetryData != null)
         {
@@ -1256,6 +1272,12 @@ public class MRTOneWidget : WidgetBase
             _gaugeCircle.Fill = new SolidColorBrush(Color.FromArgb(
                 (byte)(255 * _backgroundOpacity), 20, 20, 20));
         }
+        
+        // CRITICAL FIX: Reload MRTOne settings and reapply visual enhancements
+        // This ensures gradient background, shift ring, and other visual features
+        // are properly restored when locking/unlocking or loading saved layouts
+        _settings = LoadSettings();
+        ApplyVisualEnhancements();
     }
     
     // ============================================
@@ -1393,7 +1415,13 @@ public class MRTOneWidget : WidgetBase
             return;
         
         var rpm = _lastTelemetryData.RPM;
-        var zone = ShiftPointCalculator.GetRPMZone(rpm, _lastTelemetryData.Gear);
+        var zone = ShiftPointCalculator.GetRPMZone(
+            rpm, 
+            _lastTelemetryData.Gear, 
+            _lastTelemetryData.PlayerCarSLFirstRPM, 
+            _lastTelemetryData.PlayerCarSLShiftRPM, 
+            _lastTelemetryData.PlayerCarSLLastRPM, 
+            _lastTelemetryData.PlayerCarSLBlinkRPM);
         
         // Use actual engine redline from telemetry if available (most accurate)
         // Fall back to estimated redline only if telemetry doesn't provide it

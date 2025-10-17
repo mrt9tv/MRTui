@@ -8,9 +8,99 @@ This is a sophisticated real-time telemetry overlay system for iRacing, built wi
 ### Core Architecture
 - **Platform**: WPF desktop application (.NET 8.0) with XAML UI
 - **Language**: C# with modern language features (pattern matching, LINQ, async/await)
-- **SDK Integration**: iRacing SDK data extraction via YAML parsing and reflection
+- **SDK Integration**: iRacing SDK (SVappsLAB.iRacingTelemetrySDK v0.9.8.3) for real-time telemetry
 - **Widget System**: Modular overlay architecture with WidgetBase abstract class
 - **Settings**: JSON-based persistence with real-time event propagation
+
+### iRacing SDK Quick Reference
+
+**Package**: `SVappsLAB.iRacingTelemetrySDK` v0.9.8.3
+**Documentation**: See [docs/SDK_MASTER_REFERENCE.md](../docs/SDK_MASTER_REFERENCE.md) for complete details
+
+#### Adding New Telemetry Variables
+
+1. **Add to RequiredTelemetryVars** attribute in `IRacingTelemetryService.cs`:
+   ```csharp
+   [RequiredTelemetryVars([
+       // ... existing variables
+       "NewVariable1",  // Your new variable (case-insensitive)
+       "NewVariable2"
+   ])]
+   ```
+
+2. **Add property to TelemetryData model** (`Core/Models/TelemetryData.cs`):
+   ```csharp
+   public class TelemetryData
+   {
+       // ... existing properties
+       public float NewVariable1 { get; set; }
+       public float NewVariable2 { get; set; }
+   }
+   ```
+
+3. **Map in OnTelemetryUpdate()** (`IRacingTelemetryService.cs`):
+   ```csharp
+   var data = new Models.TelemetryData
+   {
+       // ... existing mappings
+       NewVariable1 = sdkData.NewVariable1,
+       NewVariable2 = sdkData.NewVariable2,
+   };
+   ```
+
+4. **Rebuild project** - Source generator updates the SDK's TelemetryData struct
+
+#### Event System Pattern
+
+```csharp
+// Connection state changes
+_telemetryService.StatusChanged += OnStatusChanged;
+
+private void OnStatusChanged(object? sender, ConnectionStatusEventArgs e)
+{
+    if (e.Status == ConnectionStatus.Connected)
+    {
+        // iRacing connected - show widgets
+    }
+    else if (e.Status == ConnectionStatus.Disconnected)
+    {
+        // iRacing disconnected - hide widgets
+    }
+}
+
+// Telemetry updates (60 Hz)
+_telemetryService.TelemetryUpdated += OnTelemetryUpdated;
+
+private void OnTelemetryUpdated(object? sender, TelemetryData data)
+{
+    // Update UI on UI thread
+    Dispatcher.Invoke(() => UpdateUI(data));
+}
+```
+
+#### Variable Discovery
+
+- **Find all variables**: Check [docs/iRacing_SDK_Variables_Reference.md](../docs/iRacing_SDK_Variables_Reference.md) (400+ variables documented)
+- **Currently using**: 72 variables (see `IRacingTelemetryService.cs` RequiredTelemetryVars attribute)
+- **Test with IBT files**: Record telemetry in iRacing (Ctrl+D) for offline testing
+
+#### Common Variable Categories
+
+- **Vehicle**: Speed, RPM, Gear, Throttle, Brake, Clutch, SteeringWheelAngle
+- **Position**: Lap, LapDistPct, PlayerCarClassPosition, PlayerCarIdx
+- **Timing**: LapLastLapTime, LapBestLapTime, LapCurrentLapTime, SessionTimeRemain
+- **Multi-Car**: CarIdxLapDistPct[64], CarIdxOnPitRoad[64], CarIdxPosition[64] (all cars)
+- **Lateral Spotter**: CarLeftRight (0=Clear, 1=Left, 2=Right, 3=Both)
+- **Tires**: LFtempCL/CM/CR, LFwearL/M/R, LFpressure (all 4 corners)
+- **Fluids**: FuelLevel, FuelLevelPct, WaterTemp, OilTemp
+- **Environment**: AirTemp, TrackTemp, SessionFlags
+
+#### Performance Notes
+
+- **Update Rate**: 60 Hz (every ~16.67ms)
+- **Thread Safety**: Events fire on SDK thread, use `Dispatcher.Invoke()` for UI updates
+- **Array Handling**: Always null-check CarIdx arrays (64 elements, not all populated)
+- **Enum Casting**: Cast SDK enums to int for storage: `(int)sdkData.CarLeftRight`
 
 ### Key Development Commands
 ```powershell

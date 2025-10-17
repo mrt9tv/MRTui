@@ -101,7 +101,15 @@ namespace iRacingOverlay.Core.Services;
     
     // Player Orientation (for future enhancements)
     "Yaw",                   // float - Player heading angle (radians)
-    "YawRate"                // float - Rate of heading change (rad/s)
+    "YawRate",               // float - Rate of heading change (rad/s)
+    
+    // ===== PHASE 1: PROFESSIONAL SHIFT LIGHT TELEMETRY =====
+    // iRacing provides professional-grade shift point data based on car physics/torque curves
+    // These values are car-specific and instantly accurate (no learning required)
+    "PlayerCarSLFirstRPM",   // float - When shift lights start illuminating
+    "PlayerCarSLShiftRPM",   // float - OPTIMAL SHIFT POINT (key value)
+    "PlayerCarSLLastRPM",    // float - When shift lights fully lit
+    "PlayerCarSLBlinkRPM"    // float - Blink threshold (over-rev warning)
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -115,6 +123,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private DateTime _lapStartTime = DateTime.UtcNow;
     private float _sessionBestLapTime = float.MaxValue;
     private float _personalBestLapTime = float.MaxValue;
+    
+    // Update rate tracking (60Hz telemetry)
+    private int _updateCount = 0;
+    private DateTime _lastUpdateRateCalculation = DateTime.UtcNow;
+    private double _updateRate = 0.0;
+    private const int UPDATE_RATE_CALCULATION_INTERVAL_MS = 1000; // Calculate Hz every 1 second
     
     // Session info caching (populated from SessionInfo YAML)
     private string _driverName = "";
@@ -138,6 +152,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     }
 
     public bool IsConnected => _client?.IsConnected() ?? false;
+
+    public double UpdateRate => _updateRate;
 
     // Use our Models.TelemetryData for the interface
     public event EventHandler<Models.TelemetryData>? TelemetryUpdated;
@@ -279,6 +295,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     {
         try
         {
+            // Track update rate (60Hz telemetry)
+            _updateCount++;
+            var now = DateTime.UtcNow;
+            var elapsed = (now - _lastUpdateRateCalculation).TotalMilliseconds;
+            if (elapsed >= UPDATE_RATE_CALCULATION_INTERVAL_MS)
+            {
+                _updateRate = (_updateCount / elapsed) * 1000.0; // Convert to Hz
+                _updateCount = 0;
+                _lastUpdateRateCalculation = now;
+            }
+            
             // Try to parse session info if not yet parsed (might not be available immediately on connect)
             // Keep trying until we successfully get TrackLength, since it's critical for distance calculations
             if (!_sessionInfoParsed || _trackLength <= 0)
@@ -324,6 +351,13 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // TODO: Check SDK for actual redline field (DriverCarRedLine, EngineMaxRPM, ShiftRPM, etc.)
                 // For now, leave at 0 and let ShiftPointCalculator learn it
                 EngineRedlineRPM = 0, // Will be populated if SDK provides it
+                
+                // PHASE 1: Professional shift light telemetry (car-specific, instant accuracy)
+                PlayerCarSLFirstRPM = sdkData.PlayerCarSLFirstRPM,
+                PlayerCarSLShiftRPM = sdkData.PlayerCarSLShiftRPM,
+                PlayerCarSLLastRPM = sdkData.PlayerCarSLLastRPM,
+                PlayerCarSLBlinkRPM = sdkData.PlayerCarSLBlinkRPM,
+                
                 Gear = sdkData.Gear,
                 Throttle = sdkData.Throttle,
                 Brake = sdkData.Brake,
@@ -424,6 +458,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 Yaw = sdkData.Yaw,
                 YawRate = sdkData.YawRate
             };
+            
+            // DEBUG: Log shift light telemetry values to diagnose car compatibility
+            LogShiftLightData(sdkData);
             
             // DEBUG: Log CarLeftRight changes to diagnose SDK behavior
             LogLateralSpotterData(sdkData, data);
@@ -623,6 +660,59 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     
     // Track last CarLeftRight value to only log changes
     private int _lastCarLeftRight = -1;
+    
+    // Track if we've logged shift light info (only log once per session)
+    private bool _shiftLightDataLogged = false;
+    
+    /// <summary>
+    /// Log shift light telemetry values to diagnose which cars support shift lights.
+    /// Only logs once per session to avoid spam.
+    /// </summary>
+    private void LogShiftLightData(SVappsLAB.iRacingTelemetrySDK.TelemetryData sdkData)
+    {
+        // Only log once per session
+        if (_shiftLightDataLogged)
+            return;
+        
+        try
+        {
+            var logPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), 
+                "MRT-UI", 
+                "shift_light_debug.log");
+            
+            var log = new System.Text.StringBuilder();
+            log.AppendLine($"\n[{DateTime.Now:HH:mm:ss.fff}] ===== SHIFT LIGHT TELEMETRY DATA =====");
+            log.AppendLine($"Current RPM: {sdkData.RPM:F0}");
+            log.AppendLine($"Current Gear: {sdkData.Gear}");
+            log.AppendLine($"SDK Shift Light Values:");
+            log.AppendLine($"  PlayerCarSLFirstRPM: {sdkData.PlayerCarSLFirstRPM:F0} (shift lights START)");
+            log.AppendLine($"  PlayerCarSLShiftRPM: {sdkData.PlayerCarSLShiftRPM:F0} (OPTIMAL shift point)");
+            log.AppendLine($"  PlayerCarSLLastRPM:  {sdkData.PlayerCarSLLastRPM:F0} (shift lights FULLY LIT)");
+            log.AppendLine($"  PlayerCarSLBlinkRPM: {sdkData.PlayerCarSLBlinkRPM:F0} (over-rev BLINK)");
+            
+            if (sdkData.PlayerCarSLShiftRPM > 0)
+            {
+                log.AppendLine($"\n✅ This car HAS shift light data - using SDK professional zones");
+            }
+            else
+            {
+                log.AppendLine($"\n⚠️ This car does NOT have shift light data (all values are 0)");
+                log.AppendLine($"   This is NORMAL for cars without shift lights (Street Stock, older road cars, etc.)");
+                log.AppendLine($"   Falling back to learning system - RPM zones will adapt as you drive");
+            }
+            log.AppendLine($"=========================================\n");
+            
+            System.IO.File.AppendAllText(logPath, log.ToString());
+            _shiftLightDataLogged = true;
+            
+            _logger.LogInformation("Shift light data logged to: {LogPath}", logPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to log shift light data");
+        }
+    }
     
     /// <summary>
     /// Log CarLeftRight value changes to diagnose SDK false positives.

@@ -123,6 +123,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     public WidgetType Type { get; }
     public string Icon { get; }
     
+    // Expose AppSettings singleton for data binding (e.g., EnableLateralSpotter checkbox)
+    public AppSettings Settings => AppSettings.Instance;
+    
     // Size constraints based on widget type
     public double MinSize => Type == WidgetType.MRTOne ? MIN_MRTONE_SIZE : 100;
     public double MaxSize => Type == WidgetType.MRTOne ? MAX_MRTONE_SIZE : 400;
@@ -529,9 +532,9 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         ApplySettingsCommand = new RelayCommand(ApplySettings);
         
         // Initialize MRT One settings with defaults
-        _topSelectedField = "Speed";
+        _topSelectedField = "RPM";
         _centerSelectedField = "Gear";
-        _bottomSelectedField = "RPM";
+        _bottomSelectedField = "Speed";
         _leftSelectedField = "FuelLevel";
         _rightSelectedField = "Brake";
         _showTop = true;

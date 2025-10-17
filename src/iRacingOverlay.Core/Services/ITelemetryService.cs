@@ -18,6 +18,11 @@ public interface ITelemetryService : IDisposable
     bool IsConnected { get; }
 
     /// <summary>
+    /// Gets the current telemetry update rate in Hz (updates per second)
+    /// </summary>
+    double UpdateRate { get; }
+
+    /// <summary>
     /// Event fired when telemetry data is updated
     /// </summary>
     event EventHandler<TelemetryData>? TelemetryUpdated;

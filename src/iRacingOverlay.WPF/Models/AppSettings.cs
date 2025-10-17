@@ -15,7 +15,8 @@ public class AppSettings : INotifyPropertyChanged
 {
     private static AppSettings? _instance;
     private bool _enableLateralSpotter = true;
-    
+    private bool _lockWindows = false;
+
     /// <summary>
     /// Singleton instance
     /// </summary>
@@ -66,7 +67,19 @@ public class AppSettings : INotifyPropertyChanged
     /// <summary>
     /// Whether windows are locked (prevents dragging)
     /// </summary>
-    public bool LockWindows { get; set; } = false;
+    public bool LockWindows
+    {
+        get => _lockWindows;
+        set
+        {
+            if (_lockWindows != value)
+            {
+                _lockWindows = value;
+                OnPropertyChanged();
+                NotifyChanged();
+            }
+        }
+    }
     
     /// <summary>
     /// Global opacity for all widgets (0.0 to 1.0)
@@ -92,7 +105,28 @@ public class AppSettings : INotifyPropertyChanged
     /// Start manager window minimized to taskbar
     /// </summary>
     public bool StartMinimized { get; set; } = false;
-    
+
+    // Hotkey Settings
+    /// <summary>
+    /// Modifier key for toggle lock hotkey (Ctrl, Alt, Shift, or None)
+    /// </summary>
+    public string ToggleLockModifier { get; set; } = "Ctrl";
+
+    /// <summary>
+    /// Main key for toggle lock hotkey (default L for Lock)
+    /// </summary>
+    public string ToggleLockKey { get; set; } = "L";
+
+    /// <summary>
+    /// Modifier key for toggle visibility hotkey (Ctrl, Alt, Shift, or None)
+    /// </summary>
+    public string ToggleVisibilityModifier { get; set; } = "Ctrl";
+
+    /// <summary>
+    /// Main key for toggle visibility hotkey (default H for Hide)
+    /// </summary>
+    public string ToggleVisibilityKey { get; set; } = "H";
+
     // Window State Settings
     /// <summary>
     /// Manager window width (default 1280)
@@ -163,6 +197,15 @@ public class AppSettings : INotifyPropertyChanged
     public void NotifyChanged()
     {
         SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Check if two hotkeys have the same binding
+    /// </summary>
+    public bool HotkeysConflict()
+    {
+        return ToggleLockModifier == ToggleVisibilityModifier &&
+               ToggleLockKey == ToggleVisibilityKey;
     }
     
     /// <summary>
