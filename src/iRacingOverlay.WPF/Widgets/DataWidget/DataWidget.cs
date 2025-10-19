@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
+using iRacingOverlay.Core.Telemetry;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
@@ -374,6 +375,26 @@ public class DataWidget : WidgetBase
             
             cell.Value.Text = valueText;
             cell.Value.Foreground = new SolidColorBrush(color);
+            
+            // Special opacity handling for TractionControl when N/A
+            // BACKWARD COMPAT: Handle both int (new) and float (old binary)
+            var isTCNA = cell.Field == TelemetryField.TractionControl && value switch
+            {
+                int tc => tc < 0,
+                float tcf => tcf < 0,
+                _ => false
+            };
+            
+            if (isTCNA)
+            {
+                cell.Value.Opacity = 0.3; // Dim when N/A (car doesn't have TC)
+                cell.Label.Opacity = 0.3; // Sync label opacity
+            }
+            else
+            {
+                cell.Value.Opacity = 1.0; // Normal opacity
+                cell.Label.Opacity = 1.0;
+            }
         }
     }
 
@@ -419,11 +440,11 @@ public class DataWidget : WidgetBase
                 {
                     if (field == TelemetryField.SpeedMph || !AppSettings.Instance.UseMetricUnits)
                     {
-                        text = $"{(int)(speedMs * 2.23694f)}"; // m/s to mph
+                        text = $"{(int)UnitConversions.MpsToMph(speedMs)}"; // m/s to mph
                     }
                     else
                     {
-                        text = $"{(int)(speedMs * 3.6f)}"; // m/s to km/h
+                        text = $"{(int)UnitConversions.MpsToKmh(speedMs)}"; // m/s to km/h
                     }
                 }
                 else
@@ -452,6 +473,46 @@ public class DataWidget : WidgetBase
             case TelemetryField.Brake:
             case TelemetryField.Clutch:
                 text = value is float percent ? $"{(int)(percent * 100)}%" : "0%";
+                break;
+
+            case TelemetryField.BrakeBias:
+                // Brake bias is already a percentage from SDK (e.g., 52.5)
+                text = value is float bias ? $"{bias:F1}%" : "0.0%";
+                break;
+
+            case TelemetryField.TractionControl:
+                // Traction control level (-1 = N/A, 0 = OFF, >0 = active level)
+                // BACKWARD COMPAT: Handle both int (new) and float (old binary)
+                switch (value)
+                {
+                    case int tc:
+                        if (tc < 0)
+                        {
+                            text = "N/A";
+                            color = _primaryColor; // Teal when not available (will be shown with reduced opacity)
+                        }
+                        else
+                        {
+                            text = tc == 0 ? "OFF" : $"{tc}"; // Display integer level (no decimals)
+                            color = tc == 0 ? _secondaryColor : _primaryColor; // Orange when OFF, Teal when active
+                        }
+                        break;
+                    case float tcf:
+                        if (tcf < 0)
+                        {
+                            text = "N/A";
+                            color = _primaryColor;
+                        }
+                        else
+                        {
+                            text = tcf == 0 ? "OFF" : $"{(int)tcf}";
+                            color = tcf == 0 ? _secondaryColor : _primaryColor;
+                        }
+                        break;
+                    default:
+                        text = "---";
+                        break;
+                }
                 break;
 
             case TelemetryField.FuelLevel:
@@ -501,7 +562,7 @@ public class DataWidget : WidgetBase
             case TelemetryField.OilTemp:
                 if (value is float temp)
                 {
-                    text = AppSettings.Instance.UseMetricUnits ? $"{(int)temp}°C" : $"{(int)(temp * 9 / 5 + 32)}°F";
+                    text = AppSettings.Instance.UseMetricUnits ? $"{(int)temp}°C" : $"{(int)UnitConversions.CelsiusToFahrenheit(temp)}°F";
                     // Color warnings for high temps (based on Celsius values)
                     if (temp > 110f)
                         color = Colors.Red;
@@ -520,7 +581,7 @@ public class DataWidget : WidgetBase
             case TelemetryField.TireTempRR:
                 if (value is float tireTemp)
                 {
-                    text = AppSettings.Instance.UseMetricUnits ? $"{(int)tireTemp}°C" : $"{(int)(tireTemp * 9 / 5 + 32)}°F";
+                    text = AppSettings.Instance.UseMetricUnits ? $"{(int)tireTemp}°C" : $"{(int)UnitConversions.CelsiusToFahrenheit(tireTemp)}°F";
                     
                     // Color coding based on tire temperature ranges (Celsius)
                     // Cold: < 60°C (blue)

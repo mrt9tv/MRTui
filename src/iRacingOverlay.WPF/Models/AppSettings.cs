@@ -177,6 +177,46 @@ public class AppSettings : INotifyPropertyChanged
         }
     }
     
+    private bool _showBrakeBiasOverlay = true;
+    private double _brakeBiasDisplayDuration = 1.0;
+    
+    /// <summary>
+    /// Show transient brake bias overlay in center section when value changes
+    /// </summary>
+    public bool ShowBrakeBiasOverlay
+    {
+        get => _showBrakeBiasOverlay;
+        set
+        {
+            if (_showBrakeBiasOverlay != value)
+            {
+                _showBrakeBiasOverlay = value;
+                OnPropertyChanged();
+                Save();
+                NotifyChanged();
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Duration (in seconds) that brake bias overlay stays visible after last change
+    /// Supports decimal values (e.g., 1.5 seconds)
+    /// </summary>
+    public double BrakeBiasDisplayDuration
+    {
+        get => _brakeBiasDisplayDuration;
+        set
+        {
+            if (Math.Abs(_brakeBiasDisplayDuration - value) > 0.01)
+            {
+                _brakeBiasDisplayDuration = value;
+                OnPropertyChanged();
+                Save();
+                NotifyChanged();
+            }
+        }
+    }
+    
     // Note: Events cannot be serialized and don't need [JsonIgnore] attribute
     public event EventHandler? SettingsChanged;
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -89,7 +89,13 @@ public class MRTOneSettings
     /// </summary>
     [JsonPropertyName("enableGlowEffects")]
     public bool EnableGlowEffects { get; set; } = false;
-    
+
+    /// <summary>
+    /// Enable pit limiter indicator (fast blinking white/yellow border when limiter active) - ON by default for safety
+    /// </summary>
+    [JsonPropertyName("enablePitLimiterIndicator")]
+    public bool EnablePitLimiterIndicator { get; set; } = true;
+
     /// <summary>
     /// Create default settings
     /// </summary>
@@ -108,7 +114,8 @@ public class MRTOneSettings
         // Visual enhancements
         EnableGradientBackground = true,  // ON by default
         EnableShiftPointRing = false,
-        EnableGlowEffects = false
+        EnableGlowEffects = false,
+        EnablePitLimiterIndicator = true  // ON by default for safety
     };
     
     /// <summary>

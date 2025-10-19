@@ -16,6 +16,9 @@ public enum TelemetryField
     Throttle,
     Brake,
     ABSActive,       // ABS system active indicator
+    WheelLock,       // Wheel lockup detection (hybrid system)
+    BrakeBias,       // Brake bias adjustment (percentage, front bias)
+    TractionControl, // Traction control level (0=OFF, >0=active)
     Clutch,
     
     // Temperatures

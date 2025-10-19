@@ -67,6 +67,28 @@ public class TelemetryData
     public bool BrakeABSactive { get; set; }
 
     /// <summary>
+    /// Brake bias adjustment percentage (front bias)
+    /// Value represents percentage of braking force to front (e.g., 55.5 = 55.5% front)
+    /// Adjustable in-car via driver controls
+    /// </summary>
+    public float BrakeBias { get; set; }
+
+    /// <summary>
+    /// Traction control setting/level (integer 0-20 depending on car)
+    /// Value represents TC strength level (0 = OFF, 1-20 = Active levels)
+    /// Only available in cars equipped with traction control
+    /// Adjustable in-car via driver controls
+    /// </summary>
+    public int TractionControl { get; set; }
+
+    /// <summary>
+    /// Pit speed limiter active state
+    /// True when pit speed limiter is engaged (typically F1 button or assigned key)
+    /// Used to enforce pit lane speed restrictions
+    /// </summary>
+    public bool PitSpeedLimiterActive { get; set; }
+
+    /// <summary>
     /// Clutch input (0.0 to 1.0)
     /// </summary>
     public float Clutch { get; set; }
@@ -87,10 +109,34 @@ public class TelemetryData
     public float LapDistPct { get; set; }
 
     /// <summary>
-    /// Current position in race
+    /// Current position in race (SDK position - updates at start/finish line)
     /// </summary>
     public int Position { get; set; }
-    
+
+    /// <summary>
+    /// Live overall position (updates every tick, mode-aware, frozen on checkered flag)
+    /// Calculated based on session type: Race=lap count, Qualifying=best time
+    /// </summary>
+    public int LivePosition { get; set; }
+
+    /// <summary>
+    /// Live class position (updates every tick, mode-aware, frozen on checkered flag)
+    /// Falls back to SDK PlayerCarClassPosition if calculation unavailable
+    /// </summary>
+    public int LiveClassPosition { get; set; }
+
+    /// <summary>
+    /// Session state enum (0=Invalid, 1=GetInCar, 2=Warmup, 3=ParadeLaps, 4=Racing, 5=Checkered, 6=CoolDown)
+    /// Used to detect checkered flag and freeze final positions
+    /// </summary>
+    public int SessionState { get; set; }
+
+    /// <summary>
+    /// Session type from YAML ("Practice", "Qualifying", "Warmup", "Race")
+    /// Used to determine position calculation mode
+    /// </summary>
+    public string SessionType { get; set; } = string.Empty;
+
     /// <summary>
     /// Player's car index in the session (0-63)
     /// Used to identify player in CarIdx arrays
@@ -120,14 +166,39 @@ public class TelemetryData
     public float FuelLevelPct { get; set; }
 
     /// <summary>
+    /// Fuel consumption rate in kg/hr
+    /// </summary>
+    public float FuelUsePerHour { get; set; }
+
+    /// <summary>
+    /// Fuel line pressure in bar
+    /// </summary>
+    public float FuelPress { get; set; }
+
+    /// <summary>
     /// Water temperature in Celsius
     /// </summary>
     public float WaterTemp { get; set; }
 
     /// <summary>
+    /// Coolant level in liters
+    /// </summary>
+    public float WaterLevel { get; set; }
+
+    /// <summary>
     /// Oil temperature in Celsius
     /// </summary>
     public float OilTemp { get; set; }
+
+    /// <summary>
+    /// Oil level in liters
+    /// </summary>
+    public float OilLevel { get; set; }
+
+    /// <summary>
+    /// Oil pressure in bar
+    /// </summary>
+    public float OilPress { get; set; }
 
     /// <summary>
     /// Last lap time in seconds
@@ -140,17 +211,37 @@ public class TelemetryData
     public float LapBestLapTime { get; set; }
     
     /// <summary>
-    /// Current lap time in seconds (calculated)
+    /// Current lap time in seconds (from SDK)
+    /// </summary>
+    public float LapCurrentLapTime { get; set; }
+    
+    /// <summary>
+    /// Delta to personal best lap in seconds (from SDK)
+    /// </summary>
+    public float LapDeltaToBestLap { get; set; }
+    
+    /// <summary>
+    /// Delta-delta (rate of change) to personal best lap in seconds (from SDK)
+    /// </summary>
+    public float LapDeltaToBestLap_DD { get; set; }
+    
+    /// <summary>
+    /// Delta to session best lap in seconds (from SDK)
+    /// </summary>
+    public float LapDeltaToSessionBestLap { get; set; }
+    
+    /// <summary>
+    /// Current lap time in seconds (calculated locally - kept for backward compatibility)
     /// </summary>
     public float CurrentLapTime { get; set; }
     
     /// <summary>
-    /// Delta to personal best lap (negative = faster)
+    /// Delta to personal best lap (calculated locally - kept for backward compatibility)
     /// </summary>
     public float DeltaToBestLap { get; set; }
     
     /// <summary>
-    /// Delta to session best lap (negative = faster)
+    /// Delta to session best lap (calculated locally - kept for backward compatibility)
     /// </summary>
     public float DeltaToSessionBest { get; set; }
 
@@ -208,11 +299,109 @@ public class TelemetryData
     public float LRbrakeLinePress { get; set; }
     public float RRbrakeLinePress { get; set; }
 
+    // Tire Rumble (Force Feedback indicators - CRITICAL for lockup detection!)
+    /// <summary>
+    /// Left Front tire rumble pitch - spikes during wheel slip/lockup
+    /// </summary>
+    public float TireLF_RumblePitch { get; set; }
+    
+    /// <summary>
+    /// Right Front tire rumble pitch - spikes during wheel slip/lockup
+    /// </summary>
+    public float TireRF_RumblePitch { get; set; }
+    
+    /// <summary>
+    /// Left Rear tire rumble pitch - spikes during wheel slip/lockup
+    /// </summary>
+    public float TireLR_RumblePitch { get; set; }
+    
+    /// <summary>
+    /// Right Rear tire rumble pitch - spikes during wheel slip/lockup
+    /// </summary>
+    public float TireRR_RumblePitch { get; set; }
+
+    // Wheel Odometers (for calculating individual wheel speeds!)
+    /// <summary>
+    /// Left Front wheel odometer (meters) - distance traveled by LF wheel
+    /// </summary>
+    public float LFodometer { get; set; }
+    
+    /// <summary>
+    /// Right Front wheel odometer (meters) - distance traveled by RF wheel
+    /// </summary>
+    public float RFodometer { get; set; }
+    
+    /// <summary>
+    /// Left Rear wheel odometer (meters) - distance traveled by LR wheel
+    /// </summary>
+    public float LRodometer { get; set; }
+    
+    /// <summary>
+    /// Right Rear wheel odometer (meters) - distance traveled by RR wheel
+    /// </summary>
+    public float RRodometer { get; set; }
+
+    // Shock/Suspension Data (for wheel load analysis)
+    /// <summary>
+    /// Left Front shock deflection (meters) - suspension travel
+    /// </summary>
+    public float LFshockDefl { get; set; }
+    
+    /// <summary>
+    /// Right Front shock deflection (meters)
+    /// </summary>
+    public float RFshockDefl { get; set; }
+    
+    /// <summary>
+    /// Left Rear shock deflection (meters)
+    /// </summary>
+    public float LRshockDefl { get; set; }
+    
+    /// <summary>
+    /// Right Rear shock deflection (meters)
+    /// </summary>
+    public float RRshockDefl { get; set; }
+    
+    /// <summary>
+    /// Left Front shock velocity (m/s) - rate of suspension compression/extension
+    /// </summary>
+    public float LFshockVel { get; set; }
+    
+    /// <summary>
+    /// Right Front shock velocity (m/s)
+    /// </summary>
+    public float RFshockVel { get; set; }
+    
+    /// <summary>
+    /// Left Rear shock velocity (m/s)
+    /// </summary>
+    public float LRshockVel { get; set; }
+    
+    /// <summary>
+    /// Right Rear shock velocity (m/s)
+    /// </summary>
+    public float RRshockVel { get; set; }
+
     // Environmental conditions
     /// <summary>
     /// Air temperature in Celsius
     /// </summary>
     public float AirTemp { get; set; }
+    
+    /// <summary>
+    /// Air density in kg/m³ (affects downforce)
+    /// </summary>
+    public float AirDensity { get; set; }
+    
+    /// <summary>
+    /// Atmospheric pressure in hPa
+    /// </summary>
+    public float AirPressure { get; set; }
+    
+    /// <summary>
+    /// Relative humidity percentage (0-100)
+    /// </summary>
+    public float RelativeHumidity { get; set; }
     
     /// <summary>
     /// Track surface temperature in Celsius
@@ -223,6 +412,83 @@ public class TelemetryData
     /// Track temperature from crew chief in Celsius
     /// </summary>
     public float TrackTempCrew { get; set; }
+    
+    /// <summary>
+    /// Player on pit road status
+    /// </summary>
+    public bool OnPitRoad { get; set; }
+    
+    /// <summary>
+    /// Sky condition enum (0=clear, 3=overcast)
+    /// </summary>
+    public int Skies { get; set; }
+    
+    /// <summary>
+    /// Weather type enum
+    /// </summary>
+    public int WeatherType { get; set; }
+    
+    /// <summary>
+    /// Fog density percentage (0-100)
+    /// </summary>
+    public float FogLevel { get; set; }
+    
+    // Motion & Orientation
+    /// <summary>
+    /// World-space X velocity in m/s
+    /// </summary>
+    public float VelocityX { get; set; }
+    
+    /// <summary>
+    /// World-space Y velocity (vertical) in m/s
+    /// </summary>
+    public float VelocityY { get; set; }
+    
+    /// <summary>
+    /// World-space Z velocity in m/s
+    /// </summary>
+    public float VelocityZ { get; set; }
+    
+    /// <summary>
+    /// Vehicle pitch angle in radians
+    /// </summary>
+    public float Pitch { get; set; }
+    
+    /// <summary>
+    /// Rate of pitch change in rad/s
+    /// </summary>
+    public float PitchRate { get; set; }
+    
+    /// <summary>
+    /// Vehicle roll angle in radians
+    /// </summary>
+    public float Roll { get; set; }
+    
+    /// <summary>
+    /// Rate of roll change in rad/s
+    /// </summary>
+    public float RollRate { get; set; }
+    
+    // Driver Inputs (Raw)
+    /// <summary>
+    /// Raw brake pedal input (pre-ABS) (0.0 to 1.0)
+    /// </summary>
+    public float BrakeRaw { get; set; }
+    
+    /// <summary>
+    /// Raw throttle input (pre-TC) (0.0 to 1.0)
+    /// </summary>
+    public float ThrottleRaw { get; set; }
+    
+    /// <summary>
+    /// Raw clutch pedal input (0.0 to 1.0)
+    /// </summary>
+    public float ClutchRaw { get; set; }
+    
+    /// <summary>
+    /// Handbrake input (rally cars) (0.0 to 1.0)
+    /// </summary>
+    public float HandbrakeRaw { get; set; }
 
     // Session Info (from session info string)
     /// <summary>
@@ -313,7 +579,13 @@ public class TelemetryData
     /// Last lap time for each car in seconds. Array of 64 floats.
     /// </summary>
     public float[]? CarIdxLastLapTime { get; set; }
-    
+
+    /// <summary>
+    /// Best lap time for each car in seconds. Array of 64 floats.
+    /// Used for qualifying/practice position calculation
+    /// </summary>
+    public float[]? CarIdxBestLapTime { get; set; }
+
     /// <summary>
     /// Player heading angle in radians (yaw around Z-axis)
     /// </summary>
@@ -327,10 +599,10 @@ public class TelemetryData
     /// <summary>
     /// Speed in km/h (calculated from m/s)
     /// </summary>
-    public float SpeedKmh => Speed * 3.6f;
+    public float SpeedKmh => Telemetry.UnitConversions.MpsToKmh(Speed);
 
     /// <summary>
     /// Speed in mph (calculated from m/s)
     /// </summary>
-    public float SpeedMph => Speed * 2.23694f;
+    public float SpeedMph => Telemetry.UnitConversions.MpsToMph(Speed);
 }

@@ -1,4 +1,5 @@
 using iRacingOverlay.Core.Models;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.Models;
 
@@ -27,6 +28,9 @@ public static class TelemetryDataMapper
             TelemetryField.Throttle => data.Throttle,
             TelemetryField.Brake => data.Brake,
             TelemetryField.ABSActive => data.BrakeABSactive ? 1 : 0, // Convert bool to 0/1 for display
+            TelemetryField.WheelLock => WheelLockupDetector.DetectLockup(data).AnyWheelLocked ? 1 : 0, // Hybrid lockup detection
+            TelemetryField.BrakeBias => data.BrakeBias, // Percentage (e.g., 55.5 = 55.5% front)
+            TelemetryField.TractionControl => data.TractionControl, // TC level (0=OFF, >0=active)
             TelemetryField.Clutch => data.Clutch,
             
             // Temperature
@@ -43,8 +47,8 @@ public static class TelemetryDataMapper
             
             // Lap & Timing
             TelemetryField.LapNumber => data.Lap,
-            TelemetryField.Position => data.Position,
-            TelemetryField.ClassPosition => data.Position, // TODO: Add ClassPosition to TelemetryData
+            TelemetryField.Position => data.LivePosition,         // Live overall position (race/qual mode-aware, frozen on checkered)
+            TelemetryField.ClassPosition => data.LiveClassPosition, // Live class position (race/qual mode-aware, frozen on checkered)
             TelemetryField.LastLapTime => data.LapLastLapTime,
             TelemetryField.BestLapTime => data.LapBestLapTime,
             TelemetryField.CurrentLapTime => data.CurrentLapTime,
@@ -222,6 +226,21 @@ public static class TelemetryDataMapper
                 WarningThreshold = 0.5f,  // Yellow when active (1)
                 WarningColor = "#FFFF00", // Explicit yellow color
                 DangerThreshold = 1.5f    // Never reaches this (bool is 0 or 1)
+            },
+            TelemetryField.BrakeBias => new DisplayOptions
+            {
+                Unit = "%",
+                DecimalPlaces = 1,  // Show XX.X%
+                FontSize = 18,
+                NormalColor = "#00BCD4"  // Teal
+            },
+            TelemetryField.TractionControl => new DisplayOptions
+            {
+                Unit = "",
+                DecimalPlaces = 1,  // Show level with 1 decimal (e.g., 5.0)
+                FontSize = 18,
+                NormalColor = "#00BCD4"  // Teal when active (>0)
+                // Orange color applied in GetValueColor when OFF (0)
             },
             TelemetryField.WaterTemp or TelemetryField.OilTemp or 
             TelemetryField.AirTemp or TelemetryField.TrackTemp => new DisplayOptions

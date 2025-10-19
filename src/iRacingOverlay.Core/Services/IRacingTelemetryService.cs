@@ -9,113 +9,176 @@ namespace iRacingOverlay.Core.Services;
 // to create a TelemetryData struct with these properties at compile time
 [RequiredTelemetryVars([
     // MVP 1 - Core telemetry
-    "Speed",           // m/s
-    "RPM",             // Engine RPM
-    "Gear",            // Current gear (-1=R, 0=N, 1+=gears)
-    "Throttle",        // 0-1
-    "Brake",           // 0-1
-    "BrakeABSactive",  // bool - ABS system active
-    "Clutch",          // 0-1
-    "SteeringWheelAngle", // radians
-    "Lap",             // Current lap number
-    "LapDistPct",      // 0-1 percentage around track
-    "PlayerCarClassPosition", // Position in class
-    "PlayerCarIdx",    // Player's car index (0-63)
-    "PlayerCarClass",  // Player's car class ID
+    TelemetryVar.Speed,           // m/s
+    TelemetryVar.RPM,             // Engine RPM
+    TelemetryVar.Gear,            // Current gear (-1=R, 0=N, 1+=gears)
+    TelemetryVar.Throttle,        // 0-1
+    TelemetryVar.Brake,           // 0-1
+    TelemetryVar.BrakeABSactive,  // bool - ABS system active
+    TelemetryVar.dcBrakeBias,     // float - Brake bias adjustment (percentage, front bias)
+    TelemetryVar.dcTractionControl, // float - Traction control adjustment (0-20 levels depending on car)
+    TelemetryVar.Clutch,          // 0-1
+    TelemetryVar.SteeringWheelAngle, // radians
+    TelemetryVar.Lap,             // Current lap number
+    TelemetryVar.LapDistPct,      // 0-1 percentage around track
+    TelemetryVar.PlayerCarClassPosition, // Position in class
+    TelemetryVar.PlayerCarIdx,    // Player's car index (0-63)
+    TelemetryVar.PlayerCarClass,  // Player's car class ID
     
     // MVP 2 - Critical race data
-    "FuelLevel",       // liters
-    "FuelLevelPct",    // 0-1 percentage
-    "WaterTemp",       // celsius
-    "OilTemp",         // celsius
-    "LapLastLapTime",  // seconds
-    "LapBestLapTime",  // seconds
-    "SessionTimeRemain", // seconds
+    TelemetryVar.FuelLevel,       // liters
+    TelemetryVar.FuelLevelPct,    // 0-1 percentage
+    TelemetryVar.FuelUsePerHour,  // kg/hr - Fuel consumption rate
+    TelemetryVar.FuelPress,       // bar - Fuel line pressure
+    TelemetryVar.WaterTemp,       // celsius
+    TelemetryVar.WaterLevel,      // liters
+    TelemetryVar.OilTemp,         // celsius
+    TelemetryVar.OilLevel,        // liters
+    TelemetryVar.OilPress,        // bar
+    TelemetryVar.LapLastLapTime,  // seconds
+    TelemetryVar.LapBestLapTime,  // seconds
+    TelemetryVar.LapCurrentLapTime, // seconds - Current lap time (running)
+    TelemetryVar.LapDeltaToBestLap, // seconds - Delta to personal best
+    TelemetryVar.LapDeltaToBestLap_DD, // seconds - Delta-delta (rate of change)
+    TelemetryVar.LapDeltaToSessionBestLap, // seconds - Delta to session best
+    TelemetryVar.SessionTimeRemain, // seconds
     
     // MVP 3+ - Advanced telemetry
-    "LFtempCL",        // Left Front tire temp - center left
-    "LFtempCM",        // Left Front tire temp - center middle
-    "LFtempCR",        // Left Front tire temp - center right
-    "RFtempCL",        // Right Front tire temp
-    "RFtempCM",
-    "RFtempCR",
-    "LRtempCL",        // Left Rear tire temp
-    "LRtempCM",
-    "LRtempCR",
-    "RRtempCL",        // Right Rear tire temp
-    "RRtempCM",
-    "RRtempCR",
-    "LFwearL",         // Tire wear (0-1)
-    "LFwearM",
-    "LFwearR",
-    "RFwearL",
-    "RFwearM",
-    "RFwearR",
-    "LRwearL",
-    "LRwearM",
-    "LRwearR",
-    "RRwearL",
-    "RRwearM",
-    "RRwearR",
-    "LongAccel",       // Longitudinal G-force
-    "LatAccel",        // Lateral G-force
-    "VertAccel",       // Vertical G-force
-    "SessionFlags",    // Race flags (checkered, yellow, etc.)
-    "PlayerCarMyIncidentCount", // Incident count
-    "LFbrakeLinePress", // Brake line pressure
-    "RFbrakeLinePress",
-    "LRbrakeLinePress",
-    "RRbrakeLinePress",
+    TelemetryVar.LFtempCL,        // Left Front tire temp - center left
+    TelemetryVar.LFtempCM,        // Left Front tire temp - center middle
+    TelemetryVar.LFtempCR,        // Left Front tire temp - center right
+    TelemetryVar.RFtempCL,        // Right Front tire temp
+    TelemetryVar.RFtempCM,
+    TelemetryVar.RFtempCR,
+    TelemetryVar.LRtempCL,        // Left Rear tire temp
+    TelemetryVar.LRtempCM,
+    TelemetryVar.LRtempCR,
+    TelemetryVar.RRtempCL,        // Right Rear tire temp
+    TelemetryVar.RRtempCM,
+    TelemetryVar.RRtempCR,
+    TelemetryVar.LFwearL,         // Tire wear (0-1)
+    TelemetryVar.LFwearM,
+    TelemetryVar.LFwearR,
+    TelemetryVar.RFwearL,
+    TelemetryVar.RFwearM,
+    TelemetryVar.RFwearR,
+    TelemetryVar.LRwearL,
+    TelemetryVar.LRwearM,
+    TelemetryVar.LRwearR,
+    TelemetryVar.RRwearL,
+    TelemetryVar.RRwearM,
+    TelemetryVar.RRwearR,
+    TelemetryVar.LongAccel,       // Longitudinal G-force
+    TelemetryVar.LatAccel,        // Lateral G-force
+    TelemetryVar.VertAccel,       // Vertical G-force
+    TelemetryVar.SessionFlags,    // Race flags (checkered, yellow, etc.)
+    TelemetryVar.PlayerCarMyIncidentCount, // Incident count
+    TelemetryVar.LFbrakeLinePress, // Brake line pressure
+    TelemetryVar.RFbrakeLinePress,
+    TelemetryVar.LRbrakeLinePress,
+    TelemetryVar.RRbrakeLinePress,
+    
+    // Tire Rumble Pitch (Force Feedback - CRITICAL for lockup detection!)
+    TelemetryVar.TireLF_RumblePitch, // Rumble intensity - spikes during wheel slip/lockup
+    TelemetryVar.TireRF_RumblePitch,
+    TelemetryVar.TireLR_RumblePitch,
+    TelemetryVar.TireRR_RumblePitch,
+    
+    // Wheel Odometers (CRITICAL for calculating individual wheel speeds!)
+    TelemetryVar.LFodometer,      // Distance traveled by LF wheel (meters)
+    TelemetryVar.RFodometer,      // Distance traveled by RF wheel
+    TelemetryVar.LRodometer,      // Distance traveled by LR wheel
+    TelemetryVar.RRodometer,      // Distance traveled by RR wheel
+    
+    // Shock/Suspension Data (for wheel load and lockup analysis)
+    TelemetryVar.LFshockDefl,     // LF suspension deflection (meters)
+    TelemetryVar.RFshockDefl,
+    TelemetryVar.LRshockDefl,
+    TelemetryVar.RRshockDefl,
+    TelemetryVar.LFshockVel,      // LF suspension velocity (m/s)
+    TelemetryVar.RFshockVel,
+    TelemetryVar.LRshockVel,
+    TelemetryVar.RRshockVel,
     
     // Additional telemetry fields
-    "AirTemp",         // Air temperature (celsius)
-    "TrackTemp",       // Track temperature (celsius)
-    "TrackTempCrew",   // Track temp from crew chief (celsius)
+    TelemetryVar.AirTemp,         // Air temperature (celsius)
+    TelemetryVar.AirDensity,      // kg/m³ - Air density (affects downforce)
+    TelemetryVar.AirPressure,     // hPa - Atmospheric pressure
+    TelemetryVar.RelativeHumidity, // % - Relative humidity
+    TelemetryVar.TrackTemp,       // Track temperature (celsius)
+    TelemetryVar.TrackTempCrew,   // Track temp from crew chief (celsius)
+    TelemetryVar.OnPitRoad,       // bool - Player on pit road
+    TelemetryVar.Skies,           // int - Sky condition enum (0=clear, 3=overcast)
+    TelemetryVar.WeatherType,     // int - Weather type enum
+    TelemetryVar.FogLevel,        // % - Fog density
+    
+    // Motion & Orientation
+    TelemetryVar.VelocityX,       // m/s - World-space X velocity
+    TelemetryVar.VelocityY,       // m/s - World-space Y velocity (vertical)
+    TelemetryVar.VelocityZ,       // m/s - World-space Z velocity
+    TelemetryVar.Pitch,           // radians - Vehicle pitch angle
+    TelemetryVar.PitchRate,       // rad/s - Rate of pitch change
+    TelemetryVar.Roll,            // radians - Vehicle roll angle
+    TelemetryVar.RollRate,        // rad/s - Rate of roll change
+    
+    // Driver Inputs (Raw)
+    TelemetryVar.BrakeRaw,        // 0-1 - Raw brake pedal (pre-ABS)
+    TelemetryVar.ThrottleRaw,     // 0-1 - Raw throttle (pre-TC)
+    TelemetryVar.ClutchRaw,       // 0-1 - Raw clutch pedal
+    TelemetryVar.HandbrakeRaw,    // 0-1 - Handbrake input (rally cars)
     
     // Session info
-    "SessionTime",     // Session time elapsed (seconds)
-    "SessionNum",      // Current session number
+    TelemetryVar.SessionTime,     // Session time elapsed (seconds)
+    TelemetryVar.SessionNum,      // Current session number
     
     // ===== PHASE 1: 4-Way Proximity Radar =====
     
     // Lateral Spotter (Left/Right Detection)
     // CRITICAL: SDK enum is 0=Off, 1=Clear, 2=CarLeft, 3=CarRight, 4=CarBothSides, 5=TwoCarsLeft, 6=TwoCarsRight
-    "CarLeftRight",    // Enum: 0=Off, 1=Clear, 2=Left, 3=Right, 4=Both, 5=TwoLeft, 6=TwoRight - Spotter system
+    TelemetryVar.CarLeftRight,    // Enum: 0=Off, 1=Clear, 2=Left, 3=Right, 4=Both, 5=TwoLeft, 6=TwoRight - Spotter system
     
     // Multi-Car Position Arrays (CarIdx[64])
-    "CarIdxLapDistPct",      // float[64] - Track position % for each car
-    "CarIdxOnPitRoad",       // bool[64]  - Pit road status
-    "CarIdxTrackSurface",    // int[64]   - Track surface type (enum)
-    "CarIdxClass",           // int[64]   - Car class ID
-    "CarIdxLap",             // int[64]   - Lap number for each car
-    "CarIdxPosition",        // int[64]   - Overall race position
-    "CarIdxClassPosition",   // int[64]   - Class position
+    TelemetryVar.CarIdxLapDistPct,      // float[64] - Track position % for each car
+    TelemetryVar.CarIdxOnPitRoad,       // bool[64]  - Pit road status
+    TelemetryVar.CarIdxTrackSurface,    // int[64]   - Track surface type (enum)
+    TelemetryVar.CarIdxClass,           // int[64]   - Car class ID
+    TelemetryVar.CarIdxLap,             // int[64]   - Lap number for each car
+    TelemetryVar.CarIdxPosition,        // int[64]   - Overall race position
+    TelemetryVar.CarIdxClassPosition,   // int[64]   - Class position
     
     // Car Performance Indicators
-    "CarIdxGear",            // int[64]   - Current gear
-    "CarIdxRPM",             // float[64] - Engine RPM
+    TelemetryVar.CarIdxGear,            // int[64]   - Current gear
+    TelemetryVar.CarIdxRPM,             // float[64] - Engine RPM
     
     // Timing Arrays
-    "CarIdxEstTime",         // float[64] - Estimated time to reach position
-    "CarIdxF2Time",          // float[64] - Time behind leader
-    "CarIdxLastLapTime",     // float[64] - Last lap time
-    
+    TelemetryVar.CarIdxEstTime,         // float[64] - Estimated time to reach position
+    TelemetryVar.CarIdxF2Time,          // float[64] - Time behind leader
+    TelemetryVar.CarIdxLastLapTime,     // float[64] - Last lap time
+    TelemetryVar.CarIdxBestLapTime,     // float[64] - Best lap time (for qualifying position)
+
     // Player Orientation (for future enhancements)
-    "Yaw",                   // float - Player heading angle (radians)
-    "YawRate",               // float - Rate of heading change (rad/s)
+    TelemetryVar.Yaw,                   // float - Player heading angle (radians)
+    TelemetryVar.YawRate,               // float - Rate of heading change (rad/s)
+
+    // Live Position Calculation
+    TelemetryVar.SessionState,          // int - Session state enum (racing/checkered/cooldown)
     
     // ===== PHASE 1: PROFESSIONAL SHIFT LIGHT TELEMETRY =====
     // iRacing provides professional-grade shift point data based on car physics/torque curves
     // These values are car-specific and instantly accurate (no learning required)
-    "PlayerCarSLFirstRPM",   // float - When shift lights start illuminating
-    "PlayerCarSLShiftRPM",   // float - OPTIMAL SHIFT POINT (key value)
-    "PlayerCarSLLastRPM",    // float - When shift lights fully lit
-    "PlayerCarSLBlinkRPM"    // float - Blink threshold (over-rev warning)
+    TelemetryVar.PlayerCarSLFirstRPM,   // float - When shift lights start illuminating
+    TelemetryVar.PlayerCarSLShiftRPM,   // float - OPTIMAL SHIFT POINT (key value)
+    TelemetryVar.PlayerCarSLLastRPM,    // float - When shift lights fully lit
+    TelemetryVar.PlayerCarSLBlinkRPM,   // float - Blink threshold (over-rev warning)
+
+    // ===== PHASE 2: PIT LIMITER DETECTION =====
+    TelemetryVar.dcPitSpeedLimiterToggle // bool - Pit speed limiter active state
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
     private readonly ILogger<IRacingTelemetryService> _logger;
     private ITelemetryClient<SVappsLAB.iRacingTelemetrySDK.TelemetryData>? _client;
+    private readonly LivePositionCalculator _livePositionCalculator;
     private ConnectionStatus _status = ConnectionStatus.Disconnected;
     private bool _disposed = false;
     
@@ -138,6 +201,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _driverName = "";
     private string _carNumber = "";
     private string _trackName = "";
+    private string _sessionType = "";
     private float _trackLength = 0f;
     private bool _sessionInfoParsed = false;
 
@@ -166,6 +230,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     public IRacingTelemetryService(ILogger<IRacingTelemetryService> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        // Create LivePositionCalculator without logger (it will use null logger)
+        _livePositionCalculator = new LivePositionCalculator();
     }
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
@@ -184,13 +250,13 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // Create the TelemetryClient using the auto-generated TelemetryData struct
             _client = TelemetryClient<SVappsLAB.iRacingTelemetrySDK.TelemetryData>.Create(_logger);
 
-            // Subscribe to SDK events
-            _client.OnConnectStateChanged += OnConnectStateChanged;
-            _client.OnTelemetryUpdate += OnTelemetryUpdate;
-            _client.OnError += OnError;
-
-            // Note: Monitor() blocks until cancelled, so we don't await it here
-            // It will be started by the TelemetryWorker background service
+            // Subscribe to SDK events using extension method (v1.0.0-beta.1 compatibility)
+            // Note: We're not awaiting SubscribeToAllStreams here - it will be started by Monitor()
+            // For now, we'll continue using the old event pattern and migrate to channels later
+            
+            // Note: v1.0.0-beta.1 uses channels, but we can still use Monitor() method
+            // The old event subscriptions no longer exist, so we'll need to migrate to channels
+            // For now, just create the client and we'll handle events in Monitor()
             _logger.LogInformation("iRacing telemetry client created successfully");
             
             return Task.CompletedTask;
@@ -219,7 +285,65 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         
         try
         {
-            await _client.Monitor(cancellationToken);
+            // v1.0.0-beta.1: Start Monitor() in background and use SubscribeToAllStreams to consume channels
+            var monitorTask = _client.Monitor(cancellationToken);
+            
+            var subscribeTask = _client.SubscribeToAllStreams(
+                onTelemetryUpdate: async data => 
+                {
+                    OnTelemetryUpdate(null, data);
+                    await Task.CompletedTask;
+                },
+                onConnectStateChanged: async state => 
+                {
+                    _logger.LogInformation("Connection state changed: {State}", state);
+                    Status = state == ConnectState.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
+                    StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(Status));
+                    
+                    // Parse session info and dump variables on connect
+                    if (state == ConnectState.Connected)
+                    {
+                        TryParseSessionInfo();
+                        
+                        // Diagnostic: Dump all available variables once
+                        if (!_variablesDumped && _client != null)
+                        {
+                            _variablesDumped = true;
+                            try
+                            {
+                                var outputPath = System.IO.Path.Combine(
+                                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                                    "MRT-UI",
+                                    "available_variables.txt");
+
+                                var dumperLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TelemetryVariableDumper>.Instance;
+                                var dumper = new TelemetryVariableDumper(dumperLogger);
+                                dumper.DumpAllVariables(_client, outputPath);
+                                dumper.DumpUsingSDKMethod(_client, outputPath.Replace(".txt", "_methods.txt"));
+
+                                _logger.LogInformation("Variable dump saved to: {OutputPath}", outputPath);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to dump variables (non-critical): {Message}", ex.Message);
+                            }
+                        }
+                    }
+                    
+                    await Task.CompletedTask;
+                },
+                onError: async ex =>
+                {
+                    _logger.LogError(ex, "iRacing SDK error: {Message}", ex.Message);
+                    Status = ConnectionStatus.Error;
+                    StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(ConnectionStatus.Error, error: ex));
+                    await Task.CompletedTask;
+                },
+                cancellationToken: cancellationToken
+            );
+            
+            // Wait for either Monitor or Subscribe to complete
+            await Task.WhenAny(monitorTask, subscribeTask);
         }
         catch (OperationCanceledException)
         {
@@ -233,50 +357,6 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         }
     }
 
-    private void OnConnectStateChanged(object? sender, ConnectStateChangedEventArgs e)
-    {
-        _logger.LogInformation("iRacing connection state changed: {State}", e.State);
-
-        var newStatus = e.State switch
-        {
-            ConnectState.Connected => ConnectionStatus.Connected,
-            ConnectState.Disconnected => ConnectionStatus.Disconnected,
-            _ => ConnectionStatus.Disconnected
-        };
-
-        Status = newStatus;
-
-        // Parse session info when we connect
-        if (newStatus == ConnectionStatus.Connected)
-        {
-            TryParseSessionInfo();
-
-            // Diagnostic: Dump all available variables once
-            if (!_variablesDumped && _client != null)
-            {
-                _variablesDumped = true;
-                try
-                {
-                    var outputPath = System.IO.Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                        "MRT-UI",
-                        "available_variables.txt");
-
-                    var dumperLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TelemetryVariableDumper>.Instance;
-                    var dumper = new TelemetryVariableDumper(dumperLogger);
-                    dumper.DumpAllVariables(_client, outputPath);
-                    dumper.DumpUsingSDKMethod(_client, outputPath.Replace(".txt", "_methods.txt"));
-
-                    _logger.LogInformation("Variable dump saved to: {OutputPath}", outputPath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to dump variables (non-critical): {Message}", ex.Message);
-                }
-            }
-        }
-    }
-    
     /// <summary>
     /// Attempt to get and parse session info from the SDK.
     /// This is called when connection state changes to Connected.
@@ -349,17 +429,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // Detect lap change and reset lap timer
             if (sdkData.Lap != _lastLap)
             {
-                _lastLap = sdkData.Lap;
+                _lastLap = sdkData.Lap.GetValueOrDefault();
                 _lapStartTime = DateTime.UtcNow;
                 
                 // Update best lap times when lap completes
-                if (sdkData.LapLastLapTime > 0 && sdkData.LapLastLapTime < _personalBestLapTime)
+                if (sdkData.LapLastLapTime.GetValueOrDefault() > 0 && sdkData.LapLastLapTime.GetValueOrDefault() < _personalBestLapTime)
                 {
-                    _personalBestLapTime = sdkData.LapLastLapTime;
+                    _personalBestLapTime = sdkData.LapLastLapTime.GetValueOrDefault();
                 }
-                if (sdkData.LapBestLapTime > 0 && sdkData.LapBestLapTime < _sessionBestLapTime)
+                if (sdkData.LapBestLapTime.GetValueOrDefault() > 0 && sdkData.LapBestLapTime.GetValueOrDefault() < _sessionBestLapTime)
                 {
-                    _sessionBestLapTime = sdkData.LapBestLapTime;
+                    _sessionBestLapTime = sdkData.LapBestLapTime.GetValueOrDefault();
                 }
             }
             
@@ -373,101 +453,160 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // Convert SDK TelemetryData to our Models.TelemetryData
             var data = new Models.TelemetryData
             {
-                // MVP 1 - Core telemetry
-                Speed = sdkData.Speed,
-                RPM = sdkData.RPM,
+                // MVP 1 - Core telemetry (using GetValueOrDefault() for nullable SDK properties)
+                Speed = sdkData.Speed.GetValueOrDefault(),
+                RPM = sdkData.RPM.GetValueOrDefault(),
                 // TODO: Check SDK for actual redline field (DriverCarRedLine, EngineMaxRPM, ShiftRPM, etc.)
                 // For now, leave at 0 and let ShiftPointCalculator learn it
                 EngineRedlineRPM = 0, // Will be populated if SDK provides it
                 
                 // PHASE 1: Professional shift light telemetry (car-specific, instant accuracy)
-                PlayerCarSLFirstRPM = sdkData.PlayerCarSLFirstRPM,
-                PlayerCarSLShiftRPM = sdkData.PlayerCarSLShiftRPM,
-                PlayerCarSLLastRPM = sdkData.PlayerCarSLLastRPM,
-                PlayerCarSLBlinkRPM = sdkData.PlayerCarSLBlinkRPM,
+                PlayerCarSLFirstRPM = sdkData.PlayerCarSLFirstRPM.GetValueOrDefault(),
+                PlayerCarSLShiftRPM = sdkData.PlayerCarSLShiftRPM.GetValueOrDefault(),
+                PlayerCarSLLastRPM = sdkData.PlayerCarSLLastRPM.GetValueOrDefault(),
+                PlayerCarSLBlinkRPM = sdkData.PlayerCarSLBlinkRPM.GetValueOrDefault(),
                 
-                Gear = sdkData.Gear,
-                Throttle = sdkData.Throttle,
-                Brake = sdkData.Brake,
-                BrakeABSactive = sdkData.BrakeABSactive,
-                Clutch = sdkData.Clutch,
-                SteeringWheelAngle = sdkData.SteeringWheelAngle,
-                Lap = sdkData.Lap,
-                LapDistPct = sdkData.LapDistPct,
-                Position = sdkData.PlayerCarClassPosition,
-                PlayerCarIdx = sdkData.PlayerCarIdx,
-                PlayerCarClass = sdkData.PlayerCarClass,
+                Gear = sdkData.Gear.GetValueOrDefault(),
+                Throttle = sdkData.Throttle.GetValueOrDefault(),
+                Brake = sdkData.Brake.GetValueOrDefault(),
+                BrakeABSactive = sdkData.BrakeABSactive.GetValueOrDefault(),
+                BrakeBias = sdkData.dcBrakeBias.GetValueOrDefault(),
+                TractionControl = (int)(sdkData.dcTractionControl.GetValueOrDefault()), // float to int cast, 0 if N/A
+                Clutch = sdkData.Clutch.GetValueOrDefault(),
+                SteeringWheelAngle = sdkData.SteeringWheelAngle.GetValueOrDefault(),
+                Lap = sdkData.Lap.GetValueOrDefault(),
+                LapDistPct = sdkData.LapDistPct.GetValueOrDefault(),
+                Position = sdkData.PlayerCarClassPosition.GetValueOrDefault(),
+                PlayerCarIdx = sdkData.PlayerCarIdx.GetValueOrDefault(),
+                PlayerCarClass = sdkData.PlayerCarClass.GetValueOrDefault(),
                 Timestamp = DateTime.UtcNow,
                 
                 // MVP 2 - Critical race data
-                FuelLevel = sdkData.FuelLevel,
-                FuelLevelPct = sdkData.FuelLevelPct,
-                WaterTemp = sdkData.WaterTemp,
-                OilTemp = sdkData.OilTemp,
-                LapLastLapTime = sdkData.LapLastLapTime,
-                LapBestLapTime = sdkData.LapBestLapTime,
+                FuelLevel = sdkData.FuelLevel.GetValueOrDefault(),
+                FuelLevelPct = sdkData.FuelLevelPct.GetValueOrDefault(),
+                FuelUsePerHour = sdkData.FuelUsePerHour.GetValueOrDefault(),
+                FuelPress = sdkData.FuelPress.GetValueOrDefault(),
+                WaterTemp = sdkData.WaterTemp.GetValueOrDefault(),
+                WaterLevel = sdkData.WaterLevel.GetValueOrDefault(),
+                OilTemp = sdkData.OilTemp.GetValueOrDefault(),
+                OilLevel = sdkData.OilLevel.GetValueOrDefault(),
+                OilPress = sdkData.OilPress.GetValueOrDefault(),
+                LapLastLapTime = sdkData.LapLastLapTime.GetValueOrDefault(),
+                LapBestLapTime = sdkData.LapBestLapTime.GetValueOrDefault(),
+                LapCurrentLapTime = sdkData.LapCurrentLapTime.GetValueOrDefault(),
+                LapDeltaToBestLap = sdkData.LapDeltaToBestLap.GetValueOrDefault(),
+                LapDeltaToBestLap_DD = sdkData.LapDeltaToBestLap_DD.GetValueOrDefault(),
+                LapDeltaToSessionBestLap = sdkData.LapDeltaToSessionBestLap.GetValueOrDefault(),
                 CurrentLapTime = currentLapTime,
                 DeltaToBestLap = deltaToBest,
                 DeltaToSessionBest = deltaToSession,
-                SessionTimeRemain = sdkData.SessionTimeRemain,
-                SessionTime = sdkData.SessionTime,
-                SessionNum = sdkData.SessionNum,
+                SessionTimeRemain = sdkData.SessionTimeRemain.GetValueOrDefault(),
+                SessionTime = sdkData.SessionTime.GetValueOrDefault(),
+                SessionNum = sdkData.SessionNum.GetValueOrDefault(),
                 
                 // MVP 3+ - Advanced telemetry
-                LFtempCL = sdkData.LFtempCL,
-                LFtempCM = sdkData.LFtempCM,
-                LFtempCR = sdkData.LFtempCR,
-                RFtempCL = sdkData.RFtempCL,
-                RFtempCM = sdkData.RFtempCM,
-                RFtempCR = sdkData.RFtempCR,
-                LRtempCL = sdkData.LRtempCL,
-                LRtempCM = sdkData.LRtempCM,
-                LRtempCR = sdkData.LRtempCR,
-                RRtempCL = sdkData.RRtempCL,
-                RRtempCM = sdkData.RRtempCM,
-                RRtempCR = sdkData.RRtempCR,
+                LFtempCL = sdkData.LFtempCL.GetValueOrDefault(),
+                LFtempCM = sdkData.LFtempCM.GetValueOrDefault(),
+                LFtempCR = sdkData.LFtempCR.GetValueOrDefault(),
+                RFtempCL = sdkData.RFtempCL.GetValueOrDefault(),
+                RFtempCM = sdkData.RFtempCM.GetValueOrDefault(),
+                RFtempCR = sdkData.RFtempCR.GetValueOrDefault(),
+                LRtempCL = sdkData.LRtempCL.GetValueOrDefault(),
+                LRtempCM = sdkData.LRtempCM.GetValueOrDefault(),
+                LRtempCR = sdkData.LRtempCR.GetValueOrDefault(),
+                RRtempCL = sdkData.RRtempCL.GetValueOrDefault(),
+                RRtempCM = sdkData.RRtempCM.GetValueOrDefault(),
+                RRtempCR = sdkData.RRtempCR.GetValueOrDefault(),
                 
-                LFwearL = sdkData.LFwearL,
-                LFwearM = sdkData.LFwearM,
-                LFwearR = sdkData.LFwearR,
-                RFwearL = sdkData.RFwearL,
-                RFwearM = sdkData.RFwearM,
-                RFwearR = sdkData.RFwearR,
-                LRwearL = sdkData.LRwearL,
-                LRwearM = sdkData.LRwearM,
-                LRwearR = sdkData.LRwearR,
-                RRwearL = sdkData.RRwearL,
-                RRwearM = sdkData.RRwearM,
-                RRwearR = sdkData.RRwearR,
+                LFwearL = sdkData.LFwearL.GetValueOrDefault(),
+                LFwearM = sdkData.LFwearM.GetValueOrDefault(),
+                LFwearR = sdkData.LFwearR.GetValueOrDefault(),
+                RFwearL = sdkData.RFwearL.GetValueOrDefault(),
+                RFwearM = sdkData.RFwearM.GetValueOrDefault(),
+                RFwearR = sdkData.RFwearR.GetValueOrDefault(),
+                LRwearL = sdkData.LRwearL.GetValueOrDefault(),
+                LRwearM = sdkData.LRwearM.GetValueOrDefault(),
+                LRwearR = sdkData.LRwearR.GetValueOrDefault(),
+                RRwearL = sdkData.RRwearL.GetValueOrDefault(),
+                RRwearM = sdkData.RRwearM.GetValueOrDefault(),
+                RRwearR = sdkData.RRwearR.GetValueOrDefault(),
                 
-                LongAccel = sdkData.LongAccel,
-                LatAccel = sdkData.LatAccel,
-                VertAccel = sdkData.VertAccel,
+                LongAccel = sdkData.LongAccel.GetValueOrDefault(),
+                LatAccel = sdkData.LatAccel.GetValueOrDefault(),
+                VertAccel = sdkData.VertAccel.GetValueOrDefault(),
                 
-                SessionFlags = (uint)sdkData.SessionFlags,
-                PlayerCarMyIncidentCount = sdkData.PlayerCarMyIncidentCount,
+                SessionFlags = (uint)sdkData.SessionFlags.GetValueOrDefault(),
+                PlayerCarMyIncidentCount = sdkData.PlayerCarMyIncidentCount.GetValueOrDefault(),
                 
-                LFbrakeLinePress = sdkData.LFbrakeLinePress,
-                RFbrakeLinePress = sdkData.RFbrakeLinePress,
-                LRbrakeLinePress = sdkData.LRbrakeLinePress,
-                RRbrakeLinePress = sdkData.RRbrakeLinePress,
+                LFbrakeLinePress = sdkData.LFbrakeLinePress.GetValueOrDefault(),
+                RFbrakeLinePress = sdkData.RFbrakeLinePress.GetValueOrDefault(),
+                LRbrakeLinePress = sdkData.LRbrakeLinePress.GetValueOrDefault(),
+                RRbrakeLinePress = sdkData.RRbrakeLinePress.GetValueOrDefault(),
+                
+                // Tire Rumble Pitch (Force Feedback - CRITICAL for lockup detection!)
+                TireLF_RumblePitch = sdkData.TireLF_RumblePitch.GetValueOrDefault(),
+                TireRF_RumblePitch = sdkData.TireRF_RumblePitch.GetValueOrDefault(),
+                TireLR_RumblePitch = sdkData.TireLR_RumblePitch.GetValueOrDefault(),
+                TireRR_RumblePitch = sdkData.TireRR_RumblePitch.GetValueOrDefault(),
+                
+                // Wheel Odometers (CRITICAL for calculating individual wheel speeds!)
+                LFodometer = sdkData.LFodometer.GetValueOrDefault(),
+                RFodometer = sdkData.RFodometer.GetValueOrDefault(),
+                LRodometer = sdkData.LRodometer.GetValueOrDefault(),
+                RRodometer = sdkData.RRodometer.GetValueOrDefault(),
+                
+                // Shock/Suspension Data (for wheel load and lockup analysis)
+                LFshockDefl = sdkData.LFshockDefl.GetValueOrDefault(),
+                RFshockDefl = sdkData.RFshockDefl.GetValueOrDefault(),
+                LRshockDefl = sdkData.LRshockDefl.GetValueOrDefault(),
+                RRshockDefl = sdkData.RRshockDefl.GetValueOrDefault(),
+                LFshockVel = sdkData.LFshockVel.GetValueOrDefault(),
+                RFshockVel = sdkData.RFshockVel.GetValueOrDefault(),
+                LRshockVel = sdkData.LRshockVel.GetValueOrDefault(),
+                RRshockVel = sdkData.RRshockVel.GetValueOrDefault(),
                 
                 // Environmental conditions
-                AirTemp = sdkData.AirTemp,
-                TrackTemp = sdkData.TrackTemp,
-                TrackTempCrew = sdkData.TrackTempCrew,
+                AirTemp = sdkData.AirTemp.GetValueOrDefault(),
+                AirDensity = sdkData.AirDensity.GetValueOrDefault(),
+                AirPressure = sdkData.AirPressure.GetValueOrDefault(),
+                RelativeHumidity = sdkData.RelativeHumidity.GetValueOrDefault(),
+                TrackTemp = sdkData.TrackTemp.GetValueOrDefault(),
+                TrackTempCrew = sdkData.TrackTempCrew.GetValueOrDefault(),
+                OnPitRoad = sdkData.OnPitRoad.GetValueOrDefault(),
+                Skies = (int)sdkData.Skies.GetValueOrDefault(),
+                WeatherType = (int)sdkData.WeatherType.GetValueOrDefault(),
+                FogLevel = sdkData.FogLevel.GetValueOrDefault(),
+                
+                // Motion & Orientation
+                VelocityX = sdkData.VelocityX.GetValueOrDefault(),
+                VelocityY = sdkData.VelocityY.GetValueOrDefault(),
+                VelocityZ = sdkData.VelocityZ.GetValueOrDefault(),
+                Pitch = sdkData.Pitch.GetValueOrDefault(),
+                PitchRate = sdkData.PitchRate.GetValueOrDefault(),
+                Roll = sdkData.Roll.GetValueOrDefault(),
+                RollRate = sdkData.RollRate.GetValueOrDefault(),
+                
+                // Driver Inputs (Raw)
+                BrakeRaw = sdkData.BrakeRaw.GetValueOrDefault(),
+                ThrottleRaw = sdkData.ThrottleRaw.GetValueOrDefault(),
+                ClutchRaw = sdkData.ClutchRaw.GetValueOrDefault(),
+                HandbrakeRaw = sdkData.HandbrakeRaw.GetValueOrDefault(),
                 
                 // Session info (populated from SessionInfo YAML parsing)
                 DriverName = _driverName,
                 CarNumber = _carNumber,
                 TrackName = _trackName,
+                SessionType = _sessionType,
                 TrackLength = _trackLength,
+
+                // Live Position Calculation
+                SessionState = (int)sdkData.SessionState.GetValueOrDefault(),
                 
                 // ===== PHASE 1: 4-Way Proximity Radar =====
                 
                 // Lateral Spotter (Left/Right Detection) - Cast enum to int
                 // DEBUG: Log raw SDK value to diagnose false positives
-                CarLeftRight = (int)sdkData.CarLeftRight,
+                CarLeftRight = (int)sdkData.CarLeftRight.GetValueOrDefault(),
                 
                 // Multi-Car Position Arrays (CarIdx[64])
                 CarIdxLapDistPct = sdkData.CarIdxLapDistPct,
@@ -482,18 +621,26 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxEstTime = sdkData.CarIdxEstTime,
                 CarIdxF2Time = sdkData.CarIdxF2Time,
                 CarIdxLastLapTime = sdkData.CarIdxLastLapTime,
-                
+                CarIdxBestLapTime = sdkData.CarIdxBestLapTime,
+
                 // Player Orientation
-                Yaw = sdkData.Yaw,
-                YawRate = sdkData.YawRate
+                Yaw = sdkData.Yaw.GetValueOrDefault(),
+                YawRate = sdkData.YawRate.GetValueOrDefault(),
+
+                // ===== PHASE 2: PIT LIMITER DETECTION =====
+                PitSpeedLimiterActive = sdkData.dcPitSpeedLimiterToggle.GetValueOrDefault()
             };
             
+            // Calculate live positions (handles race mode, qualifying mode, and position freezing)
+            data.LivePosition = _livePositionCalculator.CalculateLivePosition(data, classOnly: false);
+            data.LiveClassPosition = _livePositionCalculator.CalculateLivePosition(data, classOnly: true);
+
             // DEBUG: Log shift light telemetry values to diagnose car compatibility
             LogShiftLightData(sdkData);
-            
+
             // DEBUG: Log CarLeftRight changes to diagnose SDK behavior
             LogLateralSpotterData(sdkData, data);
-            
+
             // Log proximity radar data on first few updates for verification
             if (sdkData.Lap <= 2) // Only log first 2 laps to avoid spam
             {
@@ -507,13 +654,6 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         {
             _logger.LogError(ex, "Error processing telemetry update");
         }
-    }
-
-    private void OnError(object? sender, ExceptionEventArgs e)
-    {
-        _logger.LogError(e.Exception, "iRacing SDK error: {Message}", e.Exception.Message);
-        Status = ConnectionStatus.Error;
-        StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(ConnectionStatus.Error, error: e.Exception));
     }
 
     /// <summary>
@@ -548,7 +688,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             string? currentSection = null;
             int driverCarIdx = -1;
             bool inDriversArray = false;
+            bool inSessionsArray = false;
             bool isPlayerDriver = false;
+            bool isCurrentSession = false;
             int currentDriverCarIdx = -1;
             bool foundTrackLength = false;
             
@@ -561,6 +703,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 {
                     currentSection = trimmed.TrimEnd(':');
                     inDriversArray = false;
+                    inSessionsArray = false;
                     continue;
                 }
                 
@@ -623,8 +766,40 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         }
                     }
                 }
+                else if (currentSection == "SessionInfo")
+                {
+                    // Check if we're entering the Sessions array
+                    if (trimmed.StartsWith("Sessions:"))
+                    {
+                        inSessionsArray = true;
+                        continue;
+                    }
+
+                    // If we're in the Sessions array
+                    if (inSessionsArray)
+                    {
+                        // Detect start of new session entry (indicated by "- SessionNum:")
+                        if (trimmed.StartsWith("- SessionNum:"))
+                        {
+                            // Parse session number
+                            if (int.TryParse(ExtractYamlValue(trimmed), out var sessionNum))
+                            {
+                                // Assume current session is the latest one (highest SessionNum)
+                                // or match against current SessionNum from telemetry if needed
+                                isCurrentSession = true; // Simplification: parse first session's type
+                            }
+                        }
+                        else if (trimmed.StartsWith("SessionType:") && isCurrentSession)
+                        {
+                            _sessionType = ExtractYamlValue(trimmed).Trim('"', '\'');
+                            _logger.LogInformation("Parsed session type: {SessionType}", _sessionType);
+                            // Once we have session type, we can stop looking
+                            inSessionsArray = false;
+                        }
+                    }
+                }
             }
-            
+
             // Log if TrackLength was not found in YAML
             if (!foundTrackLength)
             {
@@ -751,7 +926,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     {
         try
         {
-            int currentValue = (int)sdkData.CarLeftRight;
+            int currentValue = (int)sdkData.CarLeftRight.GetValueOrDefault();
             
             // Only log when value changes
             if (currentValue != _lastCarLeftRight)
@@ -766,7 +941,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 var log = new System.Text.StringBuilder();
                 log.AppendLine($"\n[{DateTime.Now:HH:mm:ss.fff}] ===== SDK CarLeftRight CHANGED =====");
                 log.AppendLine($"SDK RAW VALUE: {currentValue} ({GetLateralDescription(currentValue)})");
-                log.AppendLine($"Player Speed: {sdkData.Speed:F1} m/s ({sdkData.Speed * 3.6f:F1} km/h)");
+                log.AppendLine($"Player Speed: {sdkData.Speed:F1} m/s ({Telemetry.UnitConversions.MpsToKmh(sdkData.Speed.GetValueOrDefault()):F1} km/h)");
                 log.AppendLine($"Player Position: Pct={sdkData.LapDistPct:F4}, Lap={sdkData.Lap}");
                 
                 // Log nearby cars to see if SDK is detecting something we're not
@@ -780,7 +955,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         float pct = sdkData.CarIdxLapDistPct[i];
                         if (pct < 0 || pct > 1) continue;
                         
-                        float diff = pct - sdkData.LapDistPct;
+                        float diff = pct - sdkData.LapDistPct.GetValueOrDefault();
                         if (diff < -0.5f) diff += 1.0f;
                         if (diff > 0.5f) diff -= 1.0f;
                         
@@ -844,7 +1019,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         try
         {
             // Log CarLeftRight enum value (lateral spotter) - Cast to int for comparison
-            int lateralValue = (int)sdkData.CarLeftRight;
+            int lateralValue = (int)sdkData.CarLeftRight.GetValueOrDefault();
             string lateralStatus = lateralValue switch
             {
                 0 => "Clear (no cars beside)",
@@ -864,8 +1039,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 _logger.LogInformation("📊 Cars on track: {Count}/64", carsOnTrack);
                 
                 // Log top 5 closest cars ahead/behind
-                var playerPct = sdkData.LapDistPct;
-                var playerLap = sdkData.Lap;
+                var playerPct = sdkData.LapDistPct.GetValueOrDefault();
+                var playerLap = sdkData.Lap.GetValueOrDefault();
                 
                 var otherCars = sdkData.CarIdxLapDistPct
                     .Select((pct, idx) => new { Idx = idx, Pct = pct })
@@ -929,13 +1104,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         {
             try
             {
-                // Unsubscribe from events
-                _client.OnConnectStateChanged -= OnConnectStateChanged;
-                _client.OnTelemetryUpdate -= OnTelemetryUpdate;
-                _client.OnError -= OnError;
-
-                // Dispose the client (this will stop monitoring)
-                _client.Dispose();
+                // v1.0.0-beta.1: SubscribeToAllStreams handles cleanup via cancellationToken
+                // We just need to dispose the client
+                await _client.DisposeAsync();
                 _client = null;
 
                 Status = ConnectionStatus.Disconnected;

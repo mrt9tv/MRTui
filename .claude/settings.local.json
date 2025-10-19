@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet run:*)"
+      "Bash(dotnet run:*)",
+      "Bash(find docs/ -name \"*.md\" -type f -exec wc -l {} +)",
+      "Bash(cat global.json)"
     ],
     "deny": [],
     "ask": []
