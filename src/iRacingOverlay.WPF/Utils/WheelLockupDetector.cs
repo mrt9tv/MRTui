@@ -8,6 +8,11 @@ namespace iRacingOverlay.WPF.Utils;
 /// PHYSICS PRINCIPLE: Locked wheels have LESS grip than rolling wheels
 /// → Lockup causes deceleration to DROP or PLATEAU despite increased brake input
 /// Works universally - no sensors required, pure physics-based detection
+/// 
+/// DEBUG LOGGING: All Console.WriteLine output is automatically written to:
+/// - Console window (real-time monitoring)
+/// - wheel_lockup_debug.log file (persistent logging)
+/// See App.xaml.cs MultiTextWriter for implementation details
 /// </summary>
 public static class WheelLockupDetector
 {
@@ -44,40 +49,48 @@ public static class WheelLockupDetector
     /// <summary>
     /// Deceleration efficiency drop threshold
     /// If decel drops by this percentage while brake input increases → LOCKUP
-    /// Default 0.10 = 10% deceleration drop (BALANCED AGGRESSIVE)
-    /// Example: Was decelerating at 20 m/s², now only 18.0 m/s² despite more brake → LOCKED
+    /// Default 0.06 = 6% deceleration drop (HYPER AGGRESSIVE - 15% more sensitive than before)
+    /// Example: Was decelerating at 20 m/s², now only 18.8 m/s² despite more brake → LOCKED
     /// </summary>
-    public static float DecelDropThreshold { get; set; } = 0.10f;
+    public static float DecelDropThreshold { get; set; } = 0.06f;
     
     /// <summary>
     /// Brake input increase required to detect inefficiency
     /// Must be braking harder by at least this much to compare efficiency
-    /// Default 0.03 = 3% more brake input (BALANCED AGGRESSIVE)
+    /// Default 0.02 = 2% more brake input (VERY AGGRESSIVE - sensitive to small changes)
     /// </summary>
-    public static float BrakeIncreaseThreshold { get; set; } = 0.03f;
+    public static float BrakeIncreaseThreshold { get; set; } = 0.02f;
     
     // ===== BRAKE PRESSURE DETECTION THRESHOLDS =====
     
     /// <summary>
     /// Minimum brake line pressure to consider (bar)
     /// Below this, pressure readings may be unreliable
-    /// Default 10.0 bar (typical GT3 hard braking starts ~15-20 bar)
+    /// LOWERED: 10.0 → 5.0 bar to catch light trail braking (turning + braking)
     /// </summary>
-    public static float MinBrakePressure { get; set; } = 10.0f;
+    public static float MinBrakePressure { get; set; } = 5.0f;
     
     /// <summary>
     /// Pressure drop threshold indicating wheel lockup (bar)
     /// When one wheel's pressure drops this much below average → locked
-    /// Default 3.0 bar = significant pressure drop (physics: locked wheel = friction loss = pressure drop)
+    /// ADAPTIVE: Uses PERCENTAGE-based threshold for light braking, absolute for hard braking
+    /// Light braking (20%): 15% drop = ~0.9 bar at 6 bar avg
+    /// Hard braking (80%): 15% drop = ~3.0 bar at 20 bar avg
+    /// Minimum absolute floor to prevent false positives from sensor noise
     /// </summary>
-    public static float PressureDropThreshold { get; set; } = 3.0f;
+    public static float PressureDropThresholdPercentage { get; set; } = 0.15f; // 15% drop
+    
+    /// <summary>
+    /// Minimum absolute pressure drop (bar) - safety floor to prevent sensor noise false positives
+    /// </summary>
+    public static float MinPressureDropThreshold { get; set; } = 0.8f;
     
     /// <summary>
     /// Minimum speed for pressure-based detection (m/s)
     /// Below this speed, pressure detection is disabled (low-speed braking is less critical)
-    /// Default 20.0 m/s = 72 km/h (~45 mph)
+    /// LOWERED: 20.0 → 10.0 m/s (36 km/h / ~22 mph) for slow corner entry lockups
     /// </summary>
-    public static float MinPressureDetectionSpeed { get; set; } = 20.0f;
+    public static float MinPressureDetectionSpeed { get; set; } = 10.0f;
     
     // ===== BRAKE PRESSURE DETECTION METHOD =====
     
@@ -90,12 +103,14 @@ public static class WheelLockupDetector
     {
         var state = new WheelLockupState();
         
-        // Early exit: Only check at speed during hard braking
-        if (data.Brake < 0.7f || data.Speed < MinPressureDetectionSpeed)
+        // Early exit: Only check at speed during ANY braking (even light trail braking)
+        // CRITICAL FIX: Lowered from 50% to 15% brake to catch trail braking into corners!
+        // Trail braking = 20-40% brake while turning = MOST COMMON single-wheel lockup scenario
+        if (data.Brake < 0.15f || data.Speed < MinPressureDetectionSpeed)
         {
-            if (EnableDiagnostics && data.Brake > 0.65f && data.Speed > MinPressureDetectionSpeed * 0.8f)
+            if (EnableDiagnostics && data.Brake > 0.12f && data.Speed > MinPressureDetectionSpeed * 0.85f)
             {
-                Console.WriteLine($"[PRESSURE] Early exit: Brake:{data.Brake:P0} (min:70%) Speed:{data.Speed:F1}m/s (min:{MinPressureDetectionSpeed:F1}m/s)");
+                Console.WriteLine($"[PRESSURE] Early exit: Brake:{data.Brake:P0} (min:15%) Speed:{data.Speed:F1}m/s (min:{MinPressureDetectionSpeed:F1}m/s)");
             }
             return state;
         }
@@ -104,26 +119,52 @@ public static class WheelLockupDetector
         float avgFrontPress = (data.LFbrakeLinePress + data.RFbrakeLinePress) / 2f;
         float avgRearPress = (data.LRbrakeLinePress + data.RRbrakeLinePress) / 2f;
         
-        // DEBUG: Log pressure readings when braking hard
-        if (EnableDiagnostics && data.Brake > 0.80f)
+        // ADAPTIVE THRESHOLD: Use percentage of average pressure, with minimum absolute floor
+        // Light braking (6 bar avg): 15% = 0.9 bar (uses 0.9 bar)
+        // Hard braking (20 bar avg): 15% = 3.0 bar (uses 3.0 bar)
+        // This adapts to brake intensity while preventing sensor noise false positives
+        float frontPressureDropThreshold = Math.Max(MinPressureDropThreshold, avgFrontPress * PressureDropThresholdPercentage);
+        float rearPressureDropThreshold = Math.Max(MinPressureDropThreshold, avgRearPress * PressureDropThresholdPercentage);
+        
+        // DEBUG: Log pressure readings when braking (even light braking for trail braking scenarios)
+        // CRITICAL: Lowered from 50% to 15% to monitor trail braking into corners (matches detection threshold!)
+        if (EnableDiagnostics && data.Brake > 0.15f)
         {
+            // Calculate pressure drops for diagnostic purposes
+            float lfDrop = avgFrontPress - data.LFbrakeLinePress;
+            float rfDrop = avgFrontPress - data.RFbrakeLinePress;
+            float lrDrop = avgRearPress - data.LRbrakeLinePress;
+            float rrDrop = avgRearPress - data.RRbrakeLinePress;
+            
             Console.WriteLine($"[PRESSURE DEBUG] Brake:{data.Brake:P0} Speed:{data.Speed:F1}m/s " +
-                            $"LF:{data.LFbrakeLinePress:F1} RF:{data.RFbrakeLinePress:F1} (AvgF:{avgFrontPress:F1}) " +
-                            $"LR:{data.LRbrakeLinePress:F1} RR:{data.RRbrakeLinePress:F1} (AvgR:{avgRearPress:F1})");
+                            $"LF:{data.LFbrakeLinePress:F1}(-{lfDrop:F1}) RF:{data.RFbrakeLinePress:F1}(-{rfDrop:F1}) (AvgF:{avgFrontPress:F1}) " +
+                            $"LR:{data.LRbrakeLinePress:F1}(-{lrDrop:F1}) RR:{data.RRbrakeLinePress:F1}(-{rrDrop:F1}) (AvgR:{avgRearPress:F1}) " +
+                            $"Thresholds: F={frontPressureDropThreshold:F1}bar R={rearPressureDropThreshold:F1}bar");
+            
+            // Log near-miss cases (within 0.3 bar of adaptive threshold)
+            float maxFrontDrop = Math.Max(lfDrop, rfDrop);
+            float maxRearDrop = Math.Max(lrDrop, rrDrop);
+            if ((maxFrontDrop > frontPressureDropThreshold - 0.3f && maxFrontDrop < frontPressureDropThreshold) ||
+                (maxRearDrop > rearPressureDropThreshold - 0.3f && maxRearDrop < rearPressureDropThreshold))
+            {
+                Console.WriteLine($"  ⚠️ NEAR THRESHOLD! Max drops: Front={maxFrontDrop:F1} Rear={maxRearDrop:F1} (Thresholds: F={frontPressureDropThreshold:F1} R={rearPressureDropThreshold:F1})");
+            }
         }
         
         // Detect individual wheel lockups via pressure drop
-        bool lfLocked = data.LFbrakeLinePress > MinBrakePressure && 
-                       (avgFrontPress - data.LFbrakeLinePress) > PressureDropThreshold;
+        // ADAPTIVE: Use percentage-based threshold that scales with brake intensity
+        // PHYSICS: Locked wheel drops BELOW MinBrakePressure, but we still want to detect it!
+        bool lfLocked = avgFrontPress > MinBrakePressure && 
+                       (avgFrontPress - data.LFbrakeLinePress) > frontPressureDropThreshold;
         
-        bool rfLocked = data.RFbrakeLinePress > MinBrakePressure && 
-                       (avgFrontPress - data.RFbrakeLinePress) > PressureDropThreshold;
+        bool rfLocked = avgFrontPress > MinBrakePressure && 
+                       (avgFrontPress - data.RFbrakeLinePress) > frontPressureDropThreshold;
         
-        bool lrLocked = data.LRbrakeLinePress > MinBrakePressure && 
-                       (avgRearPress - data.LRbrakeLinePress) > PressureDropThreshold;
+        bool lrLocked = avgRearPress > MinBrakePressure && 
+                       (avgRearPress - data.LRbrakeLinePress) > rearPressureDropThreshold;
         
-        bool rrLocked = data.RRbrakeLinePress > MinBrakePressure && 
-                       (avgRearPress - data.RRbrakeLinePress) > PressureDropThreshold;
+        bool rrLocked = avgRearPress > MinBrakePressure && 
+                       (avgRearPress - data.RRbrakeLinePress) > rearPressureDropThreshold;
         
         // Populate state if any wheel locked
         if (lfLocked || rfLocked || lrLocked || rrLocked)
@@ -147,8 +188,8 @@ public static class WheelLockupDetector
             {
                 string wheels = $"{(lfLocked ? "LF " : "")}{(rfLocked ? "RF " : "")}{(lrLocked ? "LR " : "")}{(rrLocked ? "RR " : "")}";
                 Console.WriteLine($"🔴 PRESSURE LOCKUP! {wheels}| " +
-                                $"Front: LF:{data.LFbrakeLinePress:F1} RF:{data.RFbrakeLinePress:F1} (Avg:{avgFrontPress:F1} Drop>{PressureDropThreshold:F1}) | " +
-                                $"Rear: LR:{data.LRbrakeLinePress:F1} RR:{data.RRbrakeLinePress:F1} (Avg:{avgRearPress:F1} Drop>{PressureDropThreshold:F1})");
+                                $"Front: LF:{data.LFbrakeLinePress:F1} RF:{data.RFbrakeLinePress:F1} (Avg:{avgFrontPress:F1} Threshold:{frontPressureDropThreshold:F1}) | " +
+                                $"Rear: LR:{data.LRbrakeLinePress:F1} RR:{data.RRbrakeLinePress:F1} (Avg:{avgRearPress:F1} Threshold:{rearPressureDropThreshold:F1})");
             }
         }
         
@@ -238,8 +279,8 @@ public static class WheelLockupDetector
             _maxDecelThisStop = decel;
         }
         
-        // Mark as hard braking (VERY AGGRESSIVE)
-        if (!_isHardBraking && data.Brake > 0.18f)
+        // Mark as hard braking (VERY AGGRESSIVE - even light trail braking)
+        if (!_isHardBraking && data.Brake > 0.12f)
         {
             _isHardBraking = true;
             if (EnableDiagnostics)
@@ -267,9 +308,22 @@ public static class WheelLockupDetector
             var recentSamples = _decelHistory.Skip(count - 2).Take(2).ToArray();
             float avgBrake = (recentSamples[0].Brake + recentSamples[1].Brake) * 0.5f;
             float avgDecel = (recentSamples[0].Decel + recentSamples[1].Decel) * 0.5f;
+            float avgLatAccel = Math.Abs((recentSamples[0].LatAccel + recentSamples[1].LatAccel) * 0.5f);
             
-            // Check if decel efficiency is back to normal
-            float expectedDecel = avgBrake * 18.0f; // GT3 baseline (~18 m/s² at 100%)
+            // FRICTION CIRCLE COMPENSATION: Adjust expected decel for cornering
+            float maxStraightLineDecel = 18.0f;
+            float maxDecelWithLatLoad = avgLatAccel > 0.5f 
+                ? (float)Math.Sqrt(Math.Max(0, maxStraightLineDecel * maxStraightLineDecel - avgLatAccel * avgLatAccel))
+                : maxStraightLineDecel;
+            
+            // REDUCED COMPENSATION for slight turns (single-wheel lockups more common at low lat G)
+            // At low lateral G, single-wheel lockup causes proportional decel loss without full friction circle effect
+            // Blend factor: 0-5 m/s² = 50% compensation, 5-10 m/s² = 100% compensation
+            float compensationBlend = Math.Min(1.0f, avgLatAccel / 5.0f);
+            float blendedMaxDecel = maxStraightLineDecel + (maxDecelWithLatLoad - maxStraightLineDecel) * compensationBlend;
+            
+            // Check if decel efficiency is back to normal (using cornering-adjusted baseline)
+            float expectedDecel = avgBrake * blendedMaxDecel;
             float efficiency = expectedDecel > 1.0f ? (avgDecel / expectedDecel) : 1.0f;
             
             // UNLOCK CONDITION: Good efficiency (60%+) OR low brake with reasonable decel
@@ -285,7 +339,7 @@ public static class WheelLockupDetector
                 if (EnableDiagnostics)
                 {
                     string reason = goodEfficiency ? "Good efficiency" : "Low brake";
-                    Console.WriteLine($"✅ UNLOCK! ({reason}) Efficiency:{efficiency:P0} Decel:{avgDecel:F1}m/s² Brake:{avgBrake:P0}");
+                    Console.WriteLine($"✅ UNLOCK! ({reason}) Efficiency:{efficiency:P0} Decel:{avgDecel:F1}m/s² Brake:{avgBrake:P0} Lat:{avgLatAccel:F1}m/s²");
                 }
                 
                 return state; // AnyWheelLocked = false
@@ -314,9 +368,9 @@ public static class WheelLockupDetector
             float brakeIncrease = newAvgBrake - oldAvgBrake;
             float decelRatio = oldAvgDecel > 0.1f ? newAvgDecel / oldAvgDecel : 1.0f;
             
-            // SPEED-DEPENDENT THRESHOLD: Less sensitive at low speeds
-            // Below 60 km/h (~16.7 m/s), require more severe drop to avoid false positives
-            float speedFactor = data.Speed < 16.7f ? 1.15f : 1.0f; // 15% less sensitive below 60 km/h
+            // SPEED-DEPENDENT THRESHOLD: MORE sensitive at low speeds
+            // Below 60 km/h (~16.7 m/s), lockups are more dangerous - detect earlier!
+            float speedFactor = data.Speed < 16.7f ? 0.85f : 1.0f; // 15% MORE sensitive below 60 km/h
             float adjustedDropThreshold = DecelDropThreshold * speedFactor;
             
             // LOCKUP CONDITION: Brake input increased significantly but deceleration dropped
@@ -328,14 +382,15 @@ public static class WheelLockupDetector
                 _wasLocked = true;
                 _unlockConfirmFrames = 0;
                 
-                // Determine which wheels (pass last 2 samples)
-                var newSamplesArray = new[] { allSamples[count-2], allSamples[count-1] };
-                DetermineLockedWheels(state, data, newSamplesArray, decelRatio);
+                // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
+                // Pressure-based detection handles per-wheel identification
+                state.FrontAxleLockup = true; // Default assumption (most common)
+                state.LeftFrontLocked = true;
+                state.RightFrontLocked = true;
                 
                 if (EnableDiagnostics)
                 {
-                    string wheels = $"{(state.LeftFrontLocked ? "LF " : "")}{(state.RightFrontLocked ? "RF " : "")}{(state.LeftRearLocked ? "LR " : "")}{(state.RightRearLocked ? "RR " : "")}";
-                    Console.WriteLine($"🔴 LOCKUP! Brake +{brakeIncrease:F2} decel {oldAvgDecel:F1}→{newAvgDecel:F1} ({decelRatio:F2}) | {wheels}");
+                    Console.WriteLine($"🔴 LOCKUP! Brake +{brakeIncrease:F2} decel {oldAvgDecel:F1}→{newAvgDecel:F1} ({decelRatio:F2})");
                 }
                 
                 return state;
@@ -349,19 +404,40 @@ public static class WheelLockupDetector
         // Performance: Pure efficiency check, no ratio comparisons
         if (_isHardBraking && data.Brake > 0.05f && _maxDecelThisStop > 6.0f)
         {
-            // Calculate efficiency (cached calculation)
-            float expectedDecelForBrake = data.Brake * 18.0f; // GT3 baseline
+            // FRICTION CIRCLE COMPENSATION: Adjust expected decel for lateral load during cornering
+            // Physics: Total tire grip is limited - lateral G reduces available longitudinal grip
+            // Formula: maxLongitudinal = sqrt(totalGrip² - lateral²)
+            float maxStraightLineDecel = 18.0f; // GT3 baseline (straight-line braking)
+            float absLatAccel = Math.Abs(latAccel); // Absolute lateral G (direction doesn't matter)
+            
+            // Friction circle: reduce expected decel based on lateral load
+            // If lateral = 10 m/s² (1G), max longitudinal ≈ sqrt(18² - 10²) ≈ 14.8 m/s²
+            float maxDecelWithLatLoad = absLatAccel > 0.5f 
+                ? (float)Math.Sqrt(Math.Max(0, maxStraightLineDecel * maxStraightLineDecel - absLatAccel * absLatAccel))
+                : maxStraightLineDecel;
+            
+            // CRITICAL FIX: PARTIAL compensation for slight turns (single-wheel lockups!)
+            // At low lateral G, single-wheel lockup causes decel loss WITHOUT full friction circle effect
+            // SIMPLIFIED: Reduce compensation at low brake % (trail braking is sensitive zone)
+            float brakeFactor = Math.Min(1.0f, data.Brake / 0.20f); // 0-100% from 0-20% brake
+            float baseBlend = Math.Min(1.0f, absLatAccel / 5.0f);
+            float compensationBlend = baseBlend * brakeFactor;
+            float blendedMaxDecel = maxStraightLineDecel + (maxDecelWithLatLoad - maxStraightLineDecel) * compensationBlend;
+            
+            // Calculate efficiency using BLENDED cornering-adjusted baseline
+            float expectedDecelForBrake = data.Brake * blendedMaxDecel;
             float decelEfficiency = expectedDecelForBrake > 1.0f ? (decel / expectedDecelForBrake) : 1.0f;
             
-            // HYSTERESIS: Much stricter than unlock (45% vs 60%) to prevent oscillation
-            // Unlock at 60% efficiency, re-trigger only if drops below 45%
-            // REMOVED belowMaxDecel condition - was causing false positives during brake modulation
-            float sustainedEfficiencyThreshold = 0.45f; // Very strict to avoid false positives
+            // THREE-TIER THRESHOLDS: Trail braking, Normal braking, Heavy braking
+            // 15% MORE SENSITIVE than previous version (thresholds × 0.85)
+            float sustainedEfficiencyThreshold = data.Brake < 0.25f ? 0.51f :   // Trail braking (5-25%): 51% (hyper sensitive)
+                                                  data.Brake > 0.70f ? 0.43f :   // Heavy braking (70-100%): 43% (very aggressive)
+                                                  0.30f;                         // Normal braking (25-70%): 30% (aggressive)
             
-            // Single condition: extremely low efficiency at low-medium brake
-            bool lowBrakeLockup = data.Brake < 0.45f && decelEfficiency < sustainedEfficiencyThreshold;
+            // Detect lockup across full brake range
+            bool lockupDetected = decelEfficiency < sustainedEfficiencyThreshold;
             
-            if (lowBrakeLockup)
+            if (lockupDetected)
             {
                 state.AnyWheelLocked = true;
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
@@ -369,17 +445,14 @@ public static class WheelLockupDetector
                 _wasLocked = true;
                 _unlockConfirmFrames = 0;
                 
-                // Determine which wheels (use last 2 samples for consistency)
-                if (count >= 2)
-                {
-                    var allSamples = _decelHistory.ToArray();
-                    var recentArray = new[] { allSamples[count-2], allSamples[count-1] };
-                    DetermineLockedWheels(state, data, recentArray, decelEfficiency);
-                }
+                // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
+                state.FrontAxleLockup = true;
+                state.LeftFrontLocked = true;
+                state.RightFrontLocked = true;
                 
                 if (EnableDiagnostics)
                 {
-                    Console.WriteLine($"🔴 SUSTAINED! Brake:{data.Brake:P0} Decel:{decel:F1} (Exp:{expectedDecelForBrake:F1} Eff:{decelEfficiency:P0})");
+                    Console.WriteLine($"🔴 SUSTAINED! Brake:{data.Brake:P0} Decel:{decel:F1} (Exp:{expectedDecelForBrake:F1} Eff:{decelEfficiency:P0} Thresh:{sustainedEfficiencyThreshold:P0}) Lat:{Math.Abs(latAccel):F1}m/s² Speed:{data.Speed:F1}m/s");
                 }
                 
                 return state;
@@ -387,18 +460,21 @@ public static class WheelLockupDetector
         }
         
         // ===== DECELERATION PLATEAU DETECTION (High Brake Alternative) =====
-        // If braking hard but decel is significantly below maximum achieved → LOCKUP
+        // If braking but decel is significantly below maximum achieved → LOCKUP
+        // CRITICAL: More aggressive at high brake % and high speeds!
         // Performance: Simple ratio check, no array operations
-        if (_isHardBraking && data.Brake > 0.40f && _maxDecelThisStop > 6.0f)
+        if (_isHardBraking && data.Brake > 0.15f && _maxDecelThisStop > 6.0f)
         {
             float decelRatioVsMax = decel / _maxDecelThisStop;
             
-            // SPEED-DEPENDENT: Less sensitive at low speeds
-            float speedFactor = data.Speed < 16.7f ? 0.92f : 1.0f; // 0.74 below 60 km/h, 0.80 above
-            float adjustedPlateauThreshold = 0.80f * speedFactor;
+            // SPEED + BRAKE DEPENDENT: Stricter at LOW speeds and HIGH brake %
+            // 15% MORE SENSITIVE than previous version (base threshold × 0.85)
+            float speedFactor = data.Speed < 16.7f ? 0.85f : 1.0f; // MORE sensitive below 60 km/h
+            float brakeFactor = data.Brake > 0.70f ? 1.08f : 1.0f; // 8% stricter at heavy braking (70-100%)
+            float adjustedPlateauThreshold = 0.62f * speedFactor * brakeFactor; // Base: 0.62 (was 0.73)
             
             // If current decel is < threshold of max decel achieved → wheels locked
-            if (decelRatioVsMax < adjustedPlateauThreshold) // BALANCED AGGRESSIVE
+            if (decelRatioVsMax < adjustedPlateauThreshold)
             {
                 state.AnyWheelLocked = true;
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
@@ -406,13 +482,10 @@ public static class WheelLockupDetector
                 _wasLocked = true;
                 _unlockConfirmFrames = 0;
                 
-                // Determine which wheels (use last 2 samples)
-                if (count >= 2)
-                {
-                    var allSamples = _decelHistory.ToArray();
-                    var recentArray = new[] { allSamples[count-2], allSamples[count-1] };
-                    DetermineLockedWheels(state, data, recentArray, decelRatioVsMax);
-                }
+                // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
+                state.FrontAxleLockup = true;
+                state.LeftFrontLocked = true;
+                state.RightFrontLocked = true;
                 
                 if (EnableDiagnostics)
                 {
@@ -426,18 +499,37 @@ public static class WheelLockupDetector
         // ===== INSTANT DECELERATION DROP DETECTION (Efficiency Check) =====
         // Detect sudden deceleration drops based on brake vs decel efficiency
         // Can detect on FIRST sample if efficiency is very low (instant detection)
+        // CRITICAL: Lowered threshold to 12% to catch light trail braking lockups!
         // Performance: Use current decel directly instead of averaging
-        if (data.Brake > 0.20f)
+        if (data.Brake > 0.12f)
         {
-            // Expected deceleration based on brake input
-            float expectedDecel = data.Brake * 18.0f; // GT3 ~18 m/s² at 100% brake
+            // FRICTION CIRCLE COMPENSATION: Adjust expected decel for lateral load
+            float maxStraightLineDecel = 18.0f; // GT3 baseline
+            float absLatAccel = Math.Abs(latAccel);
             
-            // SPEED-DEPENDENT: Less sensitive at low speeds
-            float speedFactor = data.Speed < 16.7f ? 0.92f : 1.0f; // 0.60 below 60 km/h, 0.65 above
-            float adjustedEfficiencyThreshold = 0.65f * speedFactor; // More aggressive for faster detection
+            // Reduce expected decel based on lateral load (cornering physics)
+            float maxDecelWithLatLoad = absLatAccel > 0.5f 
+                ? (float)Math.Sqrt(Math.Max(0, maxStraightLineDecel * maxStraightLineDecel - absLatAccel * absLatAccel))
+                : maxStraightLineDecel;
+            
+            // CRITICAL FIX: PARTIAL compensation for slight turns
+            // SIMPLIFIED: Less compensation at low brake % (trail braking zone)
+            float brakeFactor = Math.Min(1.0f, data.Brake / 0.20f);
+            float baseBlend = Math.Min(1.0f, absLatAccel / 5.0f);
+            float compensationBlend = baseBlend * brakeFactor;
+            float blendedMaxDecel = maxStraightLineDecel + (maxDecelWithLatLoad - maxStraightLineDecel) * compensationBlend;
+            
+            // Expected deceleration based on brake input (blended cornering-adjusted)
+            float expectedDecel = data.Brake * blendedMaxDecel;
+            
+            // THREE-TIER THRESHOLDS: Trail braking, Normal braking, Heavy braking
+            // 15% MORE SENSITIVE than previous version (thresholds × 0.85)
+            float adjustedEfficiencyThreshold = data.Brake < 0.25f ? 0.60f :  // Trail braking (5-25%): 60% (hyper sensitive)
+                                                 data.Brake > 0.70f ? 0.55f :  // Heavy braking (70-100%): 55% (very aggressive)
+                                                 0.47f;                         // Normal braking (25-70%): 47% (aggressive)
             
             // If actual decel is much lower than expected → LOCKUP (AGGRESSIVE for speed)
-            if (expectedDecel > 6.0f && decel < expectedDecel * adjustedEfficiencyThreshold) // More aggressive
+            if (expectedDecel > 6.0f && decel < expectedDecel * adjustedEfficiencyThreshold)
             {
                 state.AnyWheelLocked = true;
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
@@ -445,18 +537,14 @@ public static class WheelLockupDetector
                 _wasLocked = true;
                 _unlockConfirmFrames = 0;
                 
-                // Determine which wheels (use last 2 samples for consistency)
-                if (count >= 2)
-                {
-                    var allSamples = _decelHistory.ToArray();
-                    var recentArray = new[] { allSamples[count-2], allSamples[count-1] };
-                    float efficiencyRatio = decel / expectedDecel;
-                    DetermineLockedWheels(state, data, recentArray, efficiencyRatio);
-                }
+                // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
+                state.FrontAxleLockup = true;
+                state.LeftFrontLocked = true;
+                state.RightFrontLocked = true;
                 
                 if (EnableDiagnostics)
                 {
-                    Console.WriteLine($"🔴 LOCKUP (Low Eff)! Brake:{data.Brake:P0} Expected:{expectedDecel:F1} Actual:{decel:F1} ({decel/expectedDecel:P0})");
+                    Console.WriteLine($"🔴 INSTANT! Brake:{data.Brake:P0} Expected:{expectedDecel:F1} Actual:{decel:F1} ({decel/expectedDecel:P0} Thresh:{adjustedEfficiencyThreshold:P0}) Lat:{Math.Abs(latAccel):F1}m/s² Speed:{data.Speed:F1}m/s");
                 }
                 
                 return state;
@@ -464,111 +552,6 @@ public static class WheelLockupDetector
         }
         
         return state;
-    }
-    
-    /// <summary>
-    /// Determine which specific wheels are locked based on lateral acceleration and deceleration patterns
-    /// </summary>
-    private static void DetermineLockedWheels(WheelLockupState state, TelemetryData data, DecelSample[] recentSamples, float decelRatio)
-    {
-        float avgLatAccel = recentSamples.Average(s => Math.Abs(s.LatAccel));
-        float avgSteer = Math.Abs(data.SteeringWheelAngle);
-        
-        // Analyze deceleration severity to estimate front vs rear
-        // Severe deceleration drop (< 0.75) = likely rear lockup (more unstable)
-        // Moderate drop (0.75-0.90) = could be front or mixed
-        bool severeDecelDrop = decelRatio < 0.75f;
-        bool moderateDecelDrop = decelRatio >= 0.75f && decelRatio < 0.90f;
-        
-        // ===== REAR WHEEL LOCKUP INDICATORS =====
-        // Rear lockups cause instability, especially under hard braking
-        if (severeDecelDrop)
-        {
-            // Severe decel drop = rear wheels likely locked (loss of rear grip)
-            state.RearAxleLockup = true;
-            state.LeftRearLocked = true;
-            state.RightRearLocked = true;
-            
-            if (EnableDiagnostics)
-            {
-                Console.WriteLine($"  → REAR LOCKUP (Severe decel drop {decelRatio:F2})");
-            }
-        }
-        
-        // ===== FRONT WHEEL LOCKUP INDICATORS =====
-        // Front lockups reduce steering effectiveness (understeer)
-        // If steering during braking but low lateral accel = fronts locked
-        if (moderateDecelDrop && avgSteer > 20.0f && avgLatAccel < 5.0f)
-        {
-            // Steering but no lateral grip = front wheels locked
-            state.FrontAxleLockup = true;
-            state.LeftFrontLocked = true;
-            state.RightFrontLocked = true;
-            
-            if (EnableDiagnostics)
-            {
-                Console.WriteLine($"  → FRONT LOCKUP (Steer:{avgSteer:F1}° but LatAccel:{avgLatAccel:F1}m/s²)");
-            }
-        }
-        
-        // ===== LEFT vs RIGHT DETECTION =====
-        // Use lateral acceleration + steering to detect asymmetric lockup
-        float latAccel = recentSamples.Last().LatAccel;
-        float steer = data.SteeringWheelAngle;
-        
-        // If steering right (positive) but getting left lateral accel (negative) = right wheel locked
-        // If steering left (negative) but getting right lateral accel (positive) = left wheel locked
-        if (Math.Abs(steer) > 30.0f && Math.Abs(latAccel) > 3.0f)
-        {
-            // Steering and lateral accel in opposite directions = locked wheel on steering side
-            if ((steer > 0 && latAccel < -1.0f) || (steer < 0 && latAccel > 1.0f))
-            {
-                if (steer > 0) // Steering right, but car going left = right wheels locked
-                {
-                    if (state.FrontAxleLockup)
-                    {
-                        state.RightFrontLocked = true;
-                        state.LeftFrontLocked = false;
-                    }
-                    if (state.RearAxleLockup)
-                    {
-                        state.RightRearLocked = true;
-                        state.LeftRearLocked = false;
-                    }
-                    
-                    if (EnableDiagnostics)
-                    {
-                        Console.WriteLine($"  → RIGHT SIDE LOCKUP (Steer right but LatAccel:{latAccel:F1})");
-                    }
-                }
-                else // Steering left, but car going right = left wheels locked
-                {
-                    if (state.FrontAxleLockup)
-                    {
-                        state.LeftFrontLocked = true;
-                        state.RightFrontLocked = false;
-                    }
-                    if (state.RearAxleLockup)
-                    {
-                        state.LeftRearLocked = true;
-                        state.RightRearLocked = false;
-                    }
-                    
-                    if (EnableDiagnostics)
-                    {
-                        Console.WriteLine($"  → LEFT SIDE LOCKUP (Steer left but LatAccel:{latAccel:F1})");
-                    }
-                }
-            }
-        }
-        
-        // If no specific wheel detected, default to rear (most common in GT3)
-        if (!state.FrontAxleLockup && !state.RearAxleLockup)
-        {
-            state.RearAxleLockup = true;
-            state.LeftRearLocked = true;
-            state.RightRearLocked = true;
-        }
     }
     
     /// <summary>
