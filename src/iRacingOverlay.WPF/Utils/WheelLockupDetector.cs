@@ -56,14 +56,123 @@ public static class WheelLockupDetector
     /// </summary>
     public static float BrakeIncreaseThreshold { get; set; } = 0.03f;
     
+    // ===== BRAKE PRESSURE DETECTION THRESHOLDS =====
+    
+    /// <summary>
+    /// Minimum brake line pressure to consider (bar)
+    /// Below this, pressure readings may be unreliable
+    /// Default 10.0 bar (typical GT3 hard braking starts ~15-20 bar)
+    /// </summary>
+    public static float MinBrakePressure { get; set; } = 10.0f;
+    
+    /// <summary>
+    /// Pressure drop threshold indicating wheel lockup (bar)
+    /// When one wheel's pressure drops this much below average → locked
+    /// Default 3.0 bar = significant pressure drop (physics: locked wheel = friction loss = pressure drop)
+    /// </summary>
+    public static float PressureDropThreshold { get; set; } = 3.0f;
+    
+    /// <summary>
+    /// Minimum speed for pressure-based detection (m/s)
+    /// Below this speed, pressure detection is disabled (low-speed braking is less critical)
+    /// Default 20.0 m/s = 72 km/h (~45 mph)
+    /// </summary>
+    public static float MinPressureDetectionSpeed { get; set; } = 20.0f;
+    
+    // ===== BRAKE PRESSURE DETECTION METHOD =====
+    
+    /// <summary>
+    /// Detect wheel lockup via brake line pressure imbalance
+    /// PHYSICS: Locked wheel → sliding tire → friction drops → brake pressure drops
+    /// This is PREDICTIVE detection (detects pressure drop BEFORE deceleration inefficiency)
+    /// </summary>
+    private static WheelLockupState DetectPressureImbalance(TelemetryData data)
+    {
+        var state = new WheelLockupState();
+        
+        // Early exit: Only check at speed during hard braking
+        if (data.Brake < 0.7f || data.Speed < MinPressureDetectionSpeed)
+        {
+            if (EnableDiagnostics && data.Brake > 0.65f && data.Speed > MinPressureDetectionSpeed * 0.8f)
+            {
+                Console.WriteLine($"[PRESSURE] Early exit: Brake:{data.Brake:P0} (min:70%) Speed:{data.Speed:F1}m/s (min:{MinPressureDetectionSpeed:F1}m/s)");
+            }
+            return state;
+        }
+        
+        // Calculate average pressures per axle
+        float avgFrontPress = (data.LFbrakeLinePress + data.RFbrakeLinePress) / 2f;
+        float avgRearPress = (data.LRbrakeLinePress + data.RRbrakeLinePress) / 2f;
+        
+        // DEBUG: Log pressure readings when braking hard
+        if (EnableDiagnostics && data.Brake > 0.80f)
+        {
+            Console.WriteLine($"[PRESSURE DEBUG] Brake:{data.Brake:P0} Speed:{data.Speed:F1}m/s " +
+                            $"LF:{data.LFbrakeLinePress:F1} RF:{data.RFbrakeLinePress:F1} (AvgF:{avgFrontPress:F1}) " +
+                            $"LR:{data.LRbrakeLinePress:F1} RR:{data.RRbrakeLinePress:F1} (AvgR:{avgRearPress:F1})");
+        }
+        
+        // Detect individual wheel lockups via pressure drop
+        bool lfLocked = data.LFbrakeLinePress > MinBrakePressure && 
+                       (avgFrontPress - data.LFbrakeLinePress) > PressureDropThreshold;
+        
+        bool rfLocked = data.RFbrakeLinePress > MinBrakePressure && 
+                       (avgFrontPress - data.RFbrakeLinePress) > PressureDropThreshold;
+        
+        bool lrLocked = data.LRbrakeLinePress > MinBrakePressure && 
+                       (avgRearPress - data.LRbrakeLinePress) > PressureDropThreshold;
+        
+        bool rrLocked = data.RRbrakeLinePress > MinBrakePressure && 
+                       (avgRearPress - data.RRbrakeLinePress) > PressureDropThreshold;
+        
+        // Populate state if any wheel locked
+        if (lfLocked || rfLocked || lrLocked || rrLocked)
+        {
+            state.AnyWheelLocked = true;
+            state.LeftFrontLocked = lfLocked;
+            state.RightFrontLocked = rfLocked;
+            state.LeftRearLocked = lrLocked;
+            state.RightRearLocked = rrLocked;
+            
+            // Set axle flags
+            state.FrontAxleLockup = lfLocked || rfLocked;
+            state.RearAxleLockup = lrLocked || rrLocked;
+            
+            // Metadata
+            state.DetectionMethod = LockupDetectionMethod.PressureImbalance;
+            state.Confidence = LockupConfidence.High;
+            
+            // DEBUG: Log detailed pressure lockup info
+            if (EnableDiagnostics)
+            {
+                string wheels = $"{(lfLocked ? "LF " : "")}{(rfLocked ? "RF " : "")}{(lrLocked ? "LR " : "")}{(rrLocked ? "RR " : "")}";
+                Console.WriteLine($"🔴 PRESSURE LOCKUP! {wheels}| " +
+                                $"Front: LF:{data.LFbrakeLinePress:F1} RF:{data.RFbrakeLinePress:F1} (Avg:{avgFrontPress:F1} Drop>{PressureDropThreshold:F1}) | " +
+                                $"Rear: LR:{data.LRbrakeLinePress:F1} RR:{data.RRbrakeLinePress:F1} (Avg:{avgRearPress:F1} Drop>{PressureDropThreshold:F1})");
+            }
+        }
+        
+        return state;
+    }
+    
     // ===== PUBLIC DETECTION METHOD =====
     
     /// <summary>
-    /// Detect wheel lockup using deceleration inefficiency analysis
+    /// Detect wheel lockup using HYBRID detection: deceleration inefficiency + brake pressure imbalance
     /// </summary>
     public static WheelLockupState DetectLockup(TelemetryData data)
     {
         var state = new WheelLockupState();
+        
+        // ===== BRAKE PRESSURE DETECTION (Priority #0 - Most Accurate) =====
+        // Check brake pressure FIRST before deceleration analysis
+        // Pressure drop is PREDICTIVE (detects cause) vs decel drop is REACTIVE (measures effect)
+        var pressureState = DetectPressureImbalance(data);
+        if (pressureState.AnyWheelLocked)
+        {
+            // Pressure detection found lockup - return immediately for fastest response
+            return pressureState;
+        }
         
         // Early exit if not braking hard enough or moving fast enough
         // CRITICAL: If already hard braking, continue detection even if brake input drops!
