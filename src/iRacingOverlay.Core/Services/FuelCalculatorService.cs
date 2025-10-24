@@ -25,6 +25,9 @@ public class FuelCalculatorService
     // Fuel averaging service (Phase 1: Service Splitting)
     private readonly FuelAveragingService _fuelAveragingService;
     
+    // Fuel outlier detection service (Phase 2: Service Splitting)
+    private readonly FuelOutlierDetector _outlierDetector;
+    
     // EMA (Exponential Moving Average) tracking
     private float _emaValue = 0f;  // Current EMA value
     private bool _emaInitialized = false;  // Whether EMA has been initialized with first lap
@@ -82,6 +85,7 @@ public class FuelCalculatorService
     {
         _persistenceService = new SessionPersistenceService();
         _fuelAveragingService = new FuelAveragingService();
+        _outlierDetector = new FuelOutlierDetector();
     }
     
     /// <summary>
@@ -409,22 +413,21 @@ public class FuelCalculatorService
         }
         CurrentData.FuelConsistencyVariance = fuelConsistencyVariance;
         
-        // Session average with enhanced outlier filtering (still done inline for Phase 1)
+        // Session average with enhanced outlier filtering (Phase 2: Uses FuelOutlierDetector)
         float sessionAverage = 0f;
         if (validLaps.Count >= 3)
         {
             // Apply enhanced outlier detection (MAD + lap time + incidents)
-            var analyzedLaps = DetectOutliers(validLaps);
+            var analysis = _outlierDetector.DetectOutliers(validLaps);
             
             // Filter out flagged outliers for averaging
-            var cleanLaps = analyzedLaps.Where(l => !l.IsFlaggedAsOutlier).ToList();
+            var cleanLaps = analysis.CleanLaps;
             
             // Log outlier detection results
-            int flaggedCount = analyzedLaps.Count(l => l.IsFlaggedAsOutlier);
-            if (flaggedCount > 0)
+            if (analysis.OutlierCount > 0)
             {
-                LogDebug($"OUTLIER DETECTION: Flagged {flaggedCount}/{analyzedLaps.Count} laps:");
-                foreach (var outlier in analyzedLaps.Where(l => l.IsFlaggedAsOutlier))
+                LogDebug($"OUTLIER DETECTION: Flagged {analysis.OutlierCount}/{analysis.AnalyzedLaps.Count} laps:");
+                foreach (var outlier in analysis.AnalyzedLaps.Where(l => l.IsFlaggedAsOutlier))
                 {
                     LogDebug($"  Lap {outlier.LapNumber}: {outlier.FuelUsed:F3}L, {outlier.LapTime:F1}s - {outlier.OutlierReason}");
                 }
@@ -433,31 +436,19 @@ public class FuelCalculatorService
             // Fallback: If outlier filtering removed too many laps (>40%), use IQR method instead
             if (cleanLaps.Count < validLaps.Count * 0.6f)
             {
-                LogDebug($"WARNING: MAD filtering removed {flaggedCount}/{validLaps.Count} laps (>{40}%), falling back to IQR method");
+                LogDebug($"WARNING: MAD filtering removed {analysis.OutlierCount}/{validLaps.Count} laps (>40%), falling back to IQR method");
                 
-                // IQR fallback
-                var sortedFuel = validLaps.Select(l => l.FuelUsed).OrderBy(f => f).ToList();
-                int q1Index = sortedFuel.Count / 4;
-                int q3Index = (sortedFuel.Count * 3) / 4;
-                float q1 = sortedFuel[q1Index];
-                float q3 = sortedFuel[q3Index];
-                float iqr = q3 - q1;
-                
-                float lowerBound = Math.Max(0f, q1 - (1.5f * iqr));
-                float upperBound = q3 + (1.5f * iqr);
-                
-                cleanLaps = validLaps.Where(l => l.FuelUsed >= lowerBound && l.FuelUsed <= upperBound).ToList();
+                cleanLaps = _outlierDetector.ApplyIQRFallback(validLaps);
                 
                 // If IQR filtering still removed too many, use median filter
                 if (cleanLaps.Count < validLaps.Count * 0.7f)
                 {
-                    float median = sortedFuel[sortedFuel.Count / 2];
-                    cleanLaps = validLaps.Where(l => l.FuelUsed <= median * 1.5f).ToList();
+                    cleanLaps = _outlierDetector.ApplyMedianFilter(validLaps);
                     LogDebug($"IQR filtering also aggressive, using median filter: {cleanLaps.Count}/{validLaps.Count} laps");
                 }
                 else
                 {
-                    LogDebug($"IQR fallback: {cleanLaps.Count}/{validLaps.Count} laps, bounds: {lowerBound:F3}-{upperBound:F3}");
+                    LogDebug($"IQR fallback: {cleanLaps.Count}/{validLaps.Count} laps");
                 }
             }
             
@@ -2344,115 +2335,6 @@ public class FuelCalculatorService
     /// </summary>
     /// <param name="values">List of values to analyze</param>
     /// <returns>MAD value (median of absolute deviations from median)</returns>
-    private float CalculateMAD(List<float> values)
-    {
-        if (values.Count == 0)
-            return 0f;
-            
-        // Calculate median
-        var sorted = values.OrderBy(v => v).ToList();
-        float median = sorted[sorted.Count / 2];
-        
-        // Calculate absolute deviations from median
-        var deviations = values.Select(v => Math.Abs(v - median)).OrderBy(d => d).ToList();
-        
-        // Return median of deviations
-        return deviations[deviations.Count / 2];
-    }
-    
-    /// <summary>
-    /// Detect outliers using multiple methods and flag suspicious laps
-    /// Considers: MAD statistical outliers, lap time correlation, and incidents
-    /// NOTE: Incidents and off-track are part of racing - we flag but don't auto-exclude
-    /// </summary>
-    /// <param name="laps">List of laps to analyze</param>
-    /// <returns>List of laps with outlier flags set</returns>
-    private List<FuelLapHistory> DetectOutliers(List<FuelLapHistory> laps)
-    {
-        if (laps.Count < 3)
-            return laps; // Need at least 3 laps for meaningful outlier detection
-            
-        // Extract fuel values and lap times for analysis
-        var fuelValues = laps.Select(l => l.FuelUsed).ToList();
-        var lapTimes = laps.Where(l => l.LapTime > 0).Select(l => l.LapTime).ToList();
-        
-        // Calculate MAD for fuel consumption
-        float fuelMedian = fuelValues.OrderBy(f => f).ToList()[fuelValues.Count / 2];
-        float fuelMAD = CalculateMAD(fuelValues);
-        
-        // Calculate MAD for lap times (if available)
-        float lapTimeMedian = 0f;
-        float lapTimeMAD = 0f;
-        if (lapTimes.Count >= 3)
-        {
-            lapTimeMedian = lapTimes.OrderBy(t => t).ToList()[lapTimes.Count / 2];
-            lapTimeMAD = CalculateMAD(lapTimes);
-        }
-        
-        // MAD threshold: 3.0 = moderate (keeps fuel saving/incidents), 2.5 = strict
-        // Using 3.5 to be conservative - only flag extreme outliers
-        const float MAD_THRESHOLD = 3.5f;
-        
-        // Lap time correlation threshold: 15% deviation from median
-        // Allows for fuel saving (5-10% slower) but flags major incidents (>15% slower)
-        const float LAP_TIME_THRESHOLD = 0.15f;
-        
-        foreach (var lap in laps)
-        {
-            List<string> reasons = new();
-            
-            // Check MAD statistical outlier (fuel consumption)
-            if (fuelMAD > 0.001f) // Avoid division by zero
-            {
-                float fuelDeviation = Math.Abs(lap.FuelUsed - fuelMedian) / fuelMAD;
-                if (fuelDeviation > MAD_THRESHOLD)
-                {
-                    reasons.Add($"Fuel MAD={fuelDeviation:F1} (>{MAD_THRESHOLD})");
-                }
-            }
-            
-            // Check lap time correlation (if lap time available)
-            if (lap.LapTime > 0 && lapTimeMAD > 0.001f && lapTimeMedian > 0)
-            {
-                float lapTimeDeviation = (lap.LapTime - lapTimeMedian) / lapTimeMedian;
-                if (lapTimeDeviation > LAP_TIME_THRESHOLD)
-                {
-                    reasons.Add($"Lap time +{lapTimeDeviation * 100:F0}% slower");
-                }
-            }
-            
-            // Note incidents but don't auto-flag (they're part of racing)
-            // Just add to reason string for transparency
-            if (lap.HadIncident)
-            {
-                reasons.Add($"{lap.IncidentsDuringLap}x incident(s)");
-                // Don't set IsFlaggedAsOutlier - incidents alone don't make it invalid
-                // Only flag if ALSO statistically abnormal
-            }
-            
-            // Set outlier flag and reason
-            if (reasons.Count > 0)
-            {
-                // Only flag as outlier if there's a statistical reason (MAD or lap time)
-                // Incidents alone are not enough (they're normal in racing)
-                bool hasStatisticalReason = reasons.Any(r => r.Contains("MAD") || r.Contains("Lap time"));
-                
-                if (hasStatisticalReason)
-                {
-                    lap.IsFlaggedAsOutlier = true;
-                    lap.OutlierReason = string.Join(", ", reasons);
-                }
-                else
-                {
-                    // Just incidents, not a statistical outlier
-                    lap.IsFlaggedAsOutlier = false;
-                    lap.OutlierReason = string.Join(", ", reasons) + " (not flagged)";
-                }
-            }
-        }
-        
-        return laps;
-    }
     
     /// <summary>
     /// Reset all fuel calculations (call when session changes)
