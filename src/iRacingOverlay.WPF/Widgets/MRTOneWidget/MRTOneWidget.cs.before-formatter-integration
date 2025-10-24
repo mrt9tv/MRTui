@@ -693,9 +693,9 @@ public class MRTOneWidget : WidgetBase
         
         // Update labels for side boxes
         if (_leftField.HasValue)
-            _leftLabelText.Text = MRTOneDataFormatter.GetLabel(_leftField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _leftLabelText.Text = GetFieldLabel(_leftField.Value);
         if (_rightField.HasValue)
-            _rightLabelText.Text = MRTOneDataFormatter.GetLabel(_rightField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _rightLabelText.Text = GetFieldLabel(_rightField.Value);
         
         // Apply visibility
         ApplyVisibilitySettings();
@@ -907,9 +907,9 @@ public class MRTOneWidget : WidgetBase
         
         // Update labels
         if (_leftField.HasValue)
-            _leftLabelText.Text = MRTOneDataFormatter.GetLabel(_leftField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _leftLabelText.Text = GetFieldLabel(_leftField.Value);
         if (_rightField.HasValue)
-            _rightLabelText.Text = MRTOneDataFormatter.GetLabel(_rightField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _rightLabelText.Text = GetFieldLabel(_rightField.Value);
         
         // Force immediate UI refresh
         if (_lastTelemetryData != null)
@@ -918,6 +918,321 @@ public class MRTOneWidget : WidgetBase
         }
     }
     
+    private string GetFieldLabel(TelemetryField field)
+    {
+        string fieldKey = field.ToString();
+        
+        // Use custom label from settings if available, otherwise use default
+        if (AppSettings.Instance.CustomLabels.TryGetValue(fieldKey, out string? customLabel))
+        {
+            return customLabel;
+        }
+        
+        // Fallback to short, clean labels with units where appropriate
+        return field switch
+        {
+            // Engine & Controls
+            TelemetryField.Throttle => "THRTL",
+            TelemetryField.Brake => "BRAKE",
+            TelemetryField.ABSActive => "", // No label - "ABS" is the value itself
+            TelemetryField.WheelLock => "", // No label - "WHEEL LOCK" is the value itself
+            TelemetryField.BrakeBias => "BB",
+            TelemetryField.TractionControl => "TC",
+            TelemetryField.Clutch => "CLUTCH",
+            TelemetryField.RPM => "RPM",
+            TelemetryField.Gear => "GEAR",
+            
+            // Fuel (include units in label)
+            TelemetryField.FuelLevel => AppSettings.Instance.UseMetricUnits ? "FUEL (L)" : "FUEL (gal)",
+            TelemetryField.FuelPercent => "FUEL%",
+            
+            // Phase 2: Fuel Calculation Fields - Averages
+            TelemetryField.FuelAvgLast => AppSettings.Instance.UseMetricUnits ? "F/LAP (L)" : "F/LAP (gal)",
+            TelemetryField.FuelAvgL5 => AppSettings.Instance.UseMetricUnits ? "AVG5 (L)" : "AVG5 (gal)",
+            TelemetryField.FuelAvgL10 => AppSettings.Instance.UseMetricUnits ? "AVG10 (L)" : "AVG10 (gal)",
+            TelemetryField.FuelAvgSession => AppSettings.Instance.UseMetricUnits ? "AVGALL (L)" : "AVGALL (gal)",
+            TelemetryField.FuelMinPerLap => AppSettings.Instance.UseMetricUnits ? "MIN (L)" : "MIN (gal)",
+            TelemetryField.FuelMaxPerLap => AppSettings.Instance.UseMetricUnits ? "MAX (L)" : "MAX (gal)",
+            
+            // Phase 2: Fuel Calculation Fields - Laps Remaining
+            TelemetryField.FuelLapsRemainingL5 => "LAPS (L5)",
+            TelemetryField.FuelLapsRemainingL10 => "LAPS (L10)",
+            
+            // Phase 2: Fuel Calculation Fields - Strategy
+            TelemetryField.FuelNeededToFinish => AppSettings.Instance.UseMetricUnits ? "NEED (L)" : "NEED (gal)",
+            TelemetryField.FuelDeltaToFinish => AppSettings.Instance.UseMetricUnits ? "DELTA (L)" : "DELTA (gal)",
+            
+            // Phase 2: Fuel Calculation Fields - Safety Car Analysis
+            TelemetryField.FuelGreenAvg => AppSettings.Instance.UseMetricUnits ? "GREEN (L)" : "GREEN (gal)",
+            TelemetryField.FuelYellowAvg => AppSettings.Instance.UseMetricUnits ? "YELLOW (L)" : "YELLOW (gal)",
+            TelemetryField.FuelGreenLapsRemain => "LAPS (GRN)",
+            TelemetryField.FuelYellowLapsRemain => "LAPS (YEL)",
+            
+            // Temperatures (include units in label)
+            TelemetryField.WaterTemp => AppSettings.Instance.UseMetricUnits ? "WATER (°C)" : "W (°F)",
+            TelemetryField.OilTemp => AppSettings.Instance.UseMetricUnits ? "OIL (°C)" : "OIL (°F)",
+            TelemetryField.AirTemp => AppSettings.Instance.UseMetricUnits ? "AIR (°C)" : "AIR (°F)",
+            TelemetryField.TrackTemp => AppSettings.Instance.UseMetricUnits ? "TRACK (°C)" : "TRACK (°F)",
+            
+            // Speed
+            TelemetryField.Speed => AppSettings.Instance.UseMetricUnits ? "km/h" : "mph",
+            
+            // Timing
+            TelemetryField.LapNumber => "LAP",
+            TelemetryField.Position => "POS",
+            TelemetryField.ClassPosition => "P/C",
+            TelemetryField.LastLapTime => "LAST",
+            TelemetryField.BestLapTime => "BEST",
+            TelemetryField.CurrentLapTime => "CUR",
+            
+            _ => field.ToString().ToUpper()
+        };
+    }
+
+    /// <summary>
+    /// Validate and sanitize telemetry values to prevent displaying nonsensical data
+    /// Clamps values to reasonable ranges based on field type
+    /// </summary>
+    private static object ValidateTelemetryValue(TelemetryField field, object value)
+    {
+        return field switch
+        {
+            // Speed: clamp to 0-600 km/h (reasonable max for racing)
+            TelemetryField.Speed when value is float speed =>
+                Math.Clamp(speed, 0f, 166.67f),  // 166.67 m/s = 600 km/h
+
+            // RPM: clamp to 0-20000 (reasonable max for racing engines)
+            TelemetryField.RPM when value is float rpm =>
+                Math.Clamp(rpm, 0f, 20000f),
+
+            // Temperatures: clamp to -50°C to 250°C
+            TelemetryField.WaterTemp when value is float temp => Math.Clamp(temp, -50f, 250f),
+            TelemetryField.OilTemp when value is float temp => Math.Clamp(temp, -50f, 250f),
+            TelemetryField.AirTemp when value is float temp => Math.Clamp(temp, -50f, 100f),  // Narrower range for ambient
+            TelemetryField.TrackTemp when value is float temp => Math.Clamp(temp, -50f, 100f),
+
+            // Fuel: clamp to 0-500 liters (reasonable tank size)
+            TelemetryField.FuelLevel when value is float fuel => Math.Clamp(fuel, 0f, 500f),
+            TelemetryField.FuelAvgLast when value is float fuel => Math.Clamp(fuel, 0f, 50f),
+            TelemetryField.FuelAvgL5 when value is float fuel => Math.Clamp(fuel, 0f, 50f),
+            TelemetryField.FuelAvgL10 when value is float fuel => Math.Clamp(fuel, 0f, 50f),
+            TelemetryField.FuelAvgSession when value is float fuel => Math.Clamp(fuel, 0f, 50f),
+
+            // Percentages: clamp to 0-1 range
+            TelemetryField.Throttle when value is float throttle => Math.Clamp(throttle, 0f, 1f),
+            TelemetryField.Brake when value is float brake => Math.Clamp(brake, 0f, 1f),
+            TelemetryField.Clutch when value is float clutch => Math.Clamp(clutch, 0f, 1f),
+            TelemetryField.FuelPercent when value is float pct => Math.Clamp(pct, 0f, 1f),
+
+            // Brake bias: clamp to 0-100%
+            TelemetryField.BrakeBias when value is float bias => Math.Clamp(bias, 0f, 100f),
+
+            // Lap times: clamp to 0-600 seconds (10 minutes max)
+            TelemetryField.LastLapTime when value is float time => Math.Clamp(time, 0f, 600f),
+            TelemetryField.BestLapTime when value is float time => Math.Clamp(time, 0f, 600f),
+            TelemetryField.CurrentLapTime when value is float time => Math.Clamp(time, 0f, 600f),
+
+            // Position: clamp to 1-64 (max field size in iRacing)
+            TelemetryField.Position when value is int pos => Math.Clamp(pos, 1, 64),
+            TelemetryField.ClassPosition when value is int pos => Math.Clamp(pos, 1, 64),
+
+            // Lap number: clamp to 0-9999
+            TelemetryField.LapNumber when value is int lap => Math.Clamp(lap, 0, 9999),
+
+            // Gear: clamp to -1 (reverse) to 10 (reasonable max)
+            _ when field == TelemetryField.Gear && value is int gear => Math.Clamp(gear, -1, 10),
+
+            // Default: return value unchanged (no validation needed or unknown type)
+            _ => value
+        };
+    }
+
+    private string FormatFieldValue(TelemetryField field, object value, TelemetryData data)
+    {
+        // Validate and sanitize value before formatting
+        value = ValidateTelemetryValue(field, value);
+
+        return field switch
+        {
+            // Percentages (0-1 scale → 0-100%)
+            TelemetryField.Throttle when value is float throttle => $"{(int)(throttle * 100)}%",
+            TelemetryField.Brake when value is float brake => $"{(int)(brake * 100)}%",
+            TelemetryField.ABSActive when value is int abs => "ABS", // Display "ABS" as the value (no label)
+            TelemetryField.WheelLock when value is int lockup => "WHEEL\nLOCKUP", // Display "WHEEL" over "LOCKUP" (multi-line)
+            TelemetryField.BrakeBias when value is float bias => $"{bias:F1}%", // Display XX.X%
+            
+            // ⚠️ TC SCALE WARNING: TC value meaning is CAR-SPECIFIC!
+            // - Some cars: 0=OFF, higher=more TC (Dallara F3, LMP2)
+            // - Other cars: 12=OFF, lower=more TC (Ferrari 488 GT3)
+            // - See docs/TC_SCALE_INVESTIGATION.md for full details
+            // - Current implementation: Display raw value (matches iRacing behavior)
+            // BACKWARD COMPAT: Handle both int (new) and float (old binary)
+            // TextBlock centering handles alignment - no need for manual spacing
+            TelemetryField.TractionControl => value switch
+            {
+                int tc => tc < 0 ? "N/A" : tc == 0 ? "OFF" : $"{tc}",
+                float tcf => tcf < 0 ? "N/A" : tcf == 0 ? "OFF" : $"{(int)tcf}",
+                _ => "---"
+            },
+            TelemetryField.Clutch when value is float clutch => $"{(int)(clutch * 100)}%",
+            TelemetryField.FuelPercent when value is float fuelPct => $"{(int)(fuelPct * 100)}%",
+            
+            // Fuel (NO units - they're in the label now)
+            // Force invariant culture to always use "." as decimal separator
+            TelemetryField.FuelLevel when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            
+            // Phase 2: Fuel Calculation Fields
+            TelemetryField.FuelAvgLast when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelAvgL5 when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelAvgL10 when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelAvgSession when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelMinPerLap when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelMaxPerLap when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelGreenAvg when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelYellowAvg when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            
+            // Phase 2: Fuel Laps Remaining (show 1 decimal: "12.5")
+            TelemetryField.FuelLapsRemainingL5 when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelLapsRemainingL10 when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelGreenLapsRemain when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelYellowLapsRemain when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            
+            // Phase 2: Fuel Strategy (delta can be negative, show +/-)
+            TelemetryField.FuelNeededToFinish when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelDeltaToFinish when value is float fuel => 
+                (fuel >= 0 ? "+" : "") + (AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
+            
+            // Temperatures (NO units or decimals - units are in label)
+            TelemetryField.WaterTemp when value is float temp => 
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)UnitConversions.CelsiusToFahrenheit(temp)}",
+            TelemetryField.OilTemp when value is float temp => 
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)UnitConversions.CelsiusToFahrenheit(temp)}",
+            TelemetryField.AirTemp when value is float temp => 
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)UnitConversions.CelsiusToFahrenheit(temp)}",
+            TelemetryField.TrackTemp when value is float temp => 
+                AppSettings.Instance.UseMetricUnits ? $"{(int)temp}" : $"{(int)UnitConversions.CelsiusToFahrenheit(temp)}",
+            
+            // Speed (no units needed - handled by label)
+            TelemetryField.Speed when value is float speedMs =>
+                AppSettings.Instance.UseMetricUnits ? $"{(int)UnitConversions.MpsToKmh(speedMs)}" : $"{(int)UnitConversions.MpsToMph(speedMs)}",
+            
+            // RPM (no units needed - handled by label)
+            TelemetryField.RPM when value is float rpm => $"{(int)rpm}",
+            
+            // Gear (special handling)
+            TelemetryField.Gear => data.Gear switch
+            {
+                -1 => "R",
+                0 => "N",
+                _ => data.Gear.ToString()
+            },
+            
+            // Position (with "P" prefix - LivePosition is already 1-based)
+            TelemetryField.Position when value is int pos => $"P{pos}",
+            TelemetryField.ClassPosition when value is int pos => $"P{pos}",
+            
+            // Lap times (formatted as mm:ss.xxx)
+            TelemetryField.LastLapTime when value is float time => FormatLapTime(time),
+            TelemetryField.BestLapTime when value is float time => FormatLapTime(time),
+            TelemetryField.CurrentLapTime when value is float time => FormatLapTime(time),
+            
+            // Lap numbers
+            TelemetryField.LapNumber when value is int lap => $"{lap}",
+            
+            // Default fallback
+            _ => value?.ToString() ?? "-"
+        };
+    }
+    
+    /// <summary>
+    /// Format lap time as mm:ss.xxx
+    /// </summary>
+    private string FormatLapTime(float seconds)
+    {
+        if (seconds <= 0) return "--:--.---";
+        
+        int minutes = (int)(seconds / 60);
+        float remainingSeconds = seconds % 60;
+        // Use invariant culture to ensure period (.) separator instead of comma (,)
+        return $"{minutes}:{remainingSeconds.ToString("00.000", System.Globalization.CultureInfo.InvariantCulture)}";
+    }
+    
+    private System.Windows.Media.Color GetValueColor(TelemetryField field, object value, TelemetryData data)
+    {
+        // Handle ABS (int value: 0 or 1)
+        if (field == TelemetryField.ABSActive && value is int absValue)
+        {
+            return absValue == 1 ? Colors.Yellow : _primaryColor; // Yellow when ON, Teal when OFF
+        }
+        
+        // Handle Wheel Lockup (int value: 0 = no lockup, 1 = lockup detected)
+        // INACTIVE = Teal @ 0.3 opacity, LOCKED = Red @ 1.0 opacity (color + opacity both change)
+        if (field == TelemetryField.WheelLock && value is int lockupValue)
+        {
+            return lockupValue == 1 ? Colors.Red : _primaryColor; // Red when LOCKED, Teal when inactive
+        }
+        
+        // Handle Traction Control (float value: -1 = N/A, 0 = OFF, >0 = active level)
+        if (field == TelemetryField.TractionControl && value is float tcValue)
+        {
+            // Always return teal (opacity is handled separately in UpdateUI)
+            if (tcValue < 0) return _primaryColor;      // Teal when N/A (with 0.3 opacity set in UpdateUI)
+            return tcValue == 0 ? _secondaryColor : _primaryColor; // Orange when OFF, Teal when active
+        }
+        
+        if (value is not float floatValue)
+            return _primaryColor; // Default to teal
+        
+        return field switch
+        {
+            // Water temp: Red >100°C, Yellow >90°C (or Red >212°F, Yellow >194°F)
+            TelemetryField.WaterTemp when floatValue > 100 => Colors.Red,
+            TelemetryField.WaterTemp when floatValue > 90 => Colors.Yellow,
+            
+            // Oil temp: Red >120°C, Yellow >110°C (or Red >248°F, Yellow >230°F)
+            TelemetryField.OilTemp when floatValue > 120 => Colors.Red,
+            TelemetryField.OilTemp when floatValue > 110 => Colors.Yellow,
+            
+            // Fuel: Red <5L (1.3gal), Yellow <10L (2.6gal)
+            // Note: floatValue is always in liters from SDK
+            TelemetryField.FuelLevel when floatValue < 5 => Colors.Red,
+            TelemetryField.FuelLevel when floatValue < 10 => Colors.Yellow,
+            
+            _ => _primaryColor // Default to teal
+        };
+    }
     
     private void UpdateCenterFontSize()
     {
@@ -1085,8 +1400,8 @@ public class MRTOneWidget : WidgetBase
         if (_leftField.HasValue)
         {
             var leftValue = TelemetryDataMapper.GetValue(_leftField.Value, data, _telemetryService) ?? 0;
-            _leftValueText.Text = MRTOneDataFormatter.FormatValue(_leftField.Value, leftValue, data, AppSettings.Instance.UseMetricUnits);
-            _leftValueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(_leftField.Value, leftValue, data, _primaryColor, _secondaryColor));
+            _leftValueText.Text = FormatFieldValue(_leftField.Value, leftValue, data);
+            _leftValueText.Foreground = new SolidColorBrush(GetValueColor(_leftField.Value, leftValue, data));
             
             // ABS special handling: Fade to background when inactive, bright when active
             // Only update opacity if ABS state actually changed (prevents flicker from rapid SDK updates)
@@ -1149,15 +1464,15 @@ public class MRTOneWidget : WidgetBase
             }
             
             // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
-            _leftLabelText.Text = MRTOneDataFormatter.GetLabel(_leftField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _leftLabelText.Text = GetFieldLabel(_leftField.Value);
         }
         
         // Update RIGHT side box
         if (_rightField.HasValue)
         {
             var rightValue = TelemetryDataMapper.GetValue(_rightField.Value, data, _telemetryService) ?? 0;
-            _rightValueText.Text = MRTOneDataFormatter.FormatValue(_rightField.Value, rightValue, data, AppSettings.Instance.UseMetricUnits);
-            _rightValueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(_rightField.Value, rightValue, data, _primaryColor, _secondaryColor));
+            _rightValueText.Text = FormatFieldValue(_rightField.Value, rightValue, data);
+            _rightValueText.Foreground = new SolidColorBrush(GetValueColor(_rightField.Value, rightValue, data));
             
             // ABS special handling: Fade to background when inactive, bright when active
             // Only update opacity if ABS state actually changed (prevents flicker from rapid SDK updates)
@@ -1220,7 +1535,7 @@ public class MRTOneWidget : WidgetBase
             }
             
             // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
-            _rightLabelText.Text = MRTOneDataFormatter.GetLabel(_rightField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _rightLabelText.Text = GetFieldLabel(_rightField.Value);
         }
         
         // PRIORITY 1: Pit limiter (if enabled) overrides RPM zone colors - PHASE 2: Enhancement #4
@@ -1296,7 +1611,7 @@ public class MRTOneWidget : WidgetBase
         var value = TelemetryDataMapper.GetValue(field, data, _telemetryService);
         
         // Use consistent formatting functions
-        valueText.Text = MRTOneDataFormatter.FormatValue(field, value ?? 0, data, AppSettings.Instance.UseMetricUnits);
+        valueText.Text = FormatFieldValue(field, value ?? 0, data);
         
         // Special color handling for Gear (R=Red, N=Gray, forward gears=Teal)
         if (field == TelemetryField.Gear && value is int gear)
@@ -1328,7 +1643,7 @@ public class MRTOneWidget : WidgetBase
         }
         else
         {
-            valueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(field, value ?? 0, data, _primaryColor, _secondaryColor));
+            valueText.Foreground = new SolidColorBrush(GetValueColor(field, value ?? 0, data));
         }
         
         // Update label if present
@@ -1341,7 +1656,7 @@ public class MRTOneWidget : WidgetBase
             }
             else
             {
-                labelText.Text = MRTOneDataFormatter.GetLabel(field, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+                labelText.Text = GetFieldLabel(field);
                 labelText.Foreground = new SolidColorBrush(_primaryColor);
                 labelText.Visibility = Visibility.Visible;
             }

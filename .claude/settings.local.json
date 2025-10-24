@@ -3,7 +3,8 @@
     "allow": [
       "Bash(dotnet run:*)",
       "Bash(find docs/ -name \"*.md\" -type f -exec wc -l {} +)",
-      "Bash(cat global.json)"
+      "Bash(cat global.json)",
+      "Bash(dotnet build:*)"
     ],
     "deny": [],
     "ask": []
