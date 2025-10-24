@@ -1,4 +1,5 @@
 using iRacingOverlay.Core.Models;
+using iRacingOverlay.Core.Services.Fuel;
 
 namespace iRacingOverlay.Core.Services;
 
@@ -20,6 +21,9 @@ public class FuelCalculatorService
     
     // Stint tracking for StintAverage calculation
     private int _stintStartLapNumber = 0;  // Lap number when current stint started (after pit exit)
+    
+    // Fuel averaging service (Phase 1: Service Splitting)
+    private readonly FuelAveragingService _fuelAveragingService;
     
     // EMA (Exponential Moving Average) tracking
     private float _emaValue = 0f;  // Current EMA value
@@ -77,6 +81,7 @@ public class FuelCalculatorService
     public FuelCalculatorService()
     {
         _persistenceService = new SessionPersistenceService();
+        _fuelAveragingService = new FuelAveragingService();
     }
     
     /// <summary>
@@ -372,6 +377,7 @@ public class FuelCalculatorService
     
     /// <summary>
     /// Calculate all fuel averages from lap history
+    /// Phase 1: Uses FuelAveragingService for most calculations, keeps outlier detection inline
     /// </summary>
     private void CalculateAverages()
     {
@@ -392,43 +398,19 @@ public class FuelCalculatorService
             return;
         }
         
-        CurrentData.HasSufficientData = validLaps.Count >= 2;
-        
-        // Last lap average (most recent completed lap)
-        CurrentData.AvgFuelPerLap_Last = validLaps.LastOrDefault()?.FuelUsed ?? 0f;
-        LogDebug($"AvgFuelPerLap_Last = {CurrentData.AvgFuelPerLap_Last:F4}L");
-        
-        // Last 5 laps average (exponentially weighted for smoother, more responsive predictions)
-        var last5 = validLaps.TakeLast(5).ToList();
-        if (last5.Count > 0)
+        // Calculate fuel consistency variance for EMA adaptive alpha
+        float fuelConsistencyVariance = 0f;
+        if (validLaps.Count >= 5)
         {
-            // Use exponential weighting: most recent lap has highest influence
-            // Weights: [1.0, 1.15, 1.3, 1.45, 1.6] (oldest to newest)
-            // This gives 27% weight to most recent lap, smoothly decreasing to 17% for 5th lap back
-            // FIXED: Reduced from 0.2f to 0.15f to limit outlier influence (was 32% → now 27%)
-            float totalWeight = 0f;
-            float weightedSum = 0f;
-            for (int i = 0; i < last5.Count; i++)
-            {
-                float weight = 1.0f + (i * 0.15f); // Reduced weight increment for more balanced distribution
-                weightedSum += last5[i].FuelUsed * weight;
-                totalWeight += weight;
-            }
-            CurrentData.AvgFuelPerLap_L5 = weightedSum / totalWeight;
+            var last5 = validLaps.TakeLast(5).ToList();
+            float mean = last5.Average(l => l.FuelUsed);
+            float variance = last5.Sum(l => (float)Math.Pow(l.FuelUsed - mean, 2)) / last5.Count;
+            fuelConsistencyVariance = (float)Math.Sqrt(variance);
         }
-        else
-        {
-            CurrentData.AvgFuelPerLap_L5 = 0f;
-        }
-        LogDebug($"AvgFuelPerLap_L5 = {CurrentData.AvgFuelPerLap_L5:F4}L (weighted from {last5.Count} laps)");
+        CurrentData.FuelConsistencyVariance = fuelConsistencyVariance;
         
-        // Last 10 laps average (simple average for longer-term trend)
-        var last10 = validLaps.TakeLast(10).ToList();
-        CurrentData.AvgFuelPerLap_L10 = last10.Count > 0 ? last10.Average(l => l.FuelUsed) : 0f;
-        LogDebug($"AvgFuelPerLap_L10 = {CurrentData.AvgFuelPerLap_L10:F4}L (from {last10.Count} laps)");
-        
-        // Session average with enhanced outlier filtering
-        // Phase 2: Multi-method outlier detection (MAD + lap time correlation + incident tracking)
+        // Session average with enhanced outlier filtering (still done inline for Phase 1)
+        float sessionAverage = 0f;
         if (validLaps.Count >= 3)
         {
             // Apply enhanced outlier detection (MAD + lap time + incidents)
@@ -449,12 +431,11 @@ public class FuelCalculatorService
             }
             
             // Fallback: If outlier filtering removed too many laps (>40%), use IQR method instead
-            // This prevents over-filtering in races with legitimate fuel saving or variable conditions
             if (cleanLaps.Count < validLaps.Count * 0.6f)
             {
                 LogDebug($"WARNING: MAD filtering removed {flaggedCount}/{validLaps.Count} laps (>{40}%), falling back to IQR method");
                 
-                // IQR fallback: Calculate interquartile range for robust outlier detection
+                // IQR fallback
                 var sortedFuel = validLaps.Select(l => l.FuelUsed).OrderBy(f => f).ToList();
                 int q1Index = sortedFuel.Count / 4;
                 int q3Index = (sortedFuel.Count * 3) / 4;
@@ -462,8 +443,7 @@ public class FuelCalculatorService
                 float q3 = sortedFuel[q3Index];
                 float iqr = q3 - q1;
                 
-                // Outlier thresholds: Q1 - 1.5*IQR to Q3 + 1.5*IQR (standard statistical method)
-                float lowerBound = Math.Max(0f, q1 - (1.5f * iqr)); // Fuel can't be negative
+                float lowerBound = Math.Max(0f, q1 - (1.5f * iqr));
                 float upperBound = q3 + (1.5f * iqr);
                 
                 cleanLaps = validLaps.Where(l => l.FuelUsed >= lowerBound && l.FuelUsed <= upperBound).ToList();
@@ -481,165 +461,62 @@ public class FuelCalculatorService
                 }
             }
             
-            CurrentData.AvgFuelPerLap_Session = cleanLaps.Count > 0 
+            sessionAverage = cleanLaps.Count > 0 
                 ? cleanLaps.Average(l => l.FuelUsed) 
                 : validLaps.Average(l => l.FuelUsed);
             
-            LogDebug($"AvgFuelPerLap_Session = {CurrentData.AvgFuelPerLap_Session:F4}L (from {cleanLaps.Count}/{validLaps.Count} laps after outlier detection)");
+            LogDebug($"AvgFuelPerLap_Session = {sessionAverage:F4}L (from {cleanLaps.Count}/{validLaps.Count} laps after outlier detection)");
         }
         else
         {
             // Not enough data for outlier detection, use simple average
-            CurrentData.AvgFuelPerLap_Session = validLaps.Average(l => l.FuelUsed);
-            LogDebug($"AvgFuelPerLap_Session = {CurrentData.AvgFuelPerLap_Session:F4}L (from {validLaps.Count} laps, no filtering)");
+            sessionAverage = validLaps.Average(l => l.FuelUsed);
+            LogDebug($"AvgFuelPerLap_Session = {sessionAverage:F4}L (from {validLaps.Count} laps, no filtering)");
         }
         
-        // Min/Max fuel per lap (track extremes for strategic planning)
-        CurrentData.MinFuelPerLap = validLaps.Min(l => l.FuelUsed);
-        CurrentData.MaxFuelPerLap = validLaps.Max(l => l.FuelUsed);
-        LogDebug($"Min/Max = {CurrentData.MinFuelPerLap:F4}L / {CurrentData.MaxFuelPerLap:F4}L (range: {CurrentData.MaxFuelPerLap - CurrentData.MinFuelPerLap:F4}L)");
+        // PHASE 1: Use FuelAveragingService for all averaging calculations
+        var averages = _fuelAveragingService.Calculate(
+            _lapHistory, 
+            validLaps, 
+            _stintStartLapNumber,
+            fuelConsistencyVariance);
         
-        // Green flag average (for racing conditions)
-        var greenLaps = validLaps.Where(l => l.IsGreenFlagLap).ToList();
-        CurrentData.GreenFlagLapCount = greenLaps.Count;
-        CurrentData.GreenFlagAverage = greenLaps.Count > 0 ? greenLaps.Average(l => l.FuelUsed) : 0f;
-        LogDebug($"GreenFlagAverage = {CurrentData.GreenFlagAverage:F4}L (from {CurrentData.GreenFlagLapCount} laps)");
+        // Map results to CurrentData
+        CurrentData.HasSufficientData = averages.HasSufficientData;
+        CurrentData.WarningMessage = averages.WarningMessage;
+        CurrentData.AvgFuelPerLap_Last = averages.Last;
+        CurrentData.AvgFuelPerLap_L5 = averages.L5;
+        CurrentData.AvgFuelPerLap_L10 = averages.L10;
+        CurrentData.AvgFuelPerLap_Session = sessionAverage; // Use outlier-filtered session average
+        CurrentData.MinFuelPerLap = averages.Min;
+        CurrentData.MaxFuelPerLap = averages.Max;
+        CurrentData.AvgFuelPerLap_EMA = averages.EMA;
+        CurrentData.AvgFuelPerLap_GreenOnly = averages.GreenOnly;
+        CurrentData.GreenFlagLapCount = averages.GreenFlagLapCount;
+        CurrentData.GreenFlagAverage = averages.GreenOnly;
+        CurrentData.YellowFlagLapCount = averages.YellowFlagLapCount;
+        CurrentData.YellowFlagAverage = averages.YellowFlagAverage;
+        CurrentData.AvgFuelPerLap_Stint = averages.Stint;
+        CurrentData.StintLapCount = averages.StintLapCount;
+        CurrentData.AvgFuelPerLap_Adaptive = averages.Adaptive;
+        CurrentData.AvgFuelPerLap_PaceLaps = averages.PaceLaps;
+        CurrentData.PaceLapCount = averages.PaceLapCount;
+        CurrentData.AverageLapTime = averages.AverageLapTime;
         
-        // Yellow flag average (for caution periods)
-        var yellowLaps = validLaps.Where(l => l.IsYellowFlagLap).ToList();
-        CurrentData.YellowFlagLapCount = yellowLaps.Count;
-        CurrentData.YellowFlagAverage = yellowLaps.Count > 0 ? yellowLaps.Average(l => l.FuelUsed) : 0f;
-        LogDebug($"YellowFlagAverage = {CurrentData.YellowFlagAverage:F4}L (from {CurrentData.YellowFlagLapCount} laps)");
-        
-        // ===== NEW ADVANCED AVERAGING METHODS =====
-
-        // 1. Exponential Moving Average (EMA) - smoother transitions, responsive to trends
-        // Formula: EMA = (CurrentValue * Alpha) + (PreviousEMA * (1 - Alpha))
-        // ENHANCED: Adaptive alpha based on fuel consistency (variance)
-        if (validLaps.Count > 0)
-        {
-            var mostRecentLap = validLaps.Last();
-            if (!_emaInitialized)
-            {
-                // Initialize EMA with first lap value
-                _emaValue = mostRecentLap.FuelUsed;
-                _emaInitialized = true;
-                LogDebug($"EMA INITIALIZED: {_emaValue:F4}L");
-            }
-            else
-            {
-                // Calculate adaptive alpha based on fuel consistency variance (CurrentData.FuelConsistencyVariance)
-                // More consistent driving → higher alpha (more responsive)
-                // More variable driving → lower alpha (smoother, less reactive to outliers)
-                float adaptiveAlpha = CurrentData.FuelConsistencyVariance switch
-                {
-                    < 0.1f => 0.5f,  // Very consistent (±0.1L) → highly responsive (50% recent)
-                    < 0.2f => 0.4f,  // Normal consistency (±0.2L) → balanced (40% recent)
-                    < 0.3f => 0.3f,  // Variable (±0.3L) → smoother (30% recent)
-                    _ => 0.2f        // Very variable (±0.3L+) → very smooth (20% recent)
-                };
-
-                // Update EMA with adaptive exponential smoothing
-                _emaValue = (mostRecentLap.FuelUsed * adaptiveAlpha) + (_emaValue * (1 - adaptiveAlpha));
-                CurrentData.AvgFuelPerLap_EMA = _emaValue;
-                LogDebug($"AvgFuelPerLap_EMA = {CurrentData.AvgFuelPerLap_EMA:F4}L (adaptive alpha={adaptiveAlpha:F2}, variance={CurrentData.FuelConsistencyVariance:F3}L)");
-            }
-        }
-        else
-        {
-            CurrentData.AvgFuelPerLap_EMA = 0f;
-        }
-        
-        // 2. Green Flag Only Average - uses existing GreenFlagAverage calculation
-        // This excludes all yellow/caution laps for pure race pace fuel consumption
-        CurrentData.AvgFuelPerLap_GreenOnly = CurrentData.GreenFlagAverage;
+        // Log calculated averages
+        LogDebug($"AvgFuelPerLap_Last = {CurrentData.AvgFuelPerLap_Last:F4}L");
+        LogDebug($"AvgFuelPerLap_L5 = {CurrentData.AvgFuelPerLap_L5:F4}L");
+        LogDebug($"AvgFuelPerLap_L10 = {CurrentData.AvgFuelPerLap_L10:F4}L");
+        LogDebug($"Min/Max = {CurrentData.MinFuelPerLap:F4}L / {CurrentData.MaxFuelPerLap:F4}L");
+        LogDebug($"AvgFuelPerLap_EMA = {CurrentData.AvgFuelPerLap_EMA:F4}L");
         LogDebug($"AvgFuelPerLap_GreenOnly = {CurrentData.AvgFuelPerLap_GreenOnly:F4}L (from {CurrentData.GreenFlagLapCount} green laps)");
+        LogDebug($"AvgFuelPerLap_Stint = {CurrentData.AvgFuelPerLap_Stint:F4}L (from {CurrentData.StintLapCount} laps since lap {_stintStartLapNumber})");
+        LogDebug($"AvgFuelPerLap_Adaptive = {CurrentData.AvgFuelPerLap_Adaptive:F4}L");
+        LogDebug($"AverageLapTime = {CurrentData.AverageLapTime:F4}s");
         
-        // 3. Stint Average - fuel consumption since last pit stop
-        var stintLaps = validLaps.Where(l => l.LapNumber > _stintStartLapNumber).ToList();
-        CurrentData.StintLapCount = stintLaps.Count;
-        if (stintLaps.Count > 0)
+        if (CurrentData.PaceLapCount > 0)
         {
-            CurrentData.AvgFuelPerLap_Stint = stintLaps.Average(l => l.FuelUsed);
-            LogDebug($"AvgFuelPerLap_Stint = {CurrentData.AvgFuelPerLap_Stint:F4}L (from {stintLaps.Count} laps since lap {_stintStartLapNumber})");
-        }
-        else
-        {
-            // No stint data yet, fallback to L5 average
-            CurrentData.AvgFuelPerLap_Stint = CurrentData.AvgFuelPerLap_L5;
-            LogDebug($"AvgFuelPerLap_Stint = {CurrentData.AvgFuelPerLap_Stint:F4}L (fallback to L5, no stint laps yet)");
-        }
-        
-        // 4. Adaptive Weighted Average - adjusts weighting based on fuel consistency
-        // Tight weighting if fuel use is consistent, loose weighting if variable
-        var last5ForAdaptive = validLaps.TakeLast(5).ToList();
-        if (last5ForAdaptive.Count >= 3)
-        {
-            // Calculate standard deviation of last 5 laps to measure consistency
-            float mean = last5ForAdaptive.Average(l => l.FuelUsed);
-            float variance = last5ForAdaptive.Sum(l => (float)Math.Pow(l.FuelUsed - mean, 2)) / last5ForAdaptive.Count;
-            float stdDev = (float)Math.Sqrt(variance);
-            
-            // Coefficient of variation (CV) = StdDev / Mean
-            // Low CV (<0.05) = very consistent → use tight weights (favor recent laps heavily)
-            // High CV (>0.15) = variable → use loose weights (spread weight more evenly)
-            float cv = mean > 0 ? stdDev / mean : 0f;
-            
-            // Adaptive weight spread: CV < 0.05 → tight (0.3), CV > 0.15 → loose (0.1)
-            float weightSpread = cv < 0.05f ? 0.3f : cv > 0.15f ? 0.1f : 0.2f;
-            
-            // Apply adaptive weighting
-            float totalWeight = 0f;
-            float weightedSum = 0f;
-            for (int i = 0; i < last5ForAdaptive.Count; i++)
-            {
-                float weight = 1.0f + (i * weightSpread);  // Adaptive weight based on consistency
-                weightedSum += last5ForAdaptive[i].FuelUsed * weight;
-                totalWeight += weight;
-            }
-            CurrentData.AvgFuelPerLap_Adaptive = weightedSum / totalWeight;
-            LogDebug($"AvgFuelPerLap_Adaptive = {CurrentData.AvgFuelPerLap_Adaptive:F4}L (CV={cv:F3}, weightSpread={weightSpread:F2}, from {last5ForAdaptive.Count} laps)");
-        }
-        else
-        {
-            // Not enough data for adaptive weighting, fallback to L5
-            CurrentData.AvgFuelPerLap_Adaptive = CurrentData.AvgFuelPerLap_L5;
-            LogDebug($"AvgFuelPerLap_Adaptive = {CurrentData.AvgFuelPerLap_Adaptive:F4}L (fallback to L5, need 3+ laps)");
-        }
-        
-        // Calculate average lap time for time-based sessions
-        if (validLaps.Count > 0)
-        {
-            var lapsWithTime = validLaps.Where(l => l.LapTime > 0).ToList();
-            if (lapsWithTime.Count > 0)
-            {
-                // Use weighted average for lap time (same as L5 fuel: recent laps weighted more)
-                var recentLaps = lapsWithTime.TakeLast(5).ToList();
-                float totalWeight = 0f;
-                float weightedSum = 0f;
-                for (int i = 0; i < recentLaps.Count; i++)
-                {
-                    float weight = 1.0f + (i * 0.2f);
-                    weightedSum += recentLaps[i].LapTime * weight;
-                    totalWeight += weight;
-                }
-                CurrentData.AverageLapTime = weightedSum / totalWeight;
-                LogDebug($"AverageLapTime = {CurrentData.AverageLapTime:F4}s (weighted from {recentLaps.Count} laps)");
-            }
-        }
-        
-        // Pace lap fuel consumption tracking (separate from race laps)
-        var paceLaps = _lapHistory.Where(l => l.IsValidPaceLap).ToList();
-        CurrentData.PaceLapCount = paceLaps.Count;
-        if (paceLaps.Count > 0)
-        {
-            CurrentData.AvgFuelPerLap_PaceLaps = paceLaps.Average(l => l.FuelUsed);
-            LogDebug($"PaceLapAverage = {CurrentData.AvgFuelPerLap_PaceLaps:F4}L (from {CurrentData.PaceLapCount} pace laps, ~{(CurrentData.AvgFuelPerLap_PaceLaps / Math.Max(0.01f, CurrentData.AvgFuelPerLap_Session) * 100):F0}% of race pace)");
-        }
-        else
-        {
-            CurrentData.AvgFuelPerLap_PaceLaps = 0f;
-            LogDebug("No pace laps recorded yet");
+            LogDebug($"PaceLapAverage = {CurrentData.AvgFuelPerLap_PaceLaps:F4}L (from {CurrentData.PaceLapCount} pace laps)");
         }
         
         // Total fuel used
@@ -2602,6 +2479,9 @@ public class FuelCalculatorService
         _currentPitStop = null;
         _pitState = PitStopState.NotOnPitRoad;
         _sessionStatsLoaded = false;
+        
+        // Phase 1: Reset FuelAveragingService EMA state
+        _fuelAveragingService.Reset();
     }
     
     /// <summary>
