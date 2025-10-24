@@ -46,10 +46,9 @@ public class OverlayViewModel : INotifyPropertyChanged
         // Initialize widget list with all available widget types
         Widgets = new ObservableCollection<WidgetItemViewModel>
         {
-            new WidgetItemViewModel("MRT One", WidgetType.MRTOne, "🥇", _widgetManager)
-            // DataWidget and FuelWidget hidden for now
-            // new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
-            // new WidgetItemViewModel("Fuel Calculator", WidgetType.Fuel, "⛽", _widgetManager)
+            new WidgetItemViewModel("MRT One", WidgetType.MRTOne, "🥇", _widgetManager),
+            new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
+            new WidgetItemViewModel("Fuel Assist", WidgetType.Fuel, "⛽", _widgetManager)
         };
 
         // Subscribe to widget manager events
@@ -296,6 +295,20 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         "Clutch",
         "FuelLevel",
         "FuelPercent",
+        "FuelAvgLast",        // Phase 2: Last lap fuel usage
+        "FuelAvgL5",          // Phase 2: L5 average fuel usage
+        "FuelAvgL10",         // Phase 2: L10 average fuel usage
+        "FuelAvgSession",     // Phase 2: Session average fuel usage
+        "FuelMinPerLap",      // Phase 2: Minimum fuel per lap
+        "FuelMaxPerLap",      // Phase 2: Maximum fuel per lap
+        "FuelLapsRemainingL5",   // Phase 2: Laps remaining (L5 avg)
+        "FuelLapsRemainingL10",  // Phase 2: Laps remaining (L10 avg)
+        "FuelNeededToFinish",    // Phase 2: Fuel needed to finish race
+        "FuelDeltaToFinish",     // Phase 2: Fuel surplus/deficit
+        "FuelGreenAvg",       // Phase 2: Green flag average
+        "FuelYellowAvg",      // Phase 2: Yellow flag average
+        "FuelGreenLapsRemain",   // Phase 2: Laps remaining at green pace
+        "FuelYellowLapsRemain",  // Phase 2: Laps remaining at yellow pace
         "WaterTemp",
         "OilTemp",
         "LapNumber",
@@ -322,6 +335,20 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         "Clutch",
         "FuelLevel",
         "FuelPercent",
+        "FuelAvgLast",        // Phase 2: Last lap fuel usage
+        "FuelAvgL5",          // Phase 2: L5 average fuel usage
+        "FuelAvgL10",         // Phase 2: L10 average fuel usage
+        "FuelAvgSession",     // Phase 2: Session average fuel usage
+        "FuelMinPerLap",      // Phase 2: Minimum fuel per lap
+        "FuelMaxPerLap",      // Phase 2: Maximum fuel per lap
+        "FuelLapsRemainingL5",   // Phase 2: Laps remaining (L5 avg)
+        "FuelLapsRemainingL10",  // Phase 2: Laps remaining (L10 avg)
+        "FuelNeededToFinish",    // Phase 2: Fuel needed to finish race
+        "FuelDeltaToFinish",     // Phase 2: Fuel surplus/deficit
+        "FuelGreenAvg",       // Phase 2: Green flag average
+        "FuelYellowAvg",      // Phase 2: Yellow flag average
+        "FuelGreenLapsRemain",   // Phase 2: Laps remaining at green pace
+        "FuelYellowLapsRemain",  // Phase 2: Laps remaining at yellow pace
         "WaterTemp",
         "OilTemp",
         "LapNumber",
@@ -472,6 +499,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     private bool _enableGradientBackground;
     private bool _enableShiftPointRing;
     private bool _enableGlowEffects;
+    private bool _enableFuelDisplay;
     
     public bool EnableGradientBackground
     {
@@ -515,10 +543,129 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         }
     }
     
+    public bool EnableFuelDisplay
+    {
+        get => _enableFuelDisplay;
+        set
+        {
+            if (_enableFuelDisplay != value)
+            {
+                _enableFuelDisplay = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly
+            }
+        }
+    }
+    
     /// <summary>
     /// Whether this is the MRT One widget (shows/hides settings UI)
     /// </summary>
     public bool IsMRTOneWidget => Type == WidgetType.MRTOne;
+
+    /// <summary>
+    /// Whether this is the Fuel Assist widget (shows/hides Fuel settings UI)
+    /// </summary>
+    public bool IsFuelAssistWidget => Type == WidgetType.Fuel;
+
+    // Fuel Assist Widget Properties
+    public bool FuelWidgetLayoutTower
+    {
+        get => AppSettings.Instance.FuelWidget_Layout == "Tower";
+        set
+        {
+            if (value)
+            {
+                AppSettings.Instance.FuelWidget_Layout = "Tower";
+                AppSettings.Instance.Save();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FuelWidgetLayoutBar));
+                OnPropertyChanged(nameof(FuelWidgetLayoutGrid));
+            }
+        }
+    }
+
+    public bool FuelWidgetLayoutBar
+    {
+        get => AppSettings.Instance.FuelWidget_Layout == "Bar";
+        set
+        {
+            if (value)
+            {
+                AppSettings.Instance.FuelWidget_Layout = "Bar";
+                AppSettings.Instance.Save();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FuelWidgetLayoutTower));
+                OnPropertyChanged(nameof(FuelWidgetLayoutGrid));
+            }
+        }
+    }
+
+    public bool FuelWidgetLayoutGrid
+    {
+        get => AppSettings.Instance.FuelWidget_Layout == "Grid";
+        set
+        {
+            if (value)
+            {
+                AppSettings.Instance.FuelWidget_Layout = "Grid";
+                AppSettings.Instance.Save();
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FuelWidgetLayoutTower));
+                OnPropertyChanged(nameof(FuelWidgetLayoutBar));
+            }
+        }
+    }
+
+    public bool FuelWidget_ShowPercentage
+    {
+        get => AppSettings.Instance.FuelWidget_ShowPercentage;
+        set { AppSettings.Instance.FuelWidget_ShowPercentage = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowBar
+    {
+        get => AppSettings.Instance.FuelWidget_ShowBar;
+        set { AppSettings.Instance.FuelWidget_ShowBar = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowL10
+    {
+        get => AppSettings.Instance.FuelWidget_ShowL10;
+        set { AppSettings.Instance.FuelWidget_ShowL10 = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowSession
+    {
+        get => AppSettings.Instance.FuelWidget_ShowSession;
+        set { AppSettings.Instance.FuelWidget_ShowSession = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    // Legacy properties removed - individual field toggles no longer used
+    // Use FuelWidget_ShowPitStrategy master toggle instead
+
+    public string FuelWidget_Method
+    {
+        get => AppSettings.Instance.FuelWidget_Method;
+        set { AppSettings.Instance.FuelWidget_Method = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public float FuelWidget_BufferLaps
+    {
+        get => AppSettings.Instance.FuelWidget_BufferLaps;
+        set { AppSettings.Instance.FuelWidget_BufferLaps = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_BlinkCritical
+    {
+        get => AppSettings.Instance.FuelWidget_BlinkCritical;
+        set { AppSettings.Instance.FuelWidget_BlinkCritical = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowTrends
+    {
+        get => AppSettings.Instance.FuelWidget_ShowTrends;
+        set { AppSettings.Instance.FuelWidget_ShowTrends = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
 
     public WidgetItemViewModel(string name, WidgetType type, string icon, WidgetManager widgetManager)
     {
@@ -554,6 +701,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         _enableGradientBackground = true;  // ON by default
         _enableShiftPointRing = false;
         _enableGlowEffects = false;
+        _enableFuelDisplay = true;         // ON by default
     }
     
     private void ToggleActive()
@@ -582,8 +730,19 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             var config = widget.GetConfiguration();
             Position = $"X: {(int)config.X}, Y: {(int)config.Y}";
             
-            // Read current widget size (width for square widgets like MRTOne)
-            double currentSize = config.Width;
+            // Read current widget size
+            double currentSize;
+            if (Type == WidgetType.Fuel)
+            {
+                // Fuel widget uses scale transform - convert scale to size value
+                currentSize = AppSettings.Instance.FuelWidget_Scale * 200.0; // 200 is baseline
+            }
+            else
+            {
+                // For square widgets like MRTOne, use width directly
+                currentSize = config.Width;
+            }
+            
             if (Math.Abs(_widgetSize - currentSize) > 0.01)
             {
                 _widgetSize = currentSize;
@@ -622,6 +781,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 _enableGradientBackground = settings.EnableGradientBackground;
                 _enableShiftPointRing = settings.EnableShiftPointRing;
                 _enableGlowEffects = settings.EnableGlowEffects;
+                _enableFuelDisplay = settings.EnableFuelDisplay;
                 
                 // Notify all MRT One properties changed
                 OnPropertyChanged(nameof(TopSelectedField));
@@ -669,11 +829,25 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     private void ApplySize()
     {
         var widgets = _widgetManager.GetWidgetsByType(Type);
-        foreach (var widget in widgets)
+        
+        if (Type == WidgetType.Fuel)
+        {
+            // Fuel widget uses scale transform instead of direct size
+            // Map WidgetSize (100-400) to scale (0.5-2.0)
+            double scale = WidgetSize / 200.0; // 200 is baseline
+            AppSettings.Instance.FuelWidget_Scale = scale;
+            AppSettings.Instance.Save();
+            // Trigger settings changed event to update widget
+            AppSettings.Instance.NotifyChanged();
+        }
+        else
         {
             // For square widgets (MRTOne), set both width and height to the same value
-            widget.Width = WidgetSize;
-            widget.Height = WidgetSize;
+            foreach (var widget in widgets)
+            {
+                widget.Width = WidgetSize;
+                widget.Height = WidgetSize;
+            }
         }
         
         // Save layout to persist size changes
@@ -798,7 +972,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                     // PHASE 2: Visual Enhancement Settings
                     EnableGradientBackground = _enableGradientBackground,
                     EnableShiftPointRing = _enableShiftPointRing,
-                    EnableGlowEffects = _enableGlowEffects
+                    EnableGlowEffects = _enableGlowEffects,
+                    EnableFuelDisplay = _enableFuelDisplay
                 };
                 
                 // Apply to widget (this will update UI and save to config)

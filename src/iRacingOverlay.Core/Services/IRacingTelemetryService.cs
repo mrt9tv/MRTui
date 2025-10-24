@@ -162,6 +162,7 @@ namespace iRacingOverlay.Core.Services;
 
     // Live Position Calculation
     TelemetryVar.SessionState,          // int - Session state enum (racing/checkered/cooldown)
+    TelemetryVar.PaceMode,              // int - Pace mode enum (single/double file, restart type)
     
     // ===== PHASE 1: PROFESSIONAL SHIFT LIGHT TELEMETRY =====
     // iRacing provides professional-grade shift point data based on car physics/torque curves
@@ -179,6 +180,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private readonly ILogger<IRacingTelemetryService> _logger;
     private ITelemetryClient<SVappsLAB.iRacingTelemetrySDK.TelemetryData>? _client;
     private readonly LivePositionCalculator _livePositionCalculator;
+    private readonly FuelCalculatorService _fuelCalculatorService;
     private ConnectionStatus _status = ConnectionStatus.Disconnected;
     private bool _disposed = false;
     
@@ -203,7 +205,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _trackName = "";
     private string _sessionType = "";
     private float _trackLength = 0f;
+    private float _trackPitSpeedLimit = 0f; // Pit speed limit in m/s (parsed from "55.98 kph" format)
     private bool _sessionInfoParsed = false;
+    private Dictionary<int, string> _carIdxToCarNumber = new(); // CarIdx -> Car Number mapping (for pit exit display)
 
     public ConnectionStatus Status
     {
@@ -223,6 +227,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
 
     public double UpdateRate => _updateRate;
 
+    /// <summary>
+    /// Current fuel calculation data (averages, laps remaining, strategy).
+    /// Updated in real-time with each telemetry tick.
+    /// </summary>
+    public FuelData CurrentFuelData => _fuelCalculatorService.CurrentData;
+
     // Use our Models.TelemetryData for the interface
     public event EventHandler<Models.TelemetryData>? TelemetryUpdated;
     public event EventHandler<ConnectionStatusEventArgs>? StatusChanged;
@@ -232,6 +242,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         // Create LivePositionCalculator without logger (it will use null logger)
         _livePositionCalculator = new LivePositionCalculator();
+        // Create FuelCalculatorService
+        _fuelCalculatorService = new FuelCalculatorService();
     }
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
@@ -486,6 +498,15 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 FuelLevelPct = sdkData.FuelLevelPct.GetValueOrDefault(),
                 FuelUsePerHour = sdkData.FuelUsePerHour.GetValueOrDefault(),
                 FuelPress = sdkData.FuelPress.GetValueOrDefault(),
+                // Calculate tank capacity from current fuel level and percentage
+                FuelLevelMax = sdkData.FuelLevelPct.GetValueOrDefault() > 0.001f
+                    ? sdkData.FuelLevel.GetValueOrDefault() / sdkData.FuelLevelPct.GetValueOrDefault()
+                    : 0f,
+                // Use Lap as LapsCompleted (they're equivalent in iRacing)
+                LapsCompleted = sdkData.Lap.GetValueOrDefault(),
+                // Set SessionLaps and SessionLapsRemainEx to 0 for now (will be populated if SDK supports it)
+                SessionLaps = 0,
+                SessionLapsRemainEx = 0,
                 WaterTemp = sdkData.WaterTemp.GetValueOrDefault(),
                 WaterLevel = sdkData.WaterLevel.GetValueOrDefault(),
                 OilTemp = sdkData.OilTemp.GetValueOrDefault(),
@@ -598,9 +619,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 TrackName = _trackName,
                 SessionType = _sessionType,
                 TrackLength = _trackLength,
+                TrackPitSpeedLimit = _trackPitSpeedLimit,
+                CarIdxToCarNumber = _carIdxToCarNumber.Count > 0 ? new Dictionary<int, string>(_carIdxToCarNumber) : null,
 
                 // Live Position Calculation
                 SessionState = (int)sdkData.SessionState.GetValueOrDefault(),
+                PaceMode = (int)sdkData.PaceMode.GetValueOrDefault(),
                 
                 // ===== PHASE 1: 4-Way Proximity Radar =====
                 
@@ -634,6 +658,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // Calculate live positions (handles race mode, qualifying mode, and position freezing)
             data.LivePosition = _livePositionCalculator.CalculateLivePosition(data, classOnly: false);
             data.LiveClassPosition = _livePositionCalculator.CalculateLivePosition(data, classOnly: true);
+
+            // Update fuel calculator with latest telemetry
+            _fuelCalculatorService.Update(data);
 
             // DEBUG: Log shift light telemetry values to diagnose car compatibility
             LogShiftLightData(sdkData);
@@ -730,6 +757,20 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             _logger.LogWarning("Failed to parse track length from: {LengthStr}", lengthStr);
                         }
                     }
+                    else if (trimmed.StartsWith("TrackPitSpeedLimit:"))
+                    {
+                        // TrackPitSpeedLimit comes as string like "55.98 kph"
+                        var speedStr = ExtractYamlValue(trimmed);
+                        if (ParsePitSpeedLimit(speedStr, out float speedMps))
+                        {
+                            _trackPitSpeedLimit = speedMps;
+                            _logger.LogInformation("Parsed pit speed limit: {SpeedMps:F2} m/s ({SpeedStr})", _trackPitSpeedLimit, speedStr);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Failed to parse pit speed limit from: {SpeedStr}", speedStr);
+                        }
+                    }
                 }
                 else if (currentSection == "DriverInfo")
                 {
@@ -748,6 +789,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     else if (trimmed.StartsWith("Drivers:"))
                     {
                         inDriversArray = true;
+                        _carIdxToCarNumber.Clear(); // Reset car number mapping for new session
                     }
                     else if (inDriversArray)
                     {
@@ -759,10 +801,22 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                                 isPlayerDriver = (currentDriverCarIdx == driverCarIdx);
                             }
                         }
-                        else if (trimmed.StartsWith("CarNumber:") && isPlayerDriver)
+                        else if (trimmed.StartsWith("CarNumber:"))
                         {
-                            _carNumber = ExtractYamlValue(trimmed).Trim('"', '\'');
-                            _logger.LogInformation("Parsed car number: {CarNumber}", _carNumber);
+                            var carNumber = ExtractYamlValue(trimmed).Trim('"', '\'');
+                            
+                            // Store car number for ALL drivers (not just player)
+                            if (currentDriverCarIdx >= 0)
+                            {
+                                _carIdxToCarNumber[currentDriverCarIdx] = carNumber;
+                            }
+                            
+                            // Also store player's car number
+                            if (isPlayerDriver)
+                            {
+                                _carNumber = carNumber;
+                                _logger.LogInformation("Parsed car number: {CarNumber}", _carNumber);
+                            }
                         }
                     }
                 }
@@ -860,6 +914,44 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         };
         
         return lengthMeters > 0;
+    }
+    
+    /// <summary>
+    /// Parse pit speed limit from YAML string format (e.g., "55.98 kph" or "35 mph")
+    /// Converts to meters per second for consistent speed calculations.
+    /// </summary>
+    private static bool ParsePitSpeedLimit(string speedStr, out float speedMps)
+    {
+        speedMps = 0f;
+        
+        if (string.IsNullOrWhiteSpace(speedStr))
+            return false;
+        
+        // Remove quotes if present
+        speedStr = speedStr.Trim('"', '\'').Trim();
+        
+        // Split into value and unit (e.g., "55.98 kph" -> ["55.98", "kph"])
+        var parts = speedStr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 1)
+            return false;
+        
+        // Parse numeric value using INVARIANT CULTURE (dot as decimal separator)
+        // iRacing YAML always uses dot notation regardless of system locale
+        if (!float.TryParse(parts[0], System.Globalization.NumberStyles.Float, 
+            System.Globalization.CultureInfo.InvariantCulture, out float value))
+            return false;
+        
+        // Convert to meters per second based on unit (default to kph if no unit specified)
+        string unit = parts.Length > 1 ? parts[1].ToLowerInvariant() : "kph";
+        speedMps = unit switch
+        {
+            "kph" or "km/h" => value / 3.6f,      // kph to m/s (divide by 3.6)
+            "mph" => value * 0.44704f,             // mph to m/s
+            "m/s" or "mps" => value,               // already in m/s
+            _ => value / 3.6f                      // default to kph
+        };
+        
+        return speedMps > 0;
     }
     
     // Track last CarLeftRight value to only log changes

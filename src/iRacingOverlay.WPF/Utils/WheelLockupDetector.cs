@@ -22,7 +22,8 @@ public static class WheelLockupDetector
     private static float _maxDecelThisStop = 0f;
     private static bool _isHardBraking = false;
     private static bool _wasLocked = false; // Track if wheels were locked in previous frame
-    private static int _unlockConfirmFrames = 0; // Frames of good decel since potential unlock
+    // Reserved for future unlock confirmation logic:
+    // private static int _unlockConfirmFrames = 0;
     
     private class DecelSample
     {
@@ -234,7 +235,6 @@ public static class WheelLockupDetector
                 _maxDecelThisStop = 0f;
                 _isHardBraking = false;
                 _wasLocked = false;
-                _unlockConfirmFrames = 0;
             }
             
             return state;
@@ -334,7 +334,6 @@ public static class WheelLockupDetector
             if (goodEfficiency || lowBrakeUnlock)
             {
                 _wasLocked = false;
-                _unlockConfirmFrames = 0;
                 
                 if (EnableDiagnostics)
                 {
@@ -343,10 +342,6 @@ public static class WheelLockupDetector
                 }
                 
                 return state; // AnyWheelLocked = false
-            }
-            else
-            {
-                _unlockConfirmFrames = 0; // Reset counter if efficiency drops
             }
         }
         
@@ -380,7 +375,6 @@ public static class WheelLockupDetector
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
                 state.Confidence = LockupConfidence.High;
                 _wasLocked = true;
-                _unlockConfirmFrames = 0;
                 
                 // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
                 // Pressure-based detection handles per-wheel identification
@@ -443,7 +437,6 @@ public static class WheelLockupDetector
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
                 state.Confidence = LockupConfidence.High;
                 _wasLocked = true;
-                _unlockConfirmFrames = 0;
                 
                 // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
                 state.FrontAxleLockup = true;
@@ -480,7 +473,6 @@ public static class WheelLockupDetector
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
                 state.Confidence = LockupConfidence.Medium;
                 _wasLocked = true;
-                _unlockConfirmFrames = 0;
                 
                 // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
                 state.FrontAxleLockup = true;
@@ -535,7 +527,6 @@ public static class WheelLockupDetector
                 state.DetectionMethod = LockupDetectionMethod.DecelerationPlateau;
                 state.Confidence = LockupConfidence.Medium;
                 _wasLocked = true;
-                _unlockConfirmFrames = 0;
                 
                 // SIMPLIFIED: Don't try to determine which wheel - just flag lockup exists
                 state.FrontAxleLockup = true;

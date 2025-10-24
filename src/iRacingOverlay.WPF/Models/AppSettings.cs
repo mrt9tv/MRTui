@@ -48,21 +48,192 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public Dictionary<string, string> CustomLabels { get; set; } = new Dictionary<string, string>();
     
-    // Fuel Widget Settings
+    // ===== FUEL WIDGET SETTINGS =====
+
+    // Fuel Widget Layout
+    /// <summary>
+    /// Fuel widget layout type (Tower, Bar, Grid)
+    /// </summary>
+    public string FuelWidget_Layout { get; set; } = "Tower";
+
+    // Fuel Widget Visibility
+    /// <summary>
+    /// Enable fuel widget display
+    /// </summary>
+    public bool FuelWidget_Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Show fuel percentage indicator
+    /// </summary>
+    public bool FuelWidget_ShowPercentage { get; set; } = true;
+
+    /// <summary>
+    /// Show visual fuel bar graph
+    /// </summary>
+    public bool FuelWidget_ShowBar { get; set; } = true;
+
+    /// <summary>
+    /// Show Last 10 laps average
+    /// </summary>
+    public bool FuelWidget_ShowL10 { get; set; } = false;
+
+    /// <summary>
+    /// Show session average fuel consumption
+    /// </summary>
+    public bool FuelWidget_ShowSession { get; set; } = false;
+
+    /// <summary>
+    /// [OBSOLETE - Legacy setting, no longer used]
+    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
+    /// This property is kept for backward compatibility with existing config files.
+    /// </summary>
+    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
+    public bool FuelWidget_ShowIRacingDelta { get; set; } = true;
+
+    /// <summary>
+    /// [OBSOLETE - Legacy setting, no longer used]
+    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
+    /// This property is kept for backward compatibility with existing config files.
+    /// </summary>
+    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
+    public bool FuelWidget_ShowCanFinish { get; set; } = true;
+
+    /// <summary>
+    /// [OBSOLETE - Legacy setting, no longer used]
+    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
+    /// This property is kept for backward compatibility with existing config files.
+    /// </summary>
+    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
+    public bool FuelWidget_ShowPitFuel { get; set; } = true;
+
+    /// <summary>
+    /// [OBSOLETE - Legacy setting, no longer used]
+    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
+    /// This property is kept for backward compatibility with existing config files.
+    /// </summary>
+    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
+    public bool FuelWidget_ShowPressure { get; set; } = false;
+
+    /// <summary>
+    /// [OBSOLETE - Legacy setting, no longer used]
+    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
+    /// This property is kept for backward compatibility with existing config files.
+    /// </summary>
+    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
+    public bool FuelWidget_ShowPitWindow { get; set; } = true;
+
+    /// <summary>
+    /// Show entire pit strategy section (LAPS, TO GO, PRESS, PIT, PIT IN)
+    /// MASTER TOGGLE: When ON, shows all pit strategy fields. When OFF, hides entire section for minimal widget.
+    /// This single toggle controls all pit strategy visibility (individual field toggles have been removed).
+    /// </summary>
+    public bool FuelWidget_ShowPitStrategy { get; set; } = true;
+
+    /// <summary>
+    /// Show fuel pressure field (PRESS) within pit strategy section
+    /// </summary>
+    public bool FuelWidget_ShowFuelPressure { get; set; } = true;
+
+    // Fuel Widget Strategy
+    /// <summary>
+    /// Fuel averaging method (Last, Last5, Last10, Session, Max)
+    /// </summary>
+    public string FuelWidget_Method { get; set; } = "Session";  // Default to Session Average for more stable predictions
+
+    /// <summary>
+    /// Buffer laps for fuel calculations (safety margin)
+    /// </summary>
+    public float FuelWidget_BufferLaps { get; set; } = 1.0f;
+
+    /// <summary>
+    /// Enable dynamic buffer laps based on race conditions (consistency, position, weather, yellows)
+    /// </summary>
+    public bool FuelWidget_EnableDynamicBuffer { get; set; } = true;
+
+    /// <summary>
+    /// Low fuel warning threshold (laps)
+    /// </summary>
+    public float FuelWidget_LowFuelThreshold { get; set; } = 5.0f;
+
+    /// <summary>
+    /// Critical fuel warning threshold (laps) - blinking red below this value
+    /// </summary>
+    public float FuelWidget_CriticalThreshold { get; set; } = 1.2f;
+
+    // Fuel Widget Visual
+    /// <summary>
+    /// Widget scale multiplier (0.7 to 1.5)
+    /// </summary>
+    public double FuelWidget_Scale { get; set; } = 1.0;
+
+    /// <summary>
+    /// Enable blinking animation on critical fuel
+    /// </summary>
+    public bool FuelWidget_BlinkCritical { get; set; } = true;
+
+    /// <summary>
+    /// Show trend arrows for lap-to-lap deltas
+    /// </summary>
+    public bool FuelWidget_ShowTrends { get; set; } = false;
+
+    // Fuel Widget Position
     /// <summary>
     /// Fuel Widget X position
     /// </summary>
-    public double? FuelWidgetX { get; set; }
-    
+    public double FuelWidget_X { get; set; } = 1650;
+
     /// <summary>
     /// Fuel Widget Y position
     /// </summary>
-    public double? FuelWidgetY { get; set; }
+    public double FuelWidget_Y { get; set; } = 50;
+    
+    // Fuel Widget Phase 3: Fuel Saving Mode
+    // REMOVED: FuelWidget_EnableFuelSaving (unused - was never checked in code)
     
     /// <summary>
-    /// Fuel Widget size (percentage, 50-150)
+    /// Show lift point suggestions for fuel saving (disabled by default - generic suggestions not track-specific)
     /// </summary>
-    public int? FuelWidgetSize { get; set; }
+    public bool FuelWidget_ShowLiftPoints { get; set; } = false; // Changed from true to false
+    
+    /// <summary>
+    /// Show strategic alerts (PIT THIS LAP, FUEL SAVING WORKING, etc.)
+    /// </summary>
+    public bool FuelWidget_ShowSavingAlerts { get; set; } = true;
+    
+    /// <summary>
+    /// Enable optimal pit calculator (minimize time loss)
+    /// </summary>
+    public bool FuelWidget_OptimalPitCalculator { get; set; } = true;
+    
+    /// <summary>
+    /// Show pit exit position prediction (class-filtered track position after pit stop)
+    /// </summary>
+    public bool FuelWidget_ShowPitExitPosition { get; set; } = true;
+    
+    /// <summary>
+    /// Show pit strategy window
+    /// </summary>
+    public bool ShowPitStrategyWindow { get; set; } = false;
+    
+    /// <summary>
+    /// Pit Strategy Window X position
+    /// </summary>
+    public double PitStrategyWindow_X { get; set; } = 100;
+    
+    /// <summary>
+    /// Pit Strategy Window Y position
+    /// </summary>
+    public double PitStrategyWindow_Y { get; set; } = 100;
+    
+    /// <summary>
+    /// Pit Strategy Window width
+    /// </summary>
+    public double PitStrategyWindow_Width { get; set; } = 800;
+    
+    /// <summary>
+    /// Pit Strategy Window height
+    /// </summary>
+    public double PitStrategyWindow_Height { get; set; } = 600;
     
     /// <summary>
     /// Whether windows are locked (prevents dragging)
@@ -179,6 +350,7 @@ public class AppSettings : INotifyPropertyChanged
     
     private bool _showBrakeBiasOverlay = true;
     private double _brakeBiasDisplayDuration = 1.0;
+    private bool _showMRTOneFuelDisplay = true;
     
     /// <summary>
     /// Show transient brake bias overlay in center section when value changes
@@ -191,6 +363,24 @@ public class AppSettings : INotifyPropertyChanged
             if (_showBrakeBiasOverlay != value)
             {
                 _showBrakeBiasOverlay = value;
+                OnPropertyChanged();
+                Save();
+                NotifyChanged();
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Show comprehensive fuel display below MRT One circular gauge
+    /// </summary>
+    public bool ShowMRTOneFuelDisplay
+    {
+        get => _showMRTOneFuelDisplay;
+        set
+        {
+            if (_showMRTOneFuelDisplay != value)
+            {
+                _showMRTOneFuelDisplay = value;
                 OnPropertyChanged();
                 Save();
                 NotifyChanged();

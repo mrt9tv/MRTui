@@ -294,6 +294,356 @@ public class SettingsViewModel : INotifyPropertyChanged
     /// </summary>
     public string IracingSdkVersion => VersionInfo.IRACING_SDK_VERSION;
 
+    #region Fuel Widget Properties
+
+    /// <summary>
+    /// Enable Fuel Widget
+    /// </summary>
+    public bool FuelWidgetEnabled
+    {
+        get => _settings.FuelWidget_Enabled;
+        set
+        {
+            if (_settings.FuelWidget_Enabled != value)
+            {
+                _settings.FuelWidget_Enabled = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fuel Widget Layout - Tower selected
+    /// </summary>
+    public bool FuelWidgetLayoutTower
+    {
+        get => _settings.FuelWidget_Layout == "Tower";
+        set
+        {
+            if (value)
+            {
+                _settings.FuelWidget_Layout = "Tower";
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FuelWidgetLayoutBar));
+                OnPropertyChanged(nameof(FuelWidgetLayoutGrid));
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fuel Widget Layout - Bar selected
+    /// </summary>
+    public bool FuelWidgetLayoutBar
+    {
+        get => _settings.FuelWidget_Layout == "Bar";
+        set
+        {
+            if (value)
+            {
+                _settings.FuelWidget_Layout = "Bar";
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FuelWidgetLayoutTower));
+                OnPropertyChanged(nameof(FuelWidgetLayoutGrid));
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fuel Widget Layout - Grid selected
+    /// </summary>
+    public bool FuelWidgetLayoutGrid
+    {
+        get => _settings.FuelWidget_Layout == "Grid";
+        set
+        {
+            if (value)
+            {
+                _settings.FuelWidget_Layout = "Grid";
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FuelWidgetLayoutTower));
+                OnPropertyChanged(nameof(FuelWidgetLayoutBar));
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show fuel percentage
+    /// </summary>
+    public bool FuelWidget_ShowPercentage
+    {
+        get => _settings.FuelWidget_ShowPercentage;
+        set
+        {
+            if (_settings.FuelWidget_ShowPercentage != value)
+            {
+                _settings.FuelWidget_ShowPercentage = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show fuel bar graph
+    /// </summary>
+    public bool FuelWidget_ShowBar
+    {
+        get => _settings.FuelWidget_ShowBar;
+        set
+        {
+            if (_settings.FuelWidget_ShowBar != value)
+            {
+                _settings.FuelWidget_ShowBar = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show Last 10 laps average
+    /// </summary>
+    public bool FuelWidget_ShowL10
+    {
+        get => _settings.FuelWidget_ShowL10;
+        set
+        {
+            if (_settings.FuelWidget_ShowL10 != value)
+            {
+                _settings.FuelWidget_ShowL10 = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show session average
+    /// </summary>
+    public bool FuelWidget_ShowSession
+    {
+        get => _settings.FuelWidget_ShowSession;
+        set
+        {
+            if (_settings.FuelWidget_ShowSession != value)
+            {
+                _settings.FuelWidget_ShowSession = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    // Legacy properties removed - individual field toggles no longer used
+    // Use FuelWidget_ShowPitStrategy master toggle instead
+
+    /// <summary>
+    /// Show entire pit strategy section (LAPS, TO GO, PRESS, PIT, PIT IN)
+    /// MASTER TOGGLE: Controls all pit strategy field visibility
+    /// </summary>
+    public bool FuelWidget_ShowPitStrategy
+    {
+        get => _settings.FuelWidget_ShowPitStrategy;
+        set
+        {
+            if (_settings.FuelWidget_ShowPitStrategy != value)
+            {
+                _settings.FuelWidget_ShowPitStrategy = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fuel averaging method
+    /// </summary>
+    public string FuelWidget_Method
+    {
+        get => _settings.FuelWidget_Method;
+        set
+        {
+            if (_settings.FuelWidget_Method != value)
+            {
+                _settings.FuelWidget_Method = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Safety buffer laps
+    /// </summary>
+    public float FuelWidget_BufferLaps
+    {
+        get => _settings.FuelWidget_BufferLaps;
+        set
+        {
+            if (Math.Abs(_settings.FuelWidget_BufferLaps - value) > 0.01f)
+            {
+                _settings.FuelWidget_BufferLaps = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Enable dynamic buffer laps calculation
+    /// </summary>
+    public bool FuelWidget_EnableDynamicBuffer
+    {
+        get => _settings.FuelWidget_EnableDynamicBuffer;
+        set
+        {
+            if (_settings.FuelWidget_EnableDynamicBuffer != value)
+            {
+                _settings.FuelWidget_EnableDynamicBuffer = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Widget scale
+    /// </summary>
+    public double FuelWidget_Scale
+    {
+        get => _settings.FuelWidget_Scale;
+        set
+        {
+            if (Math.Abs(_settings.FuelWidget_Scale - value) > 0.01)
+            {
+                _settings.FuelWidget_Scale = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Blink on critical fuel
+    /// </summary>
+    public bool FuelWidget_BlinkCritical
+    {
+        get => _settings.FuelWidget_BlinkCritical;
+        set
+        {
+            if (_settings.FuelWidget_BlinkCritical != value)
+            {
+                _settings.FuelWidget_BlinkCritical = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show trend arrows
+    /// </summary>
+    public bool FuelWidget_ShowTrends
+    {
+        get => _settings.FuelWidget_ShowTrends;
+        set
+        {
+            if (_settings.FuelWidget_ShowTrends != value)
+            {
+                _settings.FuelWidget_ShowTrends = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    // Phase 3: Fuel Saving Mode
+
+    // REMOVED: FuelWidget_EnableFuelSaving property (backing property removed from AppSettings.cs - was unused)
+
+    /// <summary>
+    /// Show lift point suggestions in fuel saving mode
+    /// </summary>
+    public bool FuelWidget_ShowLiftPoints
+    {
+        get => _settings.FuelWidget_ShowLiftPoints;
+        set
+        {
+            if (_settings.FuelWidget_ShowLiftPoints != value)
+            {
+                _settings.FuelWidget_ShowLiftPoints = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show strategic alerts (pit this lap, increase saving, etc.)
+    /// </summary>
+    public bool FuelWidget_ShowSavingAlerts
+    {
+        get => _settings.FuelWidget_ShowSavingAlerts;
+        set
+        {
+            if (_settings.FuelWidget_ShowSavingAlerts != value)
+            {
+                _settings.FuelWidget_ShowSavingAlerts = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Enable optimal pit lap calculator
+    /// </summary>
+    public bool FuelWidget_OptimalPitCalculator
+    {
+        get => _settings.FuelWidget_OptimalPitCalculator;
+        set
+        {
+            if (_settings.FuelWidget_OptimalPitCalculator != value)
+            {
+                _settings.FuelWidget_OptimalPitCalculator = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show standalone pit strategy window
+    /// </summary>
+    public bool ShowPitStrategyWindow
+    {
+        get => _settings.ShowPitStrategyWindow;
+        set
+        {
+            if (_settings.ShowPitStrategyWindow != value)
+            {
+                _settings.ShowPitStrategyWindow = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+                
+                // Toggle window visibility
+                if (_mainWindow is MainWindow mainWindow)
+                {
+                    if (value)
+                        mainWindow.ShowPitStrategyWindow();
+                    else
+                        mainWindow.HidePitStrategyWindow();
+                }
+            }
+        }
+    }
+
+    #endregion
+
     #endregion
 
     #region Commands

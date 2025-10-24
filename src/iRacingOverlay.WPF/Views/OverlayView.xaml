@@ -328,9 +328,200 @@
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
                                                  ToolTip="Show brake bias overlay in center when adjusted (1 second)"/>
+                                        
+                                        <!-- Fuel Display -->
+                                        <CheckBox Content="Fuel Display"
+                                                 IsChecked="{Binding EnableFuelDisplay, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"
+                                                 ToolTip="Show fuel information below MRT One circle"/>
                                     </StackPanel>
                                 </Border>
                                 
+                                <!-- Info: Changes apply instantly -->
+                                <TextBlock Text="✨ Changes apply instantly"
+                                          FontSize="11"
+                                          FontStyle="Italic"
+                                          Foreground="{StaticResource MutedText}"
+                                          HorizontalAlignment="Center"
+                                          Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Right Column: Fuel Assist Widget Configuration -->
+                        <Border Grid.Column="2"
+                               Background="{StaticResource DarkSurface}"
+                               CornerRadius="10"
+                               Padding="20"
+                               Visibility="{Binding IsFuelAssistWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="⛽ Fuel Assist Configuration"
+                                          FontSize="14"
+                                          FontWeight="SemiBold"
+                                          Foreground="{StaticResource LightText}"
+                                          Margin="0,0,0,15"/>
+
+                                <!-- Layout Selection -->
+                                <StackPanel Margin="0,0,0,15">
+                                    <TextBlock Text="Widget Layout"
+                                              FontSize="12"
+                                              Foreground="{StaticResource LightText}"
+                                              Margin="0,0,0,8"/>
+                                    <RadioButton Content="📏 Tower (180x280)"
+                                               IsChecked="{Binding FuelWidgetLayoutTower, Mode=TwoWay}"
+                                               Foreground="{StaticResource LightText}"
+                                               Margin="0,0,0,5"
+                                               IsEnabled="{Binding IsActive}"/>
+                                    <RadioButton Content="📐 Bar (380x120)"
+                                               IsChecked="{Binding FuelWidgetLayoutBar, Mode=TwoWay}"
+                                               Foreground="{StaticResource LightText}"
+                                               Margin="0,0,0,5"
+                                               IsEnabled="{Binding IsActive}"/>
+                                    <RadioButton Content="▦ Grid (260x200)"
+                                               IsChecked="{Binding FuelWidgetLayoutGrid, Mode=TwoWay}"
+                                               Foreground="{StaticResource LightText}"
+                                               IsEnabled="{Binding IsActive}"/>
+                                </StackPanel>
+
+                                <!-- Display Options -->
+                                <Border BorderBrush="{StaticResource TealPrimary}"
+                                       BorderThickness="1"
+                                       CornerRadius="5"
+                                       Padding="10"
+                                       Margin="0,0,0,10"
+                                       Background="{StaticResource DarkBackground}">
+                                    <StackPanel>
+                                        <TextBlock Text="Display Options"
+                                                  FontSize="12"
+                                                  FontWeight="SemiBold"
+                                                  Foreground="{StaticResource TealPrimary}"
+                                                  Margin="0,0,0,10"/>
+
+                                        <CheckBox Content="Show fuel percentage"
+                                                 IsChecked="{Binding FuelWidget_ShowPercentage, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show fuel bar graph"
+                                                 IsChecked="{Binding FuelWidget_ShowBar, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show Last 10 laps average"
+                                                 IsChecked="{Binding FuelWidget_ShowL10, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show session average"
+                                                 IsChecked="{Binding FuelWidget_ShowSession, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        
+                                        <!-- Pit Strategy Master Toggle -->
+                                        <CheckBox Content="Show pit strategy section"
+                                                 IsChecked="{Binding FuelWidget_ShowPitStrategy, Mode=TwoWay}"
+                                                 Foreground="{StaticResource TealPrimary}"
+                                                 FontWeight="SemiBold"
+                                                 ToolTip="Show/hide entire pit strategy section (LAPS, TO GO, PRESS, PIT, PIT IN)&#x0a;This single toggle controls all pit strategy fields."
+                                                 Margin="0,5,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        
+                                        <!-- Fuel Pressure Toggle (within pit strategy section) -->
+                                        <CheckBox Content="  └─ Show fuel pressure (PRESS)"
+                                                 IsChecked="{Binding FuelWidget_ShowFuelPressure, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="15,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Strategy Settings -->
+                                <Border BorderBrush="{StaticResource TealPrimary}"
+                                       BorderThickness="1"
+                                       CornerRadius="5"
+                                       Padding="10"
+                                       Margin="0,0,0,10"
+                                       Background="{StaticResource DarkBackground}">
+                                    <StackPanel>
+                                        <TextBlock Text="Strategy Settings"
+                                                  FontSize="12"
+                                                  FontWeight="SemiBold"
+                                                  Foreground="{StaticResource TealPrimary}"
+                                                  Margin="0,0,0,10"/>
+
+                                        <!-- Averaging Method -->
+                                        <StackPanel Margin="0,0,0,10">
+                                            <TextBlock Text="Fuel Averaging Method"
+                                                      FontSize="11"
+                                                      Foreground="{StaticResource LightText}"
+                                                      Margin="0,0,0,5"/>
+                                            <ComboBox SelectedValue="{Binding FuelWidget_Method, Mode=TwoWay}"
+                                                     SelectedValuePath="Tag"
+                                                     IsEnabled="{Binding IsActive}">
+                                                <ComboBoxItem Content="Current Lap" Tag="Current"/>
+                                                <ComboBoxItem Content="Last Lap" Tag="Last"/>
+                                                <ComboBoxItem Content="Last 5 Laps" Tag="Last5"/>
+                                                <ComboBoxItem Content="Last 10 Laps" Tag="Last10"/>
+                                                <ComboBoxItem Content="Session Average" Tag="Session"/>
+                                                <ComboBoxItem Content="Maximum (Conservative)" Tag="Max"/>
+                                                <ComboBoxItem Content="EMA (Exponential)" Tag="EMA"/>
+                                                <ComboBoxItem Content="Green Flag Only" Tag="GreenOnly"/>
+                                                <ComboBoxItem Content="Stint Average" Tag="Stint"/>
+                                                <ComboBoxItem Content="Adaptive (Smart)" Tag="Adaptive"/>
+                                            </ComboBox>
+                                        </StackPanel>
+
+                                        <!-- Buffer Laps -->
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,5">
+                                                <TextBlock Text="Safety Buffer"
+                                                          FontSize="11"
+                                                          Foreground="{StaticResource LightText}"/>
+                                                <TextBlock Text="{Binding FuelWidget_BufferLaps, StringFormat='{}{0:F1} laps'}"
+                                                          FontSize="11"
+                                                          FontWeight="Bold"
+                                                          Foreground="{StaticResource OrangePrimary}"
+                                                          HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <Slider Value="{Binding FuelWidget_BufferLaps, Mode=TwoWay}"
+                                                   Minimum="0"
+                                                   Maximum="3"
+                                                   TickFrequency="0.5"
+                                                   IsSnapToTickEnabled="True"
+                                                   Style="{StaticResource MRT.Slider}"
+                                                   IsEnabled="{Binding IsActive}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Visual Settings -->
+                                <Border BorderBrush="{StaticResource TealPrimary}"
+                                       BorderThickness="1"
+                                       CornerRadius="5"
+                                       Padding="10"
+                                       Margin="0,0,0,10"
+                                       Background="{StaticResource DarkBackground}">
+                                    <StackPanel>
+                                        <TextBlock Text="Visual Settings"
+                                                  FontSize="12"
+                                                  FontWeight="SemiBold"
+                                                  Foreground="{StaticResource TealPrimary}"
+                                                  Margin="0,0,0,10"/>
+
+                                        <CheckBox Content="Blink on critical fuel (&lt;2 laps)"
+                                                 IsChecked="{Binding FuelWidget_BlinkCritical, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show trend arrows (↑↓→)"
+                                                 IsChecked="{Binding FuelWidget_ShowTrends, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <!-- Info: Changes apply instantly -->
                                 <TextBlock Text="✨ Changes apply instantly"
                                           FontSize="11"

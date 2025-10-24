@@ -1,4 +1,5 @@
 using iRacingOverlay.Core.Models;
+using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.Models;
@@ -39,11 +40,31 @@ public static class TelemetryDataMapper
             TelemetryField.AirTemp => data.AirTemp,
             TelemetryField.TrackTemp => data.TrackTempCrew, // Use crew chief track temp (more accurate)
             
-            // Fuel
+            // Fuel - Current State
             TelemetryField.FuelLevel => data.FuelLevel,
             TelemetryField.FuelPercent => data.FuelLevelPct, // SDK provides as 0-100 percentage already
             TelemetryField.FuelUsedLastLap => 0f, // TODO: Calculate from lap history
             TelemetryField.FuelRemaining => data.FuelLevel, // Alias for FuelLevel
+            
+            // Fuel - Averages (Phase 2) - NOTE: Requires telemetryService parameter
+            TelemetryField.FuelAvgLast => 0f,         // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelAvgL5 => 0f,           // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelAvgL10 => 0f,          // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelAvgSession => 0f,      // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelMinPerLap => 0f,       // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelMaxPerLap => 0f,       // Use GetValue(field, data, telemetryService)
+            
+            // Fuel - Strategy (Phase 2) - NOTE: Requires telemetryService parameter
+            TelemetryField.FuelLapsRemainingL5 => 0f,  // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelLapsRemainingL10 => 0f, // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelNeededToFinish => 0f,   // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelDeltaToFinish => 0f,    // Use GetValue(field, data, telemetryService)
+            
+            // Fuel - Safety Car Analysis (Phase 2) - NOTE: Requires telemetryService parameter
+            TelemetryField.FuelGreenAvg => 0f,         // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelYellowAvg => 0f,        // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelGreenLapsRemain => 0f,  // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelYellowLapsRemain => 0f, // Use GetValue(field, data, telemetryService)
             
             // Lap & Timing
             TelemetryField.LapNumber => data.Lap,
@@ -99,6 +120,74 @@ public static class TelemetryDataMapper
             
             _ => null
         };
+    }
+    
+    /// <summary>
+    /// Get the value for a specific telemetry field with access to fuel calculations
+    /// </summary>
+    public static object? GetValue(TelemetryField field, TelemetryData? data, ITelemetryService? telemetryService)
+    {
+        // For fuel calculation fields, get data from FuelCalculatorService
+        if (telemetryService != null)
+        {
+            var fuelData = telemetryService.CurrentFuelData;
+            
+            // Check if this is a fuel calculation field
+            var isFuelCalcField = field switch
+            {
+                TelemetryField.FuelAvgLast => true,
+                TelemetryField.FuelAvgL5 => true,
+                TelemetryField.FuelAvgL10 => true,
+                TelemetryField.FuelAvgSession => true,
+                TelemetryField.FuelMinPerLap => true,
+                TelemetryField.FuelMaxPerLap => true,
+                TelemetryField.FuelLapsRemainingL5 => true,
+                TelemetryField.FuelLapsRemainingL10 => true,
+                TelemetryField.FuelNeededToFinish => true,
+                TelemetryField.FuelDeltaToFinish => true,
+                TelemetryField.FuelGreenAvg => true,
+                TelemetryField.FuelYellowAvg => true,
+                TelemetryField.FuelGreenLapsRemain => true,
+                TelemetryField.FuelYellowLapsRemain => true,
+                _ => false
+            };
+            
+            // If it's a fuel calculation field, return the value from FuelData
+            if (isFuelCalcField && fuelData != null)
+            {
+                return field switch
+                {
+                    // Fuel - Averages (Phase 2)
+                    TelemetryField.FuelAvgLast => fuelData.AvgFuelPerLap_Last,
+                    TelemetryField.FuelAvgL5 => fuelData.AvgFuelPerLap_L5,
+                    TelemetryField.FuelAvgL10 => fuelData.AvgFuelPerLap_L10,
+                    TelemetryField.FuelAvgSession => fuelData.AvgFuelPerLap_Session,
+                    TelemetryField.FuelMinPerLap => fuelData.MinFuelPerLap,
+                    TelemetryField.FuelMaxPerLap => fuelData.MaxFuelPerLap,
+                    
+                    // Fuel - Strategy (Phase 2)
+                    TelemetryField.FuelLapsRemainingL5 => fuelData.LapsRemaining, // Uses L5 by default
+                    TelemetryField.FuelLapsRemainingL10 => fuelData.CurrentFuel / Math.Max(fuelData.AvgFuelPerLap_L10, 0.001f),
+                    TelemetryField.FuelNeededToFinish => fuelData.FuelNeededToFinish,
+                    TelemetryField.FuelDeltaToFinish => fuelData.FuelDeltaToFinish,
+                    
+                    // Fuel - Safety Car Analysis (Phase 2)
+                    TelemetryField.FuelGreenAvg => fuelData.GreenFlagAverage,
+                    TelemetryField.FuelYellowAvg => fuelData.YellowFlagAverage,
+                    TelemetryField.FuelGreenLapsRemain => fuelData.GreenFlagAverage > 0 
+                        ? fuelData.CurrentFuel / fuelData.GreenFlagAverage 
+                        : 0f,
+                    TelemetryField.FuelYellowLapsRemain => fuelData.YellowFlagAverage > 0 
+                        ? fuelData.CurrentFuel / fuelData.YellowFlagAverage 
+                        : 0f,
+                    
+                    _ => 0f // Should never reach here
+                };
+            }
+        }
+        
+        // Fall back to standard GetValue for non-fuel fields or if service not available
+        return GetValue(field, data);
     }
     
     /// <summary>

@@ -27,11 +27,31 @@ public enum TelemetryField
     AirTemp,
     TrackTemp,
     
-    // Fuel
+    // Fuel - Current State
     FuelLevel,
     FuelPercent,
     FuelUsedLastLap,
     FuelRemaining,
+    
+    // Fuel - Averages (Phase 2)
+    FuelAvgLast,          // Average fuel per lap - Last completed lap
+    FuelAvgL5,            // Average fuel per lap - Last 5 laps (recommended)
+    FuelAvgL10,           // Average fuel per lap - Last 10 laps
+    FuelAvgSession,       // Average fuel per lap - Entire session
+    FuelMinPerLap,        // Minimum fuel per lap (best efficiency)
+    FuelMaxPerLap,        // Maximum fuel per lap (worst case)
+    
+    // Fuel - Strategy (Phase 2)
+    FuelLapsRemainingL5,  // Laps remaining based on L5 average
+    FuelLapsRemainingL10, // Laps remaining based on L10 average
+    FuelNeededToFinish,   // Total fuel needed to finish race
+    FuelDeltaToFinish,    // Fuel surplus/deficit (+ = have extra, - = need more)
+    
+    // Fuel - Safety Car Analysis (Phase 2)
+    FuelGreenAvg,         // Average fuel per lap under green flag
+    FuelYellowAvg,        // Average fuel per lap under yellow flag
+    FuelGreenLapsRemain,  // Laps remaining if green flag racing
+    FuelYellowLapsRemain, // Laps remaining if yellow flag continues
     
     // Lap & Timing
     LapNumber,

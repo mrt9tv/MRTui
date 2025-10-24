@@ -11,6 +11,7 @@ using iRacingOverlay.WPF.Views;
 using iRacingOverlay.WPF.ViewModels;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
+using iRacingOverlay.WPF.Widgets.PitStrategyWindow;
 
 namespace iRacingOverlay.WPF;
 
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _updateRateTimer;
     private GlobalHotkey? _toggleLockHotkey;
     private GlobalHotkey? _toggleVisibilityHotkey;
+    private PitStrategyWindow? _pitStrategyWindow;
 
     public MainWindow(IServiceProvider services)
     {
@@ -428,6 +430,13 @@ public partial class MainWindow : Window
         _toggleLockHotkey?.Dispose();
         _toggleVisibilityHotkey?.Dispose();
 
+        // Close pit strategy window
+        if (_pitStrategyWindow != null)
+        {
+            _pitStrategyWindow.Closing -= null; // Remove handler to allow actual close
+            _pitStrategyWindow.Close();
+        }
+
         // Save current layout before closing
         _widgetManager.SaveCurrentLayout();
 
@@ -567,6 +576,58 @@ public partial class MainWindow : Window
 
         settings.WindowMaximized = (WindowState == WindowState.Maximized);
         settings.Save();
+    }
+
+    #endregion
+
+    #region Pit Strategy Window Management
+
+    /// <summary>
+    /// Show the standalone Pit Strategy Window
+    /// </summary>
+    public void ShowPitStrategyWindow()
+    {
+        if (_pitStrategyWindow == null)
+        {
+            var fuelService = _services.GetRequiredService<FuelCalculatorService>();
+            _pitStrategyWindow = new PitStrategyWindow(fuelService);
+        }
+
+        _pitStrategyWindow.Show();
+        _pitStrategyWindow.Activate(); // Bring to front
+
+        // Update setting
+        var settings = AppSettings.Instance;
+        settings.ShowPitStrategyWindow = true;
+        settings.Save();
+    }
+
+    /// <summary>
+    /// Hide the Pit Strategy Window
+    /// </summary>
+    public void HidePitStrategyWindow()
+    {
+        _pitStrategyWindow?.Hide();
+
+        // Update setting
+        var settings = AppSettings.Instance;
+        settings.ShowPitStrategyWindow = false;
+        settings.Save();
+    }
+
+    /// <summary>
+    /// Toggle Pit Strategy Window visibility
+    /// </summary>
+    public void TogglePitStrategyWindow()
+    {
+        if (_pitStrategyWindow == null || !_pitStrategyWindow.IsVisible)
+        {
+            ShowPitStrategyWindow();
+        }
+        else
+        {
+            HidePitStrategyWindow();
+        }
     }
 
     #endregion

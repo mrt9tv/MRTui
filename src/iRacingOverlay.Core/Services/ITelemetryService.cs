@@ -23,6 +23,11 @@ public interface ITelemetryService : IDisposable
     double UpdateRate { get; }
 
     /// <summary>
+    /// Gets the current fuel calculation data (averages, laps remaining, strategy)
+    /// </summary>
+    FuelData CurrentFuelData { get; }
+
+    /// <summary>
     /// Event fired when telemetry data is updated
     /// </summary>
     event EventHandler<TelemetryData>? TelemetryUpdated;

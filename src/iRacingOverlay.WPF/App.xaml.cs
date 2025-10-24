@@ -52,10 +52,13 @@ public partial class App : System.Windows.Application
             {
                 // Register telemetry service
                 services.AddSingleton<ITelemetryService, IRacingTelemetryService>();
-                
+
+                // Register fuel calculator service
+                services.AddSingleton<FuelCalculatorService>();
+
                 // Register widget manager
                 services.AddSingleton<WidgetManager>();
-                
+
                 // Register logging
                 services.AddLogging(builder =>
                 {
@@ -68,6 +71,13 @@ public partial class App : System.Windows.Application
         // Start telemetry service
         var telemetryService = _host.Services.GetRequiredService<ITelemetryService>();
         _ = telemetryService.ConnectAsync();
+
+        // Wire up fuel calculator service to telemetry updates
+        var fuelCalculatorService = _host.Services.GetRequiredService<FuelCalculatorService>();
+        telemetryService.TelemetryUpdated += (sender, data) =>
+        {
+            fuelCalculatorService.Update(data);
+        };
 
         // Start monitoring in background
         if (telemetryService is IRacingTelemetryService racingService)

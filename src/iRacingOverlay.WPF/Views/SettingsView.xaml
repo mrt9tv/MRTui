@@ -293,6 +293,144 @@
                                      Style="{StaticResource SettingDescriptionStyle}"/>
                         </StackPanel>
                     </Border>
+
+                    <!-- Fuel Widget Phase 3: Pit Strategy -->
+                    <Border Background="{StaticResource DarkSurface}"
+                            BorderBrush="{StaticResource OrangePrimary}"
+                            BorderThickness="2"
+                            CornerRadius="8"
+                            Padding="15"
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="⛽ Fuel Pit Strategy (Phase 3)" 
+                                     FontSize="16"
+                                     FontWeight="Bold"
+                                     Foreground="{StaticResource OrangePrimary}"
+                                     Margin="0,0,0,15"/>
+
+                            <!-- Fuel Saving Mode -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Enable Fuel Saving Mode" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Show fuel saving target, progress, and strategic alerts"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding FuelWidget_EnableFuelSaving}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Show Lift Points -->
+                            <Grid Margin="0,0,0,10"
+                                  IsEnabled="{Binding FuelWidget_EnableFuelSaving}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Show Lift Point Suggestions" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Display where to lift to save fuel"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding FuelWidget_ShowLiftPoints}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Show Saving Alerts -->
+                            <Grid Margin="0,0,0,10"
+                                  IsEnabled="{Binding FuelWidget_EnableFuelSaving}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Show Strategic Alerts" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Display alerts like 'PIT THIS LAP' or 'INCREASE SAVING'"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding FuelWidget_ShowSavingAlerts}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Optimal Pit Calculator -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Optimal Pit Lap Calculator" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Calculate best lap to pit (considers yellow flags)"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding FuelWidget_OptimalPitCalculator}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Dynamic Buffer Laps -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="🎯 Dynamic Buffer Laps (Enhanced)" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Auto-adjust buffer based on consistency, position, weather, yellow probability"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding FuelWidget_EnableDynamicBuffer}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <Separator Background="#404040" Margin="0,10"/>
+
+                            <!-- Standalone Pit Strategy Window -->
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="🏁 Show Pit Strategy Window" 
+                                             FontSize="15"
+                                             FontWeight="SemiBold"
+                                             Foreground="{StaticResource TealPrimary}"
+                                             Margin="0,0,0,5"/>
+                                    <TextBlock Text="Multi-stint timeline, what-if scenarios, lap time projections"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding ShowPitStrategyWindow}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- Manager Settings Tab -->

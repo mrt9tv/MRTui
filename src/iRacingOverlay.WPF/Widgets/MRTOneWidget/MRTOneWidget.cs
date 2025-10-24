@@ -51,6 +51,9 @@ public class MRTOneWidget : WidgetBase
     private readonly TextBlock _bottomValueText;
     private readonly TextBlock _bottomLabelText;
     
+    // PHASE 2 FUEL CALCULATOR: Simple 1-line fuel display below gauge
+    private readonly TextBlock _fuelDisplay;
+    
     // Brake bias transient overlay (appears temporarily when changed)
     private readonly Border _brakeBiasOverlay;
     private readonly TextBlock _brakeBiasLabel;
@@ -149,7 +152,7 @@ public class MRTOneWidget : WidgetBase
         {
             Background = Brushes.Transparent,
             Width = 228, // Extra 28px for radar squares (14px each side for 4px spacing + 12px box - 2px overlap)
-            Height = 228
+            Height = 308  // Increased from 228 to 308 (+80px) to show fuel display below circle
         };
         
         // Create main grid (no background - transparent)
@@ -158,7 +161,7 @@ public class MRTOneWidget : WidgetBase
         {
             Background = Brushes.Transparent,
             Width = 200,
-            Height = 200
+            Height = 200  // Keep at 200x200 for circular gauge (fuel display extends below via negative margin)
         };
         
         // Position main grid centered in canvas (14px offset for radar space)
@@ -362,6 +365,27 @@ public class MRTOneWidget : WidgetBase
         _bottomStack.Children.Add(_bottomLabelText);
         
         _mainGrid.Children.Add(_bottomStack);
+        
+        // PHASE 2 FUEL CALCULATOR: Comprehensive multi-line fuel display below gauge
+        // Shows: Current Fuel, Averages, Laps Remaining, Strategy Info
+        // Position on CANVAS (not grid) to avoid clipping issues with negative margins
+        _fuelDisplay = new TextBlock
+        {
+            Text = "",
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 8, // Smaller font for multi-line display
+            FontWeight = FontWeights.Normal,
+            Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), // Semi-transparent white
+            TextAlignment = TextAlignment.Center,
+            Visibility = Visibility.Collapsed, // Hidden by default, shown when fuel data available
+            LineHeight = 11, // Compact line spacing for multi-line text
+            TextWrapping = TextWrapping.NoWrap,
+            Width = 200 // Match grid width for proper centering
+        };
+        // Position fuel display on canvas below the gauge (centered horizontally at grid center: 14+100=114)
+        Canvas.SetLeft(_fuelDisplay, 14); // Align with grid left edge
+        Canvas.SetTop(_fuelDisplay, 240);  // Below grid bottom (14 + 200 + 26px spacing)
+        outerCanvas.Children.Add(_fuelDisplay);
         
         // Left side data box (optional)
         _leftBox = new StackPanel
@@ -805,6 +829,28 @@ public class MRTOneWidget : WidgetBase
             TelemetryField.FuelLevel => AppSettings.Instance.UseMetricUnits ? "FUEL (L)" : "FUEL (gal)",
             TelemetryField.FuelPercent => "FUEL%",
             
+            // Phase 2: Fuel Calculation Fields - Averages
+            TelemetryField.FuelAvgLast => AppSettings.Instance.UseMetricUnits ? "F/LAP (L)" : "F/LAP (gal)",
+            TelemetryField.FuelAvgL5 => AppSettings.Instance.UseMetricUnits ? "AVG5 (L)" : "AVG5 (gal)",
+            TelemetryField.FuelAvgL10 => AppSettings.Instance.UseMetricUnits ? "AVG10 (L)" : "AVG10 (gal)",
+            TelemetryField.FuelAvgSession => AppSettings.Instance.UseMetricUnits ? "AVGALL (L)" : "AVGALL (gal)",
+            TelemetryField.FuelMinPerLap => AppSettings.Instance.UseMetricUnits ? "MIN (L)" : "MIN (gal)",
+            TelemetryField.FuelMaxPerLap => AppSettings.Instance.UseMetricUnits ? "MAX (L)" : "MAX (gal)",
+            
+            // Phase 2: Fuel Calculation Fields - Laps Remaining
+            TelemetryField.FuelLapsRemainingL5 => "LAPS (L5)",
+            TelemetryField.FuelLapsRemainingL10 => "LAPS (L10)",
+            
+            // Phase 2: Fuel Calculation Fields - Strategy
+            TelemetryField.FuelNeededToFinish => AppSettings.Instance.UseMetricUnits ? "NEED (L)" : "NEED (gal)",
+            TelemetryField.FuelDeltaToFinish => AppSettings.Instance.UseMetricUnits ? "DELTA (L)" : "DELTA (gal)",
+            
+            // Phase 2: Fuel Calculation Fields - Safety Car Analysis
+            TelemetryField.FuelGreenAvg => AppSettings.Instance.UseMetricUnits ? "GREEN (L)" : "GREEN (gal)",
+            TelemetryField.FuelYellowAvg => AppSettings.Instance.UseMetricUnits ? "YELLOW (L)" : "YELLOW (gal)",
+            TelemetryField.FuelGreenLapsRemain => "LAPS (GRN)",
+            TelemetryField.FuelYellowLapsRemain => "LAPS (YEL)",
+            
             // Temperatures (include units in label)
             TelemetryField.WaterTemp => AppSettings.Instance.UseMetricUnits ? "WATER (°C)" : "W (°F)",
             TelemetryField.OilTemp => AppSettings.Instance.UseMetricUnits ? "OIL (°C)" : "OIL (°F)",
@@ -859,6 +905,56 @@ public class MRTOneWidget : WidgetBase
                 AppSettings.Instance.UseMetricUnits 
                     ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
                     : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            
+            // Phase 2: Fuel Calculation Fields
+            TelemetryField.FuelAvgLast when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelAvgL5 when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelAvgL10 when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelAvgSession when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelMinPerLap when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelMaxPerLap when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelGreenAvg when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelYellowAvg when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            
+            // Phase 2: Fuel Laps Remaining (show 1 decimal: "12.5")
+            TelemetryField.FuelLapsRemainingL5 when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelLapsRemainingL10 when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelGreenLapsRemain when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelYellowLapsRemain when value is float laps => laps.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+            
+            // Phase 2: Fuel Strategy (delta can be negative, show +/-)
+            TelemetryField.FuelNeededToFinish when value is float fuel => 
+                AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+            TelemetryField.FuelDeltaToFinish when value is float fuel => 
+                (fuel >= 0 ? "+" : "") + (AppSettings.Instance.UseMetricUnits 
+                    ? fuel.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
+                    : (fuel * 0.264172f).ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
             
             // Temperatures (NO units or decimals - units are in label)
             TelemetryField.WaterTemp when value is float temp => 
@@ -1082,6 +1178,9 @@ public class MRTOneWidget : WidgetBase
             UpdateSection(_bottomValueText, _bottomLabelText, _dataBinding.TertiaryField.Value, data);
         }
         
+        // PHASE 2 FUEL CALCULATOR: Update fuel display (simple 1-line below gauge)
+        UpdateFuelDisplay();
+        
         // BRAKE BIAS OVERLAY: Show temporarily when value changes (if enabled in settings)
         // Only trigger after initialization to prevent showing on connection/getting in car
         if (AppSettings.Instance.ShowBrakeBiasOverlay)
@@ -1122,7 +1221,7 @@ public class MRTOneWidget : WidgetBase
         // Update LEFT side box
         if (_leftField.HasValue)
         {
-            var leftValue = TelemetryDataMapper.GetValue(_leftField.Value, data) ?? 0;
+            var leftValue = TelemetryDataMapper.GetValue(_leftField.Value, data, _telemetryService) ?? 0;
             _leftValueText.Text = FormatFieldValue(_leftField.Value, leftValue, data);
             _leftValueText.Foreground = new SolidColorBrush(GetValueColor(_leftField.Value, leftValue, data));
             
@@ -1193,7 +1292,7 @@ public class MRTOneWidget : WidgetBase
         // Update RIGHT side box
         if (_rightField.HasValue)
         {
-            var rightValue = TelemetryDataMapper.GetValue(_rightField.Value, data) ?? 0;
+            var rightValue = TelemetryDataMapper.GetValue(_rightField.Value, data, _telemetryService) ?? 0;
             _rightValueText.Text = FormatFieldValue(_rightField.Value, rightValue, data);
             _rightValueText.Foreground = new SolidColorBrush(GetValueColor(_rightField.Value, rightValue, data));
             
@@ -1330,7 +1429,8 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     private void UpdateSection(TextBlock valueText, TextBlock? labelText, TelemetryField field, TelemetryData data)
     {
-        var value = TelemetryDataMapper.GetValue(field, data);
+        // Use telemetry service overload for fuel calculation fields
+        var value = TelemetryDataMapper.GetValue(field, data, _telemetryService);
         
         // Use consistent formatting functions
         valueText.Text = FormatFieldValue(field, value ?? 0, data);
@@ -1443,6 +1543,183 @@ public class MRTOneWidget : WidgetBase
             ProximityZone.Far => Brushes.Green,          // >16m - SAFE
             _ => Brushes.Green                           // Clear (no cars detected)
         };
+    }
+    
+    /// <summary>
+    /// PHASE 2 FUEL CALCULATOR: Update comprehensive fuel display below gauge.
+    /// Shows: Current Fuel, Last/L5/L10 Averages, Laps Remaining, Min/Max, Delta to Finish
+    /// </summary>
+    private void UpdateFuelDisplay()
+    {
+        try
+        {
+            // Early exit if fuel display is disabled
+            if (!_settings.EnableFuelDisplay)
+            {
+                if (_fuelDisplay != null)
+                    _fuelDisplay.Visibility = Visibility.Collapsed;
+                return;
+            }
+            
+            // Safety check: Ensure fuel display element is initialized
+            if (_fuelDisplay == null)
+                return;
+            
+            // Get fuel data from telemetry service (with null safety)
+            var fuelData = _telemetryService?.CurrentFuelData;
+            
+            // Additional null check for fuel data
+            if (fuelData == null)
+            {
+                _fuelDisplay.Visibility = Visibility.Collapsed;
+                return;
+            }
+        
+        // Only show fuel display if we have valid data (at least 1 lap completed for averages)
+        if (fuelData.CurrentFuel > 0 && fuelData.HasSufficientData)
+        {
+            // Build comprehensive fuel display (compact multi-line format)
+            var fuelText = new System.Text.StringBuilder();
+            
+            // Line 1: Current fuel and tank capacity
+            fuelText.AppendLine($"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L ({fuelData.FuelPct:F0}%)");
+            
+            // Line 2: Averages (Last, L5, L10, Session)
+            fuelText.AppendLine($"AVG: L:{fuelData.AvgFuelPerLap_Last:F2} | 5:{fuelData.AvgFuelPerLap_L5:F2} | 10:{fuelData.AvgFuelPerLap_L10:F2} | S:{fuelData.AvgFuelPerLap_Session:F2}");
+            
+            // Line 3: Min/Max and laps remaining (1 decimal for precision) with iRacing delta
+            string lapsDeltaStr = fuelData.LapsDifference >= 0 
+                ? $"+{fuelData.LapsDifference:F1}" 
+                : $"{fuelData.LapsDifference:F1}";
+            fuelText.AppendLine($"RANGE: {fuelData.MinFuelPerLap:F2}-{fuelData.MaxFuelPerLap:F2}L | LAPS: {fuelData.LapsRemaining:F1} (iR: {fuelData.IRacingLapsRemaining:F1}, Δ {lapsDeltaStr})");
+            
+            // Line 4: Delta to finish and fuel needed (TO GO + NEED - prominently shown)
+            if (fuelData.RaceLapsRemaining > 0)
+            {
+                // RACE MODE: TO GO = FuelDeltaToFinish (accounts for race laps + buffer + 0.3L finish threshold)
+                string deltaStr = fuelData.FuelDeltaToFinish >= 0 
+                    ? $"+{fuelData.FuelDeltaToFinish:F2}L" 
+                    : $"{fuelData.FuelDeltaToFinish:F2}L";
+                
+                // NEED: Calculate fuel needed WITHOUT buffer, just race laps + 0.3L finish threshold
+                // This gives the minimum fuel to finish (no safety buffer)
+                float fuelNeededNoBuffer = (fuelData.RaceLapsRemaining * fuelData.AvgFuelPerLap_L5) + fuelData.FuelSputteringThreshold;
+                float fuelToAddNoBuffer = Math.Max(0, fuelNeededNoBuffer - fuelData.CurrentFuel);
+                
+                string needStr = fuelToAddNoBuffer > 0.1f  // >0.1L threshold to avoid showing 0.0L
+                    ? $"{fuelToAddNoBuffer:F2}L" 
+                    : "OK";
+                
+                fuelText.AppendLine($"TO FINISH: {fuelData.FuelNeededToFinish:F2}L ({deltaStr}) | NEED {needStr}");
+            }
+            else
+            {
+                // QUALIFYING/PRACTICE MODE: 5-lap reference for TO GO
+                float fivelapFuel = fuelData.AvgFuelPerLap_L5 * 5;
+                float deltaToFiveLaps = fuelData.CurrentFuel - fivelapFuel;
+                string deltaStr = deltaToFiveLaps >= 0 
+                    ? $"+{deltaToFiveLaps:F2}L" 
+                    : $"{deltaToFiveLaps:F2}L";
+                fuelText.AppendLine($"5-LAP REF: {fivelapFuel:F2}L ({deltaStr})");
+            }
+            
+            // Line 5: Green/Yellow flag averages (if available)
+            if (fuelData.GreenFlagLapCount > 0 || fuelData.YellowFlagLapCount > 0)
+            {
+                string flagInfo = "";
+                if (fuelData.GreenFlagLapCount > 0)
+                    flagInfo += $"GREEN: {fuelData.GreenFlagAverage:F2}L ({fuelData.GreenFlagLapCount})";
+                if (fuelData.YellowFlagLapCount > 0)
+                    flagInfo += (flagInfo.Length > 0 ? " | " : "") + $"YELLOW: {fuelData.YellowFlagAverage:F2}L ({fuelData.YellowFlagLapCount})";
+                fuelText.AppendLine(flagInfo);
+            }
+            
+            // PHASE 2: Multi-Stint Strategy (Toggle-able via Visual Settings)
+            if (_settings.EnableFuelStrategy && fuelData.RaceLapsRemaining > 0 && fuelData.AvgFuelPerLap_L5 > 0)
+            {
+                fuelText.AppendLine(""); // Blank line separator
+                fuelText.AppendLine("═══ PIT STRATEGY ═══");
+                
+                // Calculate stint scenarios
+                float avgFuel = fuelData.AvgFuelPerLap_L5;
+                float tankCap = fuelData.TankCapacity;
+                int totalLaps = fuelData.RaceLapsRemaining;
+                float currentFuel = fuelData.CurrentFuel;
+                
+                // NO-STOP Strategy (if possible)
+                if (fuelData.CanFinishWithoutStop)
+                {
+                    fuelText.AppendLine($"✓ NO-STOP: Current fuel sufficient ({fuelData.FuelDeltaToFinish:+0.0;-0.0}L surplus)");
+                }
+                
+                // 1-STOP Strategy
+                float lapsOnCurrentFuel = currentFuel / avgFuel;
+                float lapsOnFullTank = tankCap / avgFuel;
+                
+                if (lapsOnCurrentFuel + lapsOnFullTank >= totalLaps)
+                {
+                    // Can finish with 1 stop
+                    int optimalPitLap = (int)Math.Floor(lapsOnCurrentFuel);
+                    int lapsAfterPit = totalLaps - optimalPitLap;
+                    float fuelToAdd = lapsAfterPit * avgFuel;
+                    fuelText.AppendLine($"1-STOP: Pit @ L{optimalPitLap} → Add {fuelToAdd:F1}L");
+                }
+                else
+                {
+                    fuelText.AppendLine($"1-STOP: NOT POSSIBLE (need {(totalLaps * avgFuel - currentFuel - tankCap):F1}L more capacity)");
+                }
+                
+                // 2-STOP Strategy
+                if (lapsOnFullTank * 2 >= totalLaps)
+                {
+                    // Calculate optimal 2-stop windows
+                    float lapsPerStint = totalLaps / 3.0f; // Divide race into 3 stints
+                    int firstPit = (int)Math.Min(lapsOnCurrentFuel, lapsPerStint);
+                    int secondPit = firstPit + (int)lapsOnFullTank;
+                    float firstStopFuel = Math.Min(tankCap, lapsPerStint * avgFuel);
+                    float secondStopFuel = Math.Min(tankCap, (totalLaps - secondPit) * avgFuel);
+                    fuelText.AppendLine($"2-STOP: L{firstPit} ({firstStopFuel:F1}L), L{secondPit} ({secondStopFuel:F1}L)");
+                }
+                else
+                {
+                    fuelText.AppendLine($"2-STOP: NOT POSSIBLE (tank too small for race distance)");
+                }
+                
+                // Optimal window (minimize risk)
+                int conservativePitLap = (int)Math.Floor(lapsOnCurrentFuel * 0.9f); // 10% safety margin
+                fuelText.AppendLine($"⚠ SAFE WINDOW: Pit by L{conservativePitLap} (90% fuel buffer)");
+            }
+            
+            _fuelDisplay.Text = fuelText.ToString().TrimEnd();
+            _fuelDisplay.Visibility = Visibility.Visible;
+            
+            // Simplified color-code based on laps remaining (orange ≥2 laps, red <2 laps)
+            Color fuelColor = fuelData.LapsRemaining >= 2
+                ? Color.FromRgb(255, 128, 0)   // Orange - SOON
+                : Colors.Red;                   // Red - URGENT
+            
+            _fuelDisplay.Foreground = new SolidColorBrush(Color.FromArgb(200, fuelColor.R, fuelColor.G, fuelColor.B));
+        }
+        else if (fuelData.CurrentFuel > 0)
+        {
+            // Show minimal info if we have fuel but not enough data for averages
+            _fuelDisplay.Text = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
+            _fuelDisplay.Visibility = Visibility.Visible;
+            _fuelDisplay.Foreground = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)); // Dimmed white
+        }
+        else
+        {
+            // Hide fuel display if no valid data yet
+            _fuelDisplay.Visibility = Visibility.Collapsed;
+        }
+        }
+        catch (Exception)
+        {
+            // Silently handle any errors during fuel display update
+            // This prevents the widget from crashing during initialization
+            if (_fuelDisplay != null)
+                _fuelDisplay.Visibility = Visibility.Collapsed;
+        }
     }
     
     protected override void OnConnectionStatusChanged(ConnectionStatus status)
@@ -1596,6 +1873,10 @@ public class MRTOneWidget : WidgetBase
         {
             RemoveGlowEffects();
         }
+        
+        // Enhancement 4: Fuel Display - trigger update instead of just toggling visibility
+        // Let UpdateFuelDisplay() handle visibility based on both settings AND data availability
+        UpdateFuelDisplay();
     }
     
     // ============================================

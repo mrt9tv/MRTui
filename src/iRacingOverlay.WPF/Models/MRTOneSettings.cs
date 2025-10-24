@@ -97,6 +97,18 @@ public class MRTOneSettings
     public bool EnablePitLimiterIndicator { get; set; } = true;
 
     /// <summary>
+    /// Enable fuel display below gauge (comprehensive fuel data with laps remaining) - ON by default
+    /// </summary>
+    [JsonPropertyName("enableFuelDisplay")]
+    public bool EnableFuelDisplay { get; set; } = true;
+
+    /// <summary>
+    /// Enable multi-stint pit strategy display (1-stop, 2-stop scenarios, optimal windows) - OFF by default
+    /// </summary>
+    [JsonPropertyName("enableFuelStrategy")]
+    public bool EnableFuelStrategy { get; set; } = false;
+
+    /// <summary>
     /// Create default settings
     /// </summary>
     public static MRTOneSettings Default => new()
@@ -115,7 +127,9 @@ public class MRTOneSettings
         EnableGradientBackground = true,  // ON by default
         EnableShiftPointRing = false,
         EnableGlowEffects = false,
-        EnablePitLimiterIndicator = true  // ON by default for safety
+        EnablePitLimiterIndicator = true,  // ON by default for safety
+        EnableFuelDisplay = true,  // ON by default
+        EnableFuelStrategy = false  // OFF by default (advanced feature)
     };
     
     /// <summary>

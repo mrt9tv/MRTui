@@ -370,7 +370,7 @@ public class DataWidget : WidgetBase
             }
 
             // Get value for the selected field
-            var value = TelemetryDataMapper.GetValue(cell.Field, data);
+            var value = TelemetryDataMapper.GetValue(cell.Field, data, _telemetryService);
             var (valueText, color) = FormatFieldValueAndColor(cell.Field, value, data);
             
             cell.Value.Text = valueText;
@@ -557,6 +557,77 @@ public class DataWidget : WidgetBase
                     text = "---";
                 }
                 break;
+            
+            // Phase 2: Fuel Calculation Fields - Averages
+            case TelemetryField.FuelAvgLast:
+            case TelemetryField.FuelAvgL5:
+            case TelemetryField.FuelAvgL10:
+            case TelemetryField.FuelAvgSession:
+            case TelemetryField.FuelMinPerLap:
+            case TelemetryField.FuelMaxPerLap:
+            case TelemetryField.FuelGreenAvg:
+            case TelemetryField.FuelYellowAvg:
+            case TelemetryField.FuelNeededToFinish:
+                if (value is float fuelVal)
+                {
+                    if (AppSettings.Instance.UseMetricUnits)
+                    {
+                        text = $"{fuelVal:F2}L";
+                    }
+                    else
+                    {
+                        float fuelGallons = fuelVal * 0.264172f;
+                        text = $"{fuelGallons:F2}gal";
+                    }
+                }
+                else
+                {
+                    text = "---";
+                }
+                break;
+            
+            // Phase 2: Fuel Laps Remaining
+            case TelemetryField.FuelLapsRemainingL5:
+            case TelemetryField.FuelLapsRemainingL10:
+            case TelemetryField.FuelGreenLapsRemain:
+            case TelemetryField.FuelYellowLapsRemain:
+                if (value is float laps)
+                {
+                    text = $"{laps:F1} laps";
+                    // Color coding for laps remaining
+                    if (laps < 2f)
+                        color = Colors.Red;
+                    else if (laps < 5f)
+                        color = Colors.Yellow;
+                }
+                else
+                {
+                    text = "---";
+                }
+                break;
+            
+            // Phase 2: Fuel Delta (can be negative)
+            case TelemetryField.FuelDeltaToFinish:
+                if (value is float delta)
+                {
+                    string sign = delta >= 0 ? "+" : "";
+                    if (AppSettings.Instance.UseMetricUnits)
+                    {
+                        text = $"{sign}{delta:F2}L";
+                    }
+                    else
+                    {
+                        float deltaGallons = delta * 0.264172f;
+                        text = $"{sign}{deltaGallons:F2}gal";
+                    }
+                    // Color coding: Red if deficit, Green if surplus
+                    color = delta < 0 ? Colors.Red : Colors.LightGreen;
+                }
+                else
+                {
+                    text = "---";
+                }
+                break;
 
             case TelemetryField.WaterTemp:
             case TelemetryField.OilTemp:
@@ -613,10 +684,10 @@ public class DataWidget : WidgetBase
                     text = allTemps; // Keep newline for multi-line display
                     
                     // For TireTempAll, get average temp for color coding from individual tire values
-                    var lf = TelemetryDataMapper.GetValue(TelemetryField.TireTempLF, data) as float? ?? 0f;
-                    var rf = TelemetryDataMapper.GetValue(TelemetryField.TireTempRF, data) as float? ?? 0f;
-                    var lr = TelemetryDataMapper.GetValue(TelemetryField.TireTempLR, data) as float? ?? 0f;
-                    var rr = TelemetryDataMapper.GetValue(TelemetryField.TireTempRR, data) as float? ?? 0f;
+                    var lf = TelemetryDataMapper.GetValue(TelemetryField.TireTempLF, data, _telemetryService) as float? ?? 0f;
+                    var rf = TelemetryDataMapper.GetValue(TelemetryField.TireTempRF, data, _telemetryService) as float? ?? 0f;
+                    var lr = TelemetryDataMapper.GetValue(TelemetryField.TireTempLR, data, _telemetryService) as float? ?? 0f;
+                    var rr = TelemetryDataMapper.GetValue(TelemetryField.TireTempRR, data, _telemetryService) as float? ?? 0f;
                     float avgTemp = (lf + rf + lr + rr) / 4f;
                     
                     color = avgTemp switch

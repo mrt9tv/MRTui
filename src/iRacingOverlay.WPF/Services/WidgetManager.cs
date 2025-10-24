@@ -17,6 +17,7 @@ namespace iRacingOverlay.WPF.Services;
 public class WidgetManager
 {
     private readonly ITelemetryService _telemetryService;
+    private readonly FuelCalculatorService _fuelCalculatorService;
     private readonly ILogger<WidgetManager> _logger;
     private readonly Dictionary<Guid, WidgetBase> _activeWidgets = new();
     private readonly Dictionary<WidgetType, Func<ITelemetryService, WidgetConfig, WidgetBase>> _widgetFactories = new();
@@ -27,9 +28,10 @@ public class WidgetManager
     public event EventHandler<Guid>? WidgetRemoved;
     public event EventHandler? WidgetVisibilityChanged;
 
-    public WidgetManager(ITelemetryService telemetryService, ILogger<WidgetManager> logger)
+    public WidgetManager(ITelemetryService telemetryService, FuelCalculatorService fuelCalculatorService, ILogger<WidgetManager> logger)
     {
         _telemetryService = telemetryService ?? throw new ArgumentNullException(nameof(telemetryService));
+        _fuelCalculatorService = fuelCalculatorService ?? throw new ArgumentNullException(nameof(fuelCalculatorService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         RegisterWidgetFactories();
@@ -47,7 +49,7 @@ public class WidgetManager
             new Widgets.DataWidget.DataWidget(service, config);
 
         _widgetFactories[WidgetType.Fuel] = (service, config) =>
-            new Widgets.FuelWidget.FuelWidget(service, config);
+            new Widgets.FuelWidget.FuelWidget(service, _fuelCalculatorService, config);
 
         // TODO: Uncomment as we create more widgets
         // _widgetFactories[WidgetType.TelemetryTable] = (service, config) =>

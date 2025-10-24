@@ -174,6 +174,26 @@ public class TelemetryData
     /// Fuel line pressure in bar
     /// </summary>
     public float FuelPress { get; set; }
+    
+    /// <summary>
+    /// Fuel tank capacity in liters (car maximum)
+    /// </summary>
+    public float FuelLevelMax { get; set; }
+    
+    /// <summary>
+    /// Laps remaining based on fuel (iRacing's calculation)
+    /// </summary>
+    public float SessionLapsRemainEx { get; set; }
+    
+    /// <summary>
+    /// Number of laps completed by player
+    /// </summary>
+    public int LapsCompleted { get; set; }
+    
+    /// <summary>
+    /// Total laps in race/session (0 for time-based sessions)
+    /// </summary>
+    public int SessionLaps { get; set; }
 
     /// <summary>
     /// Water temperature in Celsius
@@ -293,6 +313,12 @@ public class TelemetryData
 
     public uint SessionFlags { get; set; }
     public int PlayerCarMyIncidentCount { get; set; }
+    
+    /// <summary>
+    /// Pace mode enumeration (0=SingleFileStart, 1=DoubleFileStart, 2=SingleFileRestart, 3=DoubleFileRestart, 4=NotPacing)
+    /// Indicates restart formation type - useful for restart strategy
+    /// </summary>
+    public int PaceMode { get; set; }
 
     public float LFbrakeLinePress { get; set; }
     public float RFbrakeLinePress { get; set; }
@@ -511,6 +537,12 @@ public class TelemetryData
     /// </summary>
     public float TrackLength { get; set; }
     
+    /// <summary>
+    /// Track pit speed limit in meters per second (parsed from YAML SessionInfo)
+    /// Converted from kph format (e.g., "55.98 kph" → 15.55 m/s)
+    /// </summary>
+    public float TrackPitSpeedLimit { get; set; }
+    
     // ===== PHASE 1: 4-Way Proximity Radar =====
     
     /// <summary>
@@ -585,6 +617,12 @@ public class TelemetryData
     /// Used for qualifying/practice position calculation
     /// </summary>
     public float[]? CarIdxBestLapTime { get; set; }
+    
+    /// <summary>
+    /// Map of CarIdx to Car Number string (from YAML DriverInfo:Drivers)
+    /// Used for pit exit position display (e.g., "4s ahead of #14")
+    /// </summary>
+    public Dictionary<int, string>? CarIdxToCarNumber { get; set; }
 
     /// <summary>
     /// Player heading angle in radians (yaw around Z-axis)
