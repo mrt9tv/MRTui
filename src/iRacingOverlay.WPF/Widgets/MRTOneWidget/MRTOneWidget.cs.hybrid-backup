@@ -25,107 +25,6 @@ namespace iRacingOverlay.WPF.Widgets.MRTOneWidget;
 /// </summary>
 public class MRTOneWidget : WidgetBase
 {
-    #region Layout Constants
-
-    /// <summary>
-    /// Layout and sizing constants for the MRT One widget
-    /// Extracted from magic numbers for maintainability and documentation
-    /// </summary>
-    private static class LayoutConstants
-    {
-        // === Canvas and Grid Dimensions ===
-        /// <summary>Canvas size including radar square spacing (228px = 200px grid + 14px each side for radar)</summary>
-        public const double CANVAS_WIDTH = 228;
-        /// <summary>Canvas height including fuel display space below (308px = 228px top section + 80px fuel area)</summary>
-        public const double CANVAS_HEIGHT = 308;
-        /// <summary>Main grid size for circular gauge content</summary>
-        public const double GRID_SIZE = 200;
-        /// <summary>Offset from canvas edge to center grid (accounts for radar square space)</summary>
-        public const double RADAR_OFFSET = 14;
-
-        // === Radar Square Specifications ===
-        /// <summary>Width of radar spotter squares</summary>
-        public const double RADAR_SQUARE_SIZE = 12;
-        /// <summary>Radar square stroke thickness</summary>
-        public const double RADAR_STROKE_THICKNESS = 1;
-        /// <summary>Radar square corner radius for slight rounding</summary>
-        public const double RADAR_CORNER_RADIUS = 2;
-        /// <summary>Distance from edge of canvas to radar squares (provides spacing from circle)</summary>
-        public const double RADAR_EDGE_OFFSET = 2;
-        /// <summary>Center position for vertical radar squares (canvas center minus half square size)</summary>
-        public const double RADAR_CENTER_OFFSET = 108; // 114 (canvas center) - 6 (half square)
-        /// <summary>Bottom position for rear radar square</summary>
-        public const double RADAR_BACK_TOP = 214;
-
-        // === Gauge Circle ===
-        /// <summary>Gauge circle stroke thickness</summary>
-        public const double GAUGE_STROKE_THICKNESS = 3;
-        /// <summary>Gauge circle margin (spacing from grid edges)</summary>
-        public const double GAUGE_MARGIN = 5;
-
-        // === Text Positioning ===
-        /// <summary>Top section margin from top (15% of grid size)</summary>
-        public const double TOP_SECTION_MARGIN = 30;
-        /// <summary>Bottom section margin from bottom (15% of grid size)</summary>
-        public const double BOTTOM_SECTION_MARGIN = 30;
-        /// <summary>Side box horizontal margin (15% of grid size)</summary>
-        public const double SIDE_BOX_MARGIN_H = 30;
-        /// <summary>Side box vertical margin (negative to align value with center text)</summary>
-        public const double SIDE_BOX_MARGIN_V = -9;
-
-        // === Font Sizes ===
-        /// <summary>Top/bottom value text font size</summary>
-        public const double FIELD_VALUE_FONT_SIZE = 18;
-        /// <summary>Top/bottom label text font size</summary>
-        public const double FIELD_LABEL_FONT_SIZE = 10;
-        /// <summary>Center value (gear) font size</summary>
-        public const double CENTER_VALUE_FONT_SIZE = 56;
-        /// <summary>Brake bias overlay font size</summary>
-        public const double BRAKE_BIAS_FONT_SIZE = 46;
-        /// <summary>Side box label font size</summary>
-        public const double SIDE_BOX_LABEL_FONT_SIZE = 8;
-        /// <summary>Side box value font size</summary>
-        public const double SIDE_BOX_VALUE_FONT_SIZE = 13;
-        /// <summary>Fuel display font size</summary>
-        public const double FUEL_DISPLAY_FONT_SIZE = 8;
-        /// <summary>Fuel display line height (compact spacing)</summary>
-        public const double FUEL_DISPLAY_LINE_HEIGHT = 11;
-
-        // === Fuel Display Positioning ===
-        /// <summary>Vertical position of fuel display below gauge (canvas Y coordinate)</summary>
-        public const double FUEL_DISPLAY_TOP = 240;
-
-        // === RPM Indicator Bead ===
-        /// <summary>Size of RPM indicator bead (circular dot on gauge)</summary>
-        public const double RPM_BEAD_SIZE = 12;
-        /// <summary>RPM angle threshold for horizontal centering (degrees)</summary>
-        public const double RPM_CENTER_ANGLE_THRESHOLD = 260;
-        /// <summary>RPM centering factor divisor (smooths centering transition)</summary>
-        public const double RPM_CENTER_SMOOTHING = 10.0;
-
-        // === Timing Constants (milliseconds) ===
-        /// <summary>Fuel warning blink timer interval (slow blink)</summary>
-        public const int FUEL_BLINK_INTERVAL_MS = 250;
-        /// <summary>Radar critical proximity blink timer interval (fast blink)</summary>
-        public const int RADAR_BLINK_INTERVAL_MS = 125;
-        /// <summary>Pit limiter blink timer interval (fast blink)</summary>
-        public const int PIT_LIMITER_BLINK_INTERVAL_MS = 125;
-        /// <summary>RPM bead animation timer interval (~30 FPS for smooth animation)</summary>
-        public const int RPM_ANIMATION_INTERVAL_MS = 33;
-
-        // === Visual Effects ===
-        /// <summary>Glow effect blur radius for center text</summary>
-        public const double GLOW_BLUR_RADIUS_CENTER = 15;
-        /// <summary>Glow effect blur radius for gauge circle</summary>
-        public const double GLOW_BLUR_RADIUS_GAUGE = 10;
-        /// <summary>Glow effect opacity for center text</summary>
-        public const double GLOW_OPACITY_CENTER = 0.8;
-        /// <summary>Glow effect opacity for gauge circle</summary>
-        public const double GLOW_OPACITY_GAUGE = 0.6;
-    }
-
-    #endregion
-
     private readonly Grid _mainGrid;
     private readonly Ellipse _gaugeCircle;
     
@@ -252,32 +151,32 @@ public class MRTOneWidget : WidgetBase
         var outerCanvas = new Canvas
         {
             Background = Brushes.Transparent,
-            Width = LayoutConstants.CANVAS_WIDTH,
-            Height = LayoutConstants.CANVAS_HEIGHT
+            Width = 228, // Extra 28px for radar squares (14px each side for 4px spacing + 12px box - 2px overlap)
+            Height = 308  // Increased from 228 to 308 (+80px) to show fuel display below circle
         };
-
+        
         // Create main grid (no background - transparent)
-        // Use fixed size for content, then scale via LayoutTransform
+        // Use fixed size of 200x200 for content, then scale via LayoutTransform
         _mainGrid = new Grid
         {
             Background = Brushes.Transparent,
-            Width = LayoutConstants.GRID_SIZE,
-            Height = LayoutConstants.GRID_SIZE
+            Width = 200,
+            Height = 200  // Keep at 200x200 for circular gauge (fuel display extends below via negative margin)
         };
-
-        // Position main grid centered in canvas (offset for radar space)
-        Canvas.SetLeft(_mainGrid, LayoutConstants.RADAR_OFFSET);
-        Canvas.SetTop(_mainGrid, LayoutConstants.RADAR_OFFSET);
+        
+        // Position main grid centered in canvas (14px offset for radar space)
+        Canvas.SetLeft(_mainGrid, 14);
+        Canvas.SetTop(_mainGrid, 14);
         outerCanvas.Children.Add(_mainGrid);
-
+        
         // Create circular gauge that fills the entire window
         _gaugeCircle = new Ellipse
         {
             Stroke = new SolidColorBrush(_primaryColor), // Teal border
-            StrokeThickness = LayoutConstants.GAUGE_STROKE_THICKNESS,
+            StrokeThickness = 3,
             Fill = new SolidColorBrush(Color.FromArgb(
                 (byte)(255 * _backgroundOpacity), 20, 20, 20)), // Dark gray with opacity
-            Margin = new Thickness(LayoutConstants.GAUGE_MARGIN)
+            Margin = new Thickness(5) // Small margin for stroke
         };
         _mainGrid.Children.Add(_gaugeCircle);
         
@@ -289,65 +188,65 @@ public class MRTOneWidget : WidgetBase
         // Front radar (top - cars ahead)
         _radarFront = new Rectangle
         {
-            Width = LayoutConstants.RADAR_SQUARE_SIZE,
-            Height = LayoutConstants.RADAR_SQUARE_SIZE,
+            Width = 12,
+            Height = 12,
             Fill = Brushes.Green, // Default: clear/far
             Stroke = new SolidColorBrush(_primaryColor),
-            StrokeThickness = LayoutConstants.RADAR_STROKE_THICKNESS,
-            RadiusX = LayoutConstants.RADAR_CORNER_RADIUS,
-            RadiusY = LayoutConstants.RADAR_CORNER_RADIUS,
+            StrokeThickness = 1,
+            RadiusX = 2, // Slight rounding
+            RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarFront, LayoutConstants.RADAR_CENTER_OFFSET);
-        Canvas.SetTop(_radarFront, LayoutConstants.RADAR_EDGE_OFFSET);
+        Canvas.SetLeft(_radarFront, 108); // Center horizontally (114 - 6)
+        Canvas.SetTop(_radarFront, 2);    // Top, 4px further out from edge
         outerCanvas.Children.Add(_radarFront);
         
         // Back radar (bottom - cars behind)
         _radarBack = new Rectangle
         {
-            Width = LayoutConstants.RADAR_SQUARE_SIZE,
-            Height = LayoutConstants.RADAR_SQUARE_SIZE,
+            Width = 12,
+            Height = 12,
             Fill = Brushes.Green, // Default: clear/far
             Stroke = new SolidColorBrush(_primaryColor),
-            StrokeThickness = LayoutConstants.RADAR_STROKE_THICKNESS,
-            RadiusX = LayoutConstants.RADAR_CORNER_RADIUS,
-            RadiusY = LayoutConstants.RADAR_CORNER_RADIUS,
+            StrokeThickness = 1,
+            RadiusX = 2,
+            RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarBack, LayoutConstants.RADAR_CENTER_OFFSET);
-        Canvas.SetTop(_radarBack, LayoutConstants.RADAR_BACK_TOP);
+        Canvas.SetLeft(_radarBack, 108);  // Center horizontally
+        Canvas.SetTop(_radarBack, 214);   // Bottom, 4px further out from edge
         outerCanvas.Children.Add(_radarBack);
-
+        
         // Left radar (left side - cars on left)
         _radarLeft = new Rectangle
         {
-            Width = LayoutConstants.RADAR_SQUARE_SIZE,
-            Height = LayoutConstants.RADAR_SQUARE_SIZE,
+            Width = 12,
+            Height = 12,
             Fill = Brushes.Green, // Default: clear
             Stroke = new SolidColorBrush(_primaryColor),
-            StrokeThickness = LayoutConstants.RADAR_STROKE_THICKNESS,
-            RadiusX = LayoutConstants.RADAR_CORNER_RADIUS,
-            RadiusY = LayoutConstants.RADAR_CORNER_RADIUS,
+            StrokeThickness = 1,
+            RadiusX = 2,
+            RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarLeft, LayoutConstants.RADAR_EDGE_OFFSET);
-        Canvas.SetTop(_radarLeft, LayoutConstants.RADAR_CENTER_OFFSET);
+        Canvas.SetLeft(_radarLeft, 2);    // Left, 4px further out from edge
+        Canvas.SetTop(_radarLeft, 108);   // Center vertically (114 - 6)
         outerCanvas.Children.Add(_radarLeft);
-
+        
         // Right radar (right side - cars on right)
         _radarRight = new Rectangle
         {
-            Width = LayoutConstants.RADAR_SQUARE_SIZE,
-            Height = LayoutConstants.RADAR_SQUARE_SIZE,
+            Width = 12,
+            Height = 12,
             Fill = Brushes.Green, // Default: clear
             Stroke = new SolidColorBrush(_primaryColor),
-            StrokeThickness = LayoutConstants.RADAR_STROKE_THICKNESS,
-            RadiusX = LayoutConstants.RADAR_CORNER_RADIUS,
-            RadiusY = LayoutConstants.RADAR_CORNER_RADIUS,
+            StrokeThickness = 1,
+            RadiusX = 2,
+            RadiusY = 2,
             Visibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed
         };
-        Canvas.SetLeft(_radarRight, LayoutConstants.RADAR_BACK_TOP);
-        Canvas.SetTop(_radarRight, LayoutConstants.RADAR_CENTER_OFFSET);
+        Canvas.SetLeft(_radarRight, 214); // Right, 4px further out from edge
+        Canvas.SetTop(_radarRight, 108);  // Center vertically
         outerCanvas.Children.Add(_radarRight);
         
         // PHASE 2: Apply visual enhancements based on settings
@@ -358,26 +257,26 @@ public class MRTOneWidget : WidgetBase
         {
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, LayoutConstants.TOP_SECTION_MARGIN, 0, 0)
+            Margin = new Thickness(0, 30, 0, 0) // Position inside circle (15% of default 200px size)
         };
-
+        
         _topValueText = new TextBlock
         {
             Text = "0",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.FIELD_VALUE_FONT_SIZE,
+            FontSize = 18,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
         _topStack.Children.Add(_topValueText);
-
+        
         _topLabelText = new TextBlock
         {
             Text = "km/h",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.FIELD_LABEL_FONT_SIZE,
+            FontSize = 10,
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -385,15 +284,15 @@ public class MRTOneWidget : WidgetBase
             Margin = new Thickness(0, 2, 0, 0)
         };
         _topStack.Children.Add(_topLabelText);
-
+        
         _mainGrid.Children.Add(_topStack);
-
+        
         // Center section: Value only (typically Gear - no label needed)
         _centerValueText = new TextBlock
         {
             Text = "N",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.CENTER_VALUE_FONT_SIZE,
+            FontSize = 56,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -401,7 +300,7 @@ public class MRTOneWidget : WidgetBase
             TextAlignment = TextAlignment.Center
         };
         _mainGrid.Children.Add(_centerValueText);
-
+        
         // Brake bias transient overlay (hidden by default, appears when value changes)
         // Shows only the value (no label) with transparent background to avoid visual conflicts
         _brakeBiasLabel = new TextBlock
@@ -409,19 +308,19 @@ public class MRTOneWidget : WidgetBase
             Text = "", // No label - hide it
             Visibility = Visibility.Collapsed
         };
-
+        
         _brakeBiasValue = new TextBlock
         {
             Text = "50.0%",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.BRAKE_BIAS_FONT_SIZE,
+            FontSize = 46,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(_secondaryColor),  // Orange
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
-
+        
         _brakeBiasOverlay = new Border
         {
             Background = Brushes.Transparent, // Transparent to match existing circle background
@@ -431,20 +330,20 @@ public class MRTOneWidget : WidgetBase
             Child = _brakeBiasValue
         };
         _mainGrid.Children.Add(_brakeBiasOverlay);
-
+        
         // Bottom section: Value + Label (positioned absolutely in bottom portion of circle)
         _bottomStack = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Bottom,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, LayoutConstants.BOTTOM_SECTION_MARGIN)
+            Margin = new Thickness(0, 0, 0, 30) // Position inside circle (15% of default 200px size)
         };
-
+        
         _bottomValueText = new TextBlock
         {
             Text = "0",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.FIELD_VALUE_FONT_SIZE,
+            FontSize = 18,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -456,7 +355,7 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "RPM",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.FIELD_LABEL_FONT_SIZE,
+            FontSize = 10,
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -464,9 +363,9 @@ public class MRTOneWidget : WidgetBase
             Margin = new Thickness(0, 2, 0, 0)
         };
         _bottomStack.Children.Add(_bottomLabelText);
-
+        
         _mainGrid.Children.Add(_bottomStack);
-
+        
         // PHASE 2 FUEL CALCULATOR: Comprehensive multi-line fuel display below gauge
         // Shows: Current Fuel, Averages, Laps Remaining, Strategy Info
         // Position on CANVAS (not grid) to avoid clipping issues with negative margins
@@ -474,62 +373,62 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.FUEL_DISPLAY_FONT_SIZE,
+            FontSize = 8, // Smaller font for multi-line display
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), // Semi-transparent white
             TextAlignment = TextAlignment.Center,
             Visibility = Visibility.Collapsed, // Hidden by default, shown when fuel data available
-            LineHeight = LayoutConstants.FUEL_DISPLAY_LINE_HEIGHT,
+            LineHeight = 11, // Compact line spacing for multi-line text
             TextWrapping = TextWrapping.NoWrap,
-            Width = LayoutConstants.GRID_SIZE // Match grid width for proper centering
+            Width = 200 // Match grid width for proper centering
         };
-        // Position fuel display on canvas below the gauge
-        Canvas.SetLeft(_fuelDisplay, LayoutConstants.RADAR_OFFSET); // Align with grid left edge
-        Canvas.SetTop(_fuelDisplay, LayoutConstants.FUEL_DISPLAY_TOP);
+        // Position fuel display on canvas below the gauge (centered horizontally at grid center: 14+100=114)
+        Canvas.SetLeft(_fuelDisplay, 14); // Align with grid left edge
+        Canvas.SetTop(_fuelDisplay, 240);  // Below grid bottom (14 + 200 + 26px spacing)
         outerCanvas.Children.Add(_fuelDisplay);
-
+        
         // Left side data box (optional)
         _leftBox = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Margin = new Thickness(LayoutConstants.SIDE_BOX_MARGIN_H, LayoutConstants.SIDE_BOX_MARGIN_V, 0, 0),
+            Margin = new Thickness(30, -9, 0, 0), // 15% horizontal, -9px vertical to align value with center (label height + margin)
             Visibility = Visibility.Collapsed // Hidden by default
         };
-
+        
         _leftLabelText = new TextBlock
         {
             Text = "",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.SIDE_BOX_LABEL_FONT_SIZE,
+            FontSize = 8,  // Reduced from 9 to 8 for better fit
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
         _leftBox.Children.Add(_leftLabelText);
-
+        
         _leftValueText = new TextBlock
         {
             Text = "--",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.SIDE_BOX_VALUE_FONT_SIZE,
+            FontSize = 13,  // Reduced from 14 to 13 for better proportions
             FontWeight = FontWeights.Bold,
             Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 1, 0, 0)
+            Margin = new Thickness(0, 1, 0, 0)  // Reduced gap from 2 to 1
         };
         _leftBox.Children.Add(_leftValueText);
-
+        
         _mainGrid.Children.Add(_leftBox);
-
+        
         // Right side data box (optional)
         _rightBox = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, LayoutConstants.SIDE_BOX_MARGIN_V, LayoutConstants.SIDE_BOX_MARGIN_H, 0),
+            Margin = new Thickness(0, -9, 30, 0), // 15% horizontal, -9px vertical to align value with center (label height + margin)
             Visibility = Visibility.Collapsed // Hidden by default
         };
         
@@ -537,63 +436,63 @@ public class MRTOneWidget : WidgetBase
         {
             Text = "",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.SIDE_BOX_LABEL_FONT_SIZE,
+            FontSize = 8,  // Reduced from 9 to 8 for better fit
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(_primaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
         _rightBox.Children.Add(_rightLabelText);
-
+        
         _rightValueText = new TextBlock
         {
             Text = "--",
             FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.SIDE_BOX_VALUE_FONT_SIZE,
+            FontSize = 13,  // Reduced from 14 to 13 for better proportions
             FontWeight = FontWeights.Bold,
             Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 1, 0, 0)
+            Margin = new Thickness(0, 1, 0, 0)  // Reduced gap from 2 to 1
         };
         _rightBox.Children.Add(_rightValueText);
-
+        
         _mainGrid.Children.Add(_rightBox);
-
+        
         // No border - just the content (outer canvas with radar squares)
         Content = outerCanvas;
-
+        
         // Subscribe to SizeChanged to update scale transform
         SizeChanged += OnWidgetSizeChanged;
-
+        
         // Apply initial scale transform based on loaded size from config
         // (SizeChanged event won't fire if size was set before event handler was attached)
         if (Width > 0 && Height > 0)
         {
-            double scale = Math.Min(Width / LayoutConstants.CANVAS_WIDTH, Height / LayoutConstants.CANVAS_WIDTH);
+            double scale = Math.Min(Width / 228.0, Height / 228.0); // Canvas size with radar boxes
             outerCanvas.LayoutTransform = new ScaleTransform(scale, scale);
         }
-
-        // Setup blinking timer for fuel warnings (slow blink)
+        
+        // Setup blinking timer for fuel warnings (250ms interval = slower blink)
         _blinkTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.FUEL_BLINK_INTERVAL_MS)
+            Interval = TimeSpan.FromMilliseconds(250)
         };
         _blinkTimer.Tick += OnBlinkTimerTick;
         _blinkTimer.Start();
-
-        // Setup radar blinking timer for front/back critical proximity (fast blink)
+        
+        // Setup radar blinking timer for front/back critical proximity (125ms interval = faster blink)
         _radarBlinkTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.RADAR_BLINK_INTERVAL_MS)
+            Interval = TimeSpan.FromMilliseconds(125)
         };
         _radarBlinkTimer.Tick += OnRadarBlinkTimerTick;
         _radarBlinkTimer.Start();
 
-        // Setup pit limiter blinking timer (fast blink) - PHASE 2: Enhancement #4
+        // Setup pit limiter blinking timer (125ms = fast blink like radar critical) - PHASE 2: Enhancement #4
         _pitLimiterBlinkTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.PIT_LIMITER_BLINK_INTERVAL_MS)
+            Interval = TimeSpan.FromMilliseconds(125)
         };
         _pitLimiterBlinkTimer.Tick += OnPitLimiterBlinkTimerTick;
         _pitLimiterBlinkTimer.Start(); // Always running, only acts when limiter active AND feature enabled
@@ -743,12 +642,8 @@ public class MRTOneWidget : WidgetBase
     
     private void OnBlinkTimerTick(object? sender, EventArgs e)
     {
-        // Null guard: Ensure UI elements are initialized before accessing
-        if (_leftValueText == null || _rightValueText == null)
-            return;
-
         _blinkState = !_blinkState;
-
+        
         // Apply blink effect to left box if showing critical fuel
         if (_leftField == TelemetryField.FuelLevel && _leftValueText.Foreground is SolidColorBrush leftBrush && leftBrush.Color == Colors.Red)
         {
@@ -758,7 +653,7 @@ public class MRTOneWidget : WidgetBase
         {
             _leftValueText.Opacity = 1.0;
         }
-
+        
         // Apply blink effect to right box if showing critical fuel
         if (_rightField == TelemetryField.FuelLevel && _rightValueText.Foreground is SolidColorBrush rightBrush && rightBrush.Color == Colors.Red)
         {
@@ -772,12 +667,8 @@ public class MRTOneWidget : WidgetBase
     
     private void OnRadarBlinkTimerTick(object? sender, EventArgs e)
     {
-        // Null guard: Ensure radar elements are initialized before accessing
-        if (_radarFront == null || _radarBack == null)
-            return;
-
         _radarBlinkState = !_radarBlinkState;
-
+        
         // Apply FAST blink effect to FRONT radar square if VeryClose (<4m)
         if (_currentFrontZone == ProximityZone.VeryClose)
         {
@@ -787,7 +678,7 @@ public class MRTOneWidget : WidgetBase
         {
             _radarFront.Opacity = 1.0;
         }
-
+        
         // Apply FAST blink effect to REAR radar square if VeryClose (<4m)
         if (_currentRearZone == ProximityZone.VeryClose)
         {
@@ -801,10 +692,6 @@ public class MRTOneWidget : WidgetBase
     
     private void OnPitLimiterBlinkTimerTick(object? sender, EventArgs e)
     {
-        // Null guard: Ensure gauge circle is initialized before accessing
-        if (_gaugeCircle == null)
-            return;
-
         // Only blink if feature is enabled AND pit limiter is active
         if (!_settings.EnablePitLimiterIndicator || !_isPitLimiterActive)
             return;
@@ -818,22 +705,18 @@ public class MRTOneWidget : WidgetBase
 
     private void OnBrakeBiasHideTimerTick(object? sender, EventArgs e)
     {
-        // Null guard: Ensure UI elements are initialized before accessing
-        if (_brakeBiasOverlay == null || _centerValueText == null || _leftBox == null || _rightBox == null)
-            return;
-
         _brakeBiasHideTimer?.Stop();
-
+        
         // Hide brake bias overlay and restore center + left/right sections
         _brakeBiasOverlay.Visibility = Visibility.Collapsed;
         _centerValueText.Visibility = Visibility.Visible;  // Restore center section (Gear)
-
+        
         // Restore left/right boxes if they were configured (check if fields are set)
         if (_leftField.HasValue)
             _leftBox.Visibility = Visibility.Visible;
         if (_rightField.HasValue)
             _rightBox.Visibility = Visibility.Visible;
-
+        
         _brakeBiasVisible = false;
     }
     
@@ -988,70 +871,9 @@ public class MRTOneWidget : WidgetBase
             _ => field.ToString().ToUpper()
         };
     }
-
-    /// <summary>
-    /// Validate and sanitize telemetry values to prevent displaying nonsensical data
-    /// Clamps values to reasonable ranges based on field type
-    /// </summary>
-    private static object ValidateTelemetryValue(TelemetryField field, object value)
-    {
-        return field switch
-        {
-            // Speed: clamp to 0-600 km/h (reasonable max for racing)
-            TelemetryField.Speed when value is float speed =>
-                Math.Clamp(speed, 0f, 166.67f),  // 166.67 m/s = 600 km/h
-
-            // RPM: clamp to 0-20000 (reasonable max for racing engines)
-            TelemetryField.RPM when value is float rpm =>
-                Math.Clamp(rpm, 0f, 20000f),
-
-            // Temperatures: clamp to -50°C to 250°C
-            TelemetryField.WaterTemp when value is float temp => Math.Clamp(temp, -50f, 250f),
-            TelemetryField.OilTemp when value is float temp => Math.Clamp(temp, -50f, 250f),
-            TelemetryField.AirTemp when value is float temp => Math.Clamp(temp, -50f, 100f),  // Narrower range for ambient
-            TelemetryField.TrackTemp when value is float temp => Math.Clamp(temp, -50f, 100f),
-
-            // Fuel: clamp to 0-500 liters (reasonable tank size)
-            TelemetryField.FuelLevel when value is float fuel => Math.Clamp(fuel, 0f, 500f),
-            TelemetryField.FuelAvgLast when value is float fuel => Math.Clamp(fuel, 0f, 50f),
-            TelemetryField.FuelAvgL5 when value is float fuel => Math.Clamp(fuel, 0f, 50f),
-            TelemetryField.FuelAvgL10 when value is float fuel => Math.Clamp(fuel, 0f, 50f),
-            TelemetryField.FuelAvgSession when value is float fuel => Math.Clamp(fuel, 0f, 50f),
-
-            // Percentages: clamp to 0-1 range
-            TelemetryField.Throttle when value is float throttle => Math.Clamp(throttle, 0f, 1f),
-            TelemetryField.Brake when value is float brake => Math.Clamp(brake, 0f, 1f),
-            TelemetryField.Clutch when value is float clutch => Math.Clamp(clutch, 0f, 1f),
-            TelemetryField.FuelPercent when value is float pct => Math.Clamp(pct, 0f, 1f),
-
-            // Brake bias: clamp to 0-100%
-            TelemetryField.BrakeBias when value is float bias => Math.Clamp(bias, 0f, 100f),
-
-            // Lap times: clamp to 0-600 seconds (10 minutes max)
-            TelemetryField.LastLapTime when value is float time => Math.Clamp(time, 0f, 600f),
-            TelemetryField.BestLapTime when value is float time => Math.Clamp(time, 0f, 600f),
-            TelemetryField.CurrentLapTime when value is float time => Math.Clamp(time, 0f, 600f),
-
-            // Position: clamp to 1-64 (max field size in iRacing)
-            TelemetryField.Position when value is int pos => Math.Clamp(pos, 1, 64),
-            TelemetryField.ClassPosition when value is int pos => Math.Clamp(pos, 1, 64),
-
-            // Lap number: clamp to 0-9999
-            TelemetryField.LapNumber when value is int lap => Math.Clamp(lap, 0, 9999),
-
-            // Gear: clamp to -1 (reverse) to 10 (reasonable max)
-            _ when field == TelemetryField.Gear && value is int gear => Math.Clamp(gear, -1, 10),
-
-            // Default: return value unchanged (no validation needed or unknown type)
-            _ => value
-        };
-    }
-
+    
     private string FormatFieldValue(TelemetryField field, object value, TelemetryData data)
     {
-        // Validate and sanitize value before formatting
-        value = ValidateTelemetryValue(field, value);
-
         return field switch
         {
             // Percentages (0-1 scale → 0-100%)
@@ -1891,13 +1713,10 @@ public class MRTOneWidget : WidgetBase
             _fuelDisplay.Visibility = Visibility.Collapsed;
         }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Log exception for debugging instead of silently swallowing errors
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] Fuel display update error: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] Stack trace: {ex.StackTrace}");
-
-            // Hide fuel display on error to prevent widget crash
+            // Silently handle any errors during fuel display update
+            // This prevents the widget from crashing during initialization
             if (_fuelDisplay != null)
                 _fuelDisplay.Visibility = Visibility.Collapsed;
         }
@@ -1912,35 +1731,8 @@ public class MRTOneWidget : WidgetBase
             ConnectionStatus.Connecting => Colors.Yellow,   // Yellow when connecting
             _ => Colors.Red                                  // Red when disconnected
         };
-
+        
         _gaugeCircle.Stroke = new SolidColorBrush(color);
-
-        // Reset all cached state when disconnecting to prevent stale data on reconnect
-        if (status == ConnectionStatus.Disconnected)
-        {
-            // Reset brake bias state
-            _brakeBiasInitialized = false;
-            _lastBrakeBias = -1f;
-
-            // Reset ABS state tracking
-            _lastLeftABSValue = -1;
-            _lastRightABSValue = -1;
-
-            // Reset Traction Control state tracking
-            _lastLeftTCValue = -999;
-            _lastRightTCValue = -999;
-
-            // Reset Wheel Lockup state tracking
-            _lastLeftLockupValue = -1;
-            _lastRightLockupValue = -1;
-
-            // Reset proximity zones
-            _currentFrontZone = ProximityZone.Clear;
-            _currentRearZone = ProximityZone.Clear;
-
-            // Reset pit limiter state
-            _isPitLimiterActive = false;
-        }
     }
     
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -2123,22 +1915,22 @@ public class MRTOneWidget : WidgetBase
         // Moves from bottom (0% RPM) to top center (100% RPM)
         _rpmIndicatorBead = new Ellipse
         {
-            Width = LayoutConstants.RPM_BEAD_SIZE,
-            Height = LayoutConstants.RPM_BEAD_SIZE,
+            Width = 12,
+            Height = 12,
             Fill = new SolidColorBrush(_secondaryColor),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             RenderTransform = new TranslateTransform(),
             Visibility = Visibility.Collapsed  // Start hidden, will show after first position update
         };
-
+        
         // Add bead to grid (above gauge circle but below text)
         _mainGrid.Children.Insert(1, _rpmIndicatorBead);
-
+        
         // Create animation timer (smoother at 30 FPS)
         _rpmBeadAnimationTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.RPM_ANIMATION_INTERVAL_MS)
+            Interval = TimeSpan.FromMilliseconds(33) // ~30 FPS for smooth animation
         };
         _rpmBeadAnimationTimer.Tick += UpdateShiftPointRing;
         _rpmBeadAnimationTimer.Start();
@@ -2221,11 +2013,11 @@ public class MRTOneWidget : WidgetBase
         
         // Round to nearest pixel for crisp rendering and force perfect centering at top
         // Smoothly transition to centered as we approach top (no flickering)
-        if (angle >= LayoutConstants.RPM_CENTER_ANGLE_THRESHOLD)  // Above 94.4% RPM, start centering horizontally
+        if (angle >= 260)  // Above 94.4% RPM, start centering horizontally
         {
             // Gradually reduce horizontal offset as we approach 270°
             // This prevents flickering at high RPM
-            double centeringFactor = Math.Min(1.0, (angle - LayoutConstants.RPM_CENTER_ANGLE_THRESHOLD) / LayoutConstants.RPM_CENTER_SMOOTHING);  // 0 at threshold, 1 at 270°
+            double centeringFactor = Math.Min(1.0, (angle - 260) / 10.0);  // 0 at 260°, 1 at 270°
             beadX = beadX * (1.0 - centeringFactor);  // Smoothly approach X=0
             beadX = Math.Round(beadX);
         }
@@ -2267,21 +2059,21 @@ public class MRTOneWidget : WidgetBase
             _centerValueText.Effect = new DropShadowEffect
             {
                 Color = _primaryColor,
-                BlurRadius = LayoutConstants.GLOW_BLUR_RADIUS_CENTER,
+                BlurRadius = 15,
                 ShadowDepth = 0,
-                Opacity = LayoutConstants.GLOW_OPACITY_CENTER
+                Opacity = 0.8
             };
         }
-
+        
         // Add subtle glow to gauge circle border - with null check
         if (_gaugeCircle != null)
         {
             _gaugeCircle.Effect = new DropShadowEffect
             {
                 Color = _primaryColor,
-                BlurRadius = LayoutConstants.GLOW_BLUR_RADIUS_GAUGE,
+                BlurRadius = 10,
                 ShadowDepth = 0,
-                Opacity = LayoutConstants.GLOW_OPACITY_GAUGE
+                Opacity = 0.6
             };
         }
     }
