@@ -21,25 +21,36 @@ public static class MRTOneFuelDisplay
     /// <returns>FuelDisplayResult with text, color, and visibility</returns>
     public static FuelDisplayResult GenerateFuelDisplay(FuelData? fuelData, bool showStrategy)
     {
+        // DEBUG: Log entry conditions
+        System.Diagnostics.Debug.WriteLine($"[MRTOne] GenerateFuelDisplay called: fuelData={(fuelData != null ? "exists" : "NULL")}, showStrategy={showStrategy}");
+        
         // Early exit if no data
         if (fuelData == null)
         {
+            System.Diagnostics.Debug.WriteLine($"[MRTOne] FuelData is NULL - hiding display");
             return new FuelDisplayResult("", Colors.Transparent, false);
         }
+        
+        // DEBUG: Log fuel data state
+        System.Diagnostics.Debug.WriteLine($"[MRTOne] FuelData state: CurrentFuel={fuelData.CurrentFuel:F2}, TankCapacity={fuelData.TankCapacity:F1}, HasSufficientData={fuelData.HasSufficientData}");
         
         // Show minimal info if we have fuel but not enough data for averages
         // OR if tank capacity is known but fuel reading isn't available yet
         if (!fuelData.HasSufficientData && (fuelData.CurrentFuel > 0 || fuelData.TankCapacity > 0))
         {
             string minimalText = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
+            System.Diagnostics.Debug.WriteLine($"[MRTOne] Showing minimal display (insufficient data)");
             return new FuelDisplayResult(minimalText, Color.FromArgb(150, 255, 255, 255), true);
         }
 
         // Only show full display if we have sufficient data
         if (!fuelData.HasSufficientData)
         {
+            System.Diagnostics.Debug.WriteLine($"[MRTOne] Hiding display (no sufficient data and no current fuel)");
             return new FuelDisplayResult("", Colors.Transparent, false);
         }
+        
+        System.Diagnostics.Debug.WriteLine($"[MRTOne] Showing full fuel display");
 
         // Build comprehensive fuel display
         var fuelText = new StringBuilder();

@@ -24,19 +24,67 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         private DispatcherTimer? _blinkTimer;
         private bool _isBlinkVisible = true;
         private string _currentLayout = "Tower";
-        
+
         // Sparkline data tracking
         private readonly System.Collections.Generic.Queue<float> _liveUsageHistory = new(10);  // 5 seconds at 0.5s interval = 10 data points
         private readonly System.Collections.Generic.Queue<float> _lapUsageHistory = new(5);    // Last 5 laps
         private float _lastUsageValue = 0f;
         private float _lastCurrentFuel = 0f;  // Track fuel level changes for live sparkline
         private DispatcherTimer? _liveUpdateTimer;  // Timer for live fuel updates (0.5 second interval)
-        
+
         // Historical min/max tracking for sparklines (persists across updates)
         private float _liveSparklineMinEver = float.MaxValue;
         private float _liveSparklineMaxEver = float.MinValue;
         private float _lapSparklineMinEver = float.MaxValue;
         private float _lapSparklineMaxEver = float.MinValue;
+
+        // Dirty field tracking (Phase 3.2) - track previous values to avoid unnecessary updates
+        private float _prevCurrentFuel = -1f;
+        private float _prevFuelPct = -1f;
+        private float _prevFuelUsedLastLap = -1f;
+        private float _prevLapToLapDelta = float.NaN;
+        private float _prevAvgFuelPerLap_L5 = -1f;
+        private float _prevAvgFuelPerLap_L10 = -1f;
+        private float _prevAvgFuelPerLap_Session = -1f;
+        private float _prevLapsRemaining = -1f;
+        private float _prevFuelNeededToFinish = -1f;
+        private float _prevFuelToAddAtPit = -1f;
+        private float _prevFuelPressure = -1f;
+        private float _prevFuelPressureDropPct = -1f;
+        private int _prevCurrentLap = -1;
+        private int _prevOptimalPitLap = -1;
+        private int _prevPitWindowStart = -1;
+        private int _prevPitWindowEnd = -1;
+        private int _prevLatestPitLap = -1;
+
+        // Cached brushes for performance (Phase 3.1)
+        private readonly Brush _brushTeal = new SolidColorBrush(Color.FromRgb(0, 128, 128));
+        private readonly Brush _brushOrange = new SolidColorBrush(Color.FromRgb(255, 128, 0));
+        private readonly Brush _brushRed = new SolidColorBrush(Color.FromRgb(255, 51, 51));
+        private readonly Brush _brushGreen = new SolidColorBrush(Color.FromRgb(0, 255, 0));
+        private readonly Brush _brushGray = new SolidColorBrush(Color.FromRgb(102, 102, 102));
+        private readonly Brush _brushYellow = new SolidColorBrush(Color.FromRgb(255, 255, 0));
+        private readonly Brush _brushCyan = new SolidColorBrush(Color.FromRgb(0, 217, 255));
+        private readonly Brush _brushGreenDark = new SolidColorBrush(Color.FromRgb(76, 175, 80));
+        private readonly Brush _brushGrayLight = new SolidColorBrush(Color.FromRgb(170, 170, 170));
+        private readonly Brush _brushRedDark = new SolidColorBrush(Color.FromRgb(183, 28, 28));
+        private readonly Brush _brushOrangeDark = new SolidColorBrush(Color.FromRgb(255, 111, 0));
+        private readonly Brush _brushGreenVeryDark = new SolidColorBrush(Color.FromRgb(27, 94, 32));
+        private readonly Brush _brushGrayDark = new SolidColorBrush(Color.FromRgb(66, 66, 66));
+        private readonly Brush _brushYellowLight = new SolidColorBrush(Color.FromRgb(255, 193, 7));
+        private readonly Brush _brushRedLight = new SolidColorBrush(Color.FromRgb(244, 67, 54));
+
+        // Cached UI element references (Phase 3.3) - reduces FindName() overhead
+        private Run? _currentFuelRun;
+        private Run? _fuelPercentageRun;
+        private TextBlock? _lastLapText;
+        private TextBlock? _lastLapTrendArrow;
+        private TextBlock? _l5AvgText;
+        private TextBlock? _l10AvgText;
+        private TextBlock? _sessionAvgText;
+        private TextBlock? _lapsRemainingText;
+        private TextBlock? _pressureText;
+        private FrameworkElement? _fuelBarFill;
 
         public override WidgetType WidgetType => WidgetType.Fuel;
 
@@ -46,6 +94,9 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             _fuelCalculator = fuelCalculator ?? throw new ArgumentNullException(nameof(fuelCalculator));
 
             InitializeComponent();
+
+            // Cache UI element references (Phase 3.3)
+            CacheUIElements();
 
             // Apply fuel calculation method from settings
             ApplyFuelCalculationMethod();
@@ -88,6 +139,23 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             };
             _liveUpdateTimer.Tick += OnLiveUpdateTimerTick;
             _liveUpdateTimer.Start();
+        }
+
+        /// <summary>
+        /// Cache frequently accessed UI element references to avoid repeated FindName() calls (Phase 3.3)
+        /// </summary>
+        private void CacheUIElements()
+        {
+            _currentFuelRun = FindName("CurrentFuelRun") as Run;
+            _fuelPercentageRun = FindName("FuelPercentageRun") as Run;
+            _lastLapText = FindName("LastLapText") as TextBlock;
+            _lastLapTrendArrow = FindName("LastLapTrendArrow") as TextBlock;
+            _l5AvgText = FindName("L5AvgText") as TextBlock;
+            _l10AvgText = FindName("L10AvgText") as TextBlock;
+            _sessionAvgText = FindName("SessionAvgText") as TextBlock;
+            _lapsRemainingText = FindName("LapsRemainingText") as TextBlock;
+            _pressureText = FindName("PressureText") as TextBlock;
+            _fuelBarFill = FindName("FuelBarFill") as FrameworkElement;
         }
 
         /// <summary>
@@ -278,6 +346,10 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             {
                 // Show pressure if both pit strategy AND pressure toggle are enabled
                 bool showPressure = showStrategy && settings.FuelWidget_ShowFuelPressure;
+                
+                // DEBUG: Log visibility decision
+                System.Diagnostics.Debug.WriteLine($"[FuelWidget] Pressure visibility: showStrategy={showStrategy}, ShowFuelPressure={settings.FuelWidget_ShowFuelPressure}, result={showPressure}");
+                
                 pressureGrid.Visibility = showPressure ? Visibility.Visible : Visibility.Collapsed;
                 if (pressureRow != null)
                     pressureRow.Height = showPressure ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
@@ -322,6 +394,23 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         }
 
         /// <summary>
+        /// Check if a float value has changed significantly (Phase 3.2)
+        /// </summary>
+        private bool HasChanged(float current, float previous, float epsilon = 0.01f)
+        {
+            if (float.IsNaN(previous)) return true; // First update
+            return Math.Abs(current - previous) > epsilon;
+        }
+
+        /// <summary>
+        /// Check if an int value has changed (Phase 3.2)
+        /// </summary>
+        private bool HasChanged(int current, int previous)
+        {
+            return current != previous;
+        }
+
+        /// <summary>
         /// Update UI with fuel data
         /// </summary>
         private void UpdateUI(FuelData data)
@@ -334,26 +423,31 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             // Note: FuelBufferLaps is now calculated dynamically by FuelCalculatorService if enabled
             // data.FuelBufferLaps will be set by CalculateDynamicBufferLaps() based on race conditions
 
-            // Current fuel level (using Run elements in XAML)
-            var currentFuelRun = FindName("CurrentFuelRun") as Run;
-            if (currentFuelRun != null)
+            // Current fuel level (using Run elements in XAML) - Phase 3.2: Only update if changed
+            // Phase 3.3: Use cached UI element references
+            if (HasChanged(data.CurrentFuel, _prevCurrentFuel) || HasChanged(data.FuelPct, _prevFuelPct))
             {
-                currentFuelRun.Text = FormatFuel(data.CurrentFuel);
-                currentFuelRun.Foreground = GetFuelLevelColor(data.FuelPct);
-            }
+                if (_currentFuelRun != null)
+                {
+                    _currentFuelRun.Text = FormatFuel(data.CurrentFuel);
+                    _currentFuelRun.Foreground = GetFuelLevelColor(data.FuelPct);
+                }
 
-            // Fuel percentage (only show if setting is enabled)
-            var fuelPercentageRun = FindName("FuelPercentageRun") as Run;
-            if (fuelPercentageRun != null)
-            {
-                if (settings.FuelWidget_ShowPercentage)
+                // Fuel percentage (only show if setting is enabled)
+                if (_fuelPercentageRun != null)
                 {
-                    fuelPercentageRun.Text = $"({(data.FuelPct * 100):F0}%)";
+                    if (settings.FuelWidget_ShowPercentage)
+                    {
+                        _fuelPercentageRun.Text = $"({(data.FuelPct * 100):F0}%)";
+                    }
+                    else
+                    {
+                        _fuelPercentageRun.Text = string.Empty; // Hide percentage
+                    }
                 }
-                else
-                {
-                    fuelPercentageRun.Text = string.Empty; // Hide percentage
-                }
+
+                _prevCurrentFuel = data.CurrentFuel;
+                _prevFuelPct = data.FuelPct;
             }
 
             // Tank capacity with sputtering threshold info (Enhanced Phase 2.1 + Phase 2.2)
@@ -397,110 +491,132 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 }
             }
 
-            // Last lap fuel usage (show -- if no data yet)
-            var lastLapText = FindName("LastLapText") as TextBlock;
-            var lastLapTrendArrow = FindName("LastLapTrendArrow") as TextBlock;
-            if (lastLapText != null)
+            // Last lap fuel usage (show -- if no data yet) - Phase 3.2: Only update if changed
+            if (HasChanged(data.FuelUsedLastLap, _prevFuelUsedLastLap) || HasChanged(data.LapToLapDelta, _prevLapToLapDelta))
             {
-                if (data.FuelUsedLastLap > 0)
+                var lastLapText = FindName("LastLapText") as TextBlock;
+                var lastLapTrendArrow = FindName("LastLapTrendArrow") as TextBlock;
+                if (lastLapText != null)
                 {
-                    lastLapText.Text = $"{FormatFuelValue(data.FuelUsedLastLap)}";
-                    lastLapText.Foreground = new SolidColorBrush(Color.FromRgb(255, 128, 0)); // Orange
-                    
-                    // Show delta value (+/- amount) if enabled and we have lap-to-lap data
-                    if (settings.FuelWidget_ShowTrends && lastLapTrendArrow != null && data.LapToLapDelta != 0)
+                    if (data.FuelUsedLastLap > 0)
                     {
-                        // Format with + or - prefix and 2 decimals
-                        string sign = data.LapToLapDelta > 0 ? "+" : "";
-                        lastLapTrendArrow.Text = $"{sign}{data.LapToLapDelta.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}";
-                        lastLapTrendArrow.Visibility = Visibility.Visible;
-                        
-                        // Color code: Red (using more fuel), Green (using less fuel), Gray (stable ±0.02)
-                        lastLapTrendArrow.Foreground = data.LapToLapDelta switch
+                        lastLapText.Text = $"{FormatFuelValue(data.FuelUsedLastLap)}";
+                        lastLapText.Foreground = _brushOrange;
+
+                        // Show delta value (+/- amount) if enabled and we have lap-to-lap data
+                        if (settings.FuelWidget_ShowTrends && lastLapTrendArrow != null && data.LapToLapDelta != 0)
                         {
-                            > 0.02f => new SolidColorBrush(Color.FromRgb(255, 51, 51)),  // Red - using MORE fuel
-                            < -0.02f => new SolidColorBrush(Color.FromRgb(0, 255, 0)),    // Green - using LESS fuel
-                            _ => new SolidColorBrush(Color.FromRgb(170, 170, 170))   // Gray - stable
-                        };
+                            // Format with + or - prefix and 2 decimals
+                            string sign = data.LapToLapDelta > 0 ? "+" : "";
+                            lastLapTrendArrow.Text = $"{sign}{data.LapToLapDelta.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}";
+                            lastLapTrendArrow.Visibility = Visibility.Visible;
+
+                            // Color code: Red (using more fuel), Green (using less fuel), Gray (stable ±0.02)
+                            lastLapTrendArrow.Foreground = data.LapToLapDelta switch
+                            {
+                                > 0.02f => _brushRed,      // Red - using MORE fuel
+                                < -0.02f => _brushGreen,   // Green - using LESS fuel
+                                _ => _brushGrayLight       // Gray - stable
+                            };
+                        }
+                        else if (lastLapTrendArrow != null)
+                        {
+                            lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                        }
                     }
-                    else if (lastLapTrendArrow != null)
+                    else
                     {
-                        lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                        lastLapText.Text = "--";
+                        lastLapText.Foreground = _brushGray;
+                        if (lastLapTrendArrow != null)
+                        {
+                            lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                        }
                     }
                 }
-                else
+
+                _prevFuelUsedLastLap = data.FuelUsedLastLap;
+                _prevLapToLapDelta = data.LapToLapDelta;
+            }
+
+            // L5 average (show -- if no data yet) - Phase 3.2: Only update if changed
+            if (HasChanged(data.AvgFuelPerLap_L5, _prevAvgFuelPerLap_L5))
+            {
+                var l5AvgText = FindName("L5AvgText") as TextBlock;
+                if (l5AvgText != null)
                 {
-                    lastLapText.Text = "--";
-                    lastLapText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
-                    if (lastLapTrendArrow != null)
+                    if (data.AvgFuelPerLap_L5 > 0)
                     {
-                        lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                        l5AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L5)}";
+                        l5AvgText.Foreground = _brushTeal;
+                    }
+                    else
+                    {
+                        l5AvgText.Text = "--";
+                        l5AvgText.Foreground = _brushGray;
                     }
                 }
+                _prevAvgFuelPerLap_L5 = data.AvgFuelPerLap_L5;
             }
 
-            // L5 average (show -- if no data yet)
-            var l5AvgText = FindName("L5AvgText") as TextBlock;
-            if (l5AvgText != null)
+            // L10 average (optional, show -- if no data yet) - Phase 3.2: Only update if changed
+            if (HasChanged(data.AvgFuelPerLap_L10, _prevAvgFuelPerLap_L10))
             {
-                if (data.AvgFuelPerLap_L5 > 0)
+                var l10AvgText = FindName("L10AvgText") as TextBlock;
+                if (l10AvgText != null)
                 {
-                    l5AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L5)}";
-                    l5AvgText.Foreground = new SolidColorBrush(Color.FromRgb(0, 128, 128)); // Teal
+                    if (data.AvgFuelPerLap_L10 > 0)
+                    {
+                        l10AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L10)}";
+                        l10AvgText.Foreground = _brushTeal;
+                    }
+                    else
+                    {
+                        l10AvgText.Text = "--";
+                        l10AvgText.Foreground = _brushGray;
+                    }
                 }
-                else
-                {
-                    l5AvgText.Text = "--";
-                    l5AvgText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
-                }
+                _prevAvgFuelPerLap_L10 = data.AvgFuelPerLap_L10;
             }
 
-            // L10 average (optional, show -- if no data yet)
-            var l10AvgText = FindName("L10AvgText") as TextBlock;
-            if (l10AvgText != null)
+            // Session average (optional, show -- if no data yet) - Phase 3.2: Only update if changed
+            if (HasChanged(data.AvgFuelPerLap_Session, _prevAvgFuelPerLap_Session))
             {
-                if (data.AvgFuelPerLap_L10 > 0)
+                var sessionAvgText = FindName("SessionAvgText") as TextBlock;
+                if (sessionAvgText != null)
                 {
-                    l10AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L10)}";
-                    l10AvgText.Foreground = new SolidColorBrush(Color.FromRgb(0, 128, 128)); // Teal
+                    if (data.AvgFuelPerLap_Session > 0)
+                    {
+                        sessionAvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_Session)}";
+                        sessionAvgText.Foreground = _brushTeal;
+                    }
+                    else
+                    {
+                        sessionAvgText.Text = "--";
+                        sessionAvgText.Foreground = _brushGray;
+                    }
                 }
-                else
-                {
-                    l10AvgText.Text = "--";
-                    l10AvgText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
-                }
+                _prevAvgFuelPerLap_Session = data.AvgFuelPerLap_Session;
             }
 
-            // Session average (optional, show -- if no data yet)
-            var sessionAvgText = FindName("SessionAvgText") as TextBlock;
-            if (sessionAvgText != null)
+            // Laps remaining (1 decimal for precision without clutter, show -- if no data yet) - Phase 3.2: Only update if changed
+            if (HasChanged(data.LapsRemaining, _prevLapsRemaining))
             {
-                if (data.AvgFuelPerLap_Session > 0)
+                var lapsRemainingText = FindName("LapsRemainingText") as TextBlock;
+                if (lapsRemainingText != null)
                 {
-                    sessionAvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_Session)}";
-                    sessionAvgText.Foreground = new SolidColorBrush(Color.FromRgb(0, 128, 128)); // Teal
+                    if (data.LapsRemaining > 0 && data.AvgFuelPerLap_L5 > 0)
+                    {
+                        lapsRemainingText.Text = data.LapsRemaining.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+                        lapsRemainingText.Foreground = GetLapsRemainingColor(data.LapsRemaining);
+                    }
+                    else
+                    {
+                        lapsRemainingText.Text = "--";
+                        lapsRemainingText.Foreground = _brushGray;
+                    }
                 }
-                else
-                {
-                    sessionAvgText.Text = "--";
-                    sessionAvgText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
-                }
-            }
-
-            // Laps remaining (1 decimal for precision without clutter, show -- if no data yet)
-            var lapsRemainingText = FindName("LapsRemainingText") as TextBlock;
-            if (lapsRemainingText != null)
-            {
-                if (data.LapsRemaining > 0 && data.AvgFuelPerLap_L5 > 0)
-                {
-                    lapsRemainingText.Text = data.LapsRemaining.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
-                    lapsRemainingText.Foreground = GetLapsRemainingColor(data.LapsRemaining);
-                }
-                else
-                {
-                    lapsRemainingText.Text = "--";
-                    lapsRemainingText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
-                }
+                _prevLapsRemaining = data.LapsRemaining;
             }
 
             // Fuel needed to finish (TO GO) - shows liters needed to complete race/session
@@ -512,7 +628,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 if (data.AvgFuelPerLap_L5 > 0)
                 {
                     float fuelNeeded;
-                    
+
                     if (data.RaceLapsRemaining > 0)
                     {
                         // RACE mode: Show fuel needed to finish (includes race laps + buffer + 0.3L sputtering threshold)
@@ -523,19 +639,17 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                         // QUALIFYING/PRACTICE mode: Show total fuel for 5-lap reference (not confusing delta)
                         fuelNeeded = data.AvgFuelPerLap_L5 * 5;
                     }
-                    
+
                     canFinishText.Text = $"{FormatFuelValue(fuelNeeded)}";
-                    
+
                     // Color based on whether we have enough fuel
                     // Compare current fuel to needed fuel
-                    canFinishText.Foreground = data.CurrentFuel >= fuelNeeded
-                        ? new SolidColorBrush(Color.FromRgb(0, 128, 128))  // Teal (have enough)
-                        : new SolidColorBrush(Color.FromRgb(255, 51, 51)); // Red (not enough)
+                    canFinishText.Foreground = data.CurrentFuel >= fuelNeeded ? _brushTeal : _brushRed;
                 }
                 else
                 {
                     canFinishText.Text = "--";
-                    canFinishText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
+                    canFinishText.Foreground = _brushGray;
                 }
             }
 
@@ -552,19 +666,19 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 {
                     pitFuelLabel.Text = "PIT";
                 }
-                
+
                 // Show if we have lap data (any session type)
                 if (data.AvgFuelPerLap_L5 > 0)
                 {
                     float fuelNeeded;
                     bool nearFinish = false;
-                    
+
                     if (data.RaceLapsRemaining > 0)
                     {
                         // RACE mode: Use backend calculation (already accounts for laps remaining + buffer + 0.3L finish threshold)
                         // FuelToAddAtPit is calculated from FuelDeltaToFinish and includes all safety margins
                         fuelNeeded = data.FuelToAddAtPit;
-                        
+
                         // Don't show PIT if very close to finish (<0.3 laps remaining)
                         nearFinish = data.LapsRemaining < 0.3f;
                     }
@@ -573,34 +687,32 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                         // QUALIFYING/PRACTICE mode: Fuel needed for 5 laps
                         fuelNeeded = Math.Max(0, (data.AvgFuelPerLap_L5 * 5) - data.CurrentFuel);
                     }
-                    
+
                     if (nearFinish)
                     {
                         // Very close to finish - hide PIT field (will finish on current fuel or already too late)
                         pitFuelText.Text = "--";
-                        pitFuelText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
+                        pitFuelText.Foreground = _brushGray;
                     }
                     else if (fuelNeeded > 0)
                     {
                         // Show fuel to add with simplified color coding (removed yellow, kept orange/red)
                         pitFuelText.Text = $"{FormatFuelValue(fuelNeeded)}";
-                        
+
                         // Simplified color coding: Red (<2 laps), Orange (≥2 laps)
-                        pitFuelText.Foreground = data.LapsRemaining < 2.0f
-                            ? new SolidColorBrush(Color.FromRgb(255, 51, 51))   // Red - PIT URGENT
-                            : new SolidColorBrush(Color.FromRgb(255, 128, 0));  // Orange - PIT SOON
+                        pitFuelText.Foreground = data.LapsRemaining < 2.0f ? _brushRed : _brushOrange;
                     }
                     else
                     {
                         // Can finish without stop - show "OK" in green
                         pitFuelText.Text = "OK";
-                        pitFuelText.Foreground = new SolidColorBrush(Color.FromRgb(0, 255, 0)); // Green
+                        pitFuelText.Foreground = _brushGreen;
                     }
                 }
                 else
                 {
                     pitFuelText.Text = "--";  // No data yet
-                    pitFuelText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
+                    pitFuelText.Foreground = _brushGray;
                 }
             }
 
@@ -609,11 +721,11 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             if (pitWindowText != null)
             {
                 // VALIDATION: Reject inverted pit windows (PitWindowStart > PitWindowEnd = invalid data)
-                bool hasValidPitWindow = data.OptimalPitLap > 0 && 
-                                        data.PitWindowStart > 0 && 
+                bool hasValidPitWindow = data.OptimalPitLap > 0 &&
+                                        data.PitWindowStart > 0 &&
                                         data.PitWindowEnd > 0 &&
                                         data.PitWindowStart <= data.PitWindowEnd; // CRITICAL: Reject inverted windows
-                
+
                 // Phase 5.C: Enhanced pit window display with multi-lap ranges
                 if (hasValidPitWindow)
                 {
@@ -621,38 +733,38 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     int currentLap = data.CurrentLap;
                     int lapsUntilWindow = Math.Max(0, data.PitWindowStart - currentLap);
                     int lapsUntilOptimal = Math.Max(0, data.OptimalPitLap - currentLap);
-                    
+
                     // Color coding based on urgency
                     if (currentLap >= data.PitWindowStart && currentLap <= data.PitWindowEnd)
                     {
                         // IN OPTIMAL WINDOW - Green
                         pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} (NOW)";
-                        pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80)); // Green
+                        pitWindowText.Foreground = _brushGreenDark;
                     }
                     else if (currentLap < data.PitWindowStart)
                     {
                         // BEFORE WINDOW - Teal (shows laps until window opens)
                         pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} ({lapsUntilWindow}L)";
-                        pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(0, 128, 128)); // Teal
+                        pitWindowText.Foreground = _brushTeal;
                     }
                     else if (currentLap > data.PitWindowEnd && currentLap < data.LatestPitLap)
                     {
                         // AFTER OPTIMAL BUT BEFORE LATEST - Orange (getting urgent)
                         int lapsUntilLatest = data.LatestPitLap - currentLap;
                         pitWindowText.Text = $"Late ({lapsUntilLatest}L left)";
-                        pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(255, 128, 0)); // Orange
+                        pitWindowText.Foreground = _brushOrange;
                     }
                     else if (currentLap >= data.LatestPitLap)
                     {
                         // PAST LATEST - Red (critical)
                         pitWindowText.Text = $"CRITICAL (L{data.LatestPitLap})";
-                        pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(255, 51, 51)); // Red
+                        pitWindowText.Foreground = _brushRed;
                     }
                     else
                     {
                         // Fallback: Show optimal lap
                         pitWindowText.Text = $"L{data.OptimalPitLap} ({lapsUntilOptimal}L)";
-                        pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(0, 217, 255)); // Cyan
+                        pitWindowText.Foreground = _brushCyan;
                     }
                 }
                 // Fallback: Show laps remaining if Phase 5.B data not available or invalid
@@ -660,29 +772,27 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 {
                     // Hide PIT IN if very close to finish (<0.6L remaining or <0.3 laps)
                     bool nearFinish = data.CurrentFuel < 0.6f || data.LapsRemaining < 0.3f;
-                    
+
                     if (nearFinish)
                     {
                         // Too close to finish - hide field
                         pitWindowText.Text = "--";
-                        pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
+                        pitWindowText.Foreground = _brushGray;
                     }
                     else
                     {
                         // Show laps remaining until fuel runs out (1 decimal for precision without clutter)
                         pitWindowText.Text = data.LapsRemaining.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
-                        
+
                         // Simplified color coding: Red (<2 laps), Orange (≥2 laps)
-                        pitWindowText.Foreground = data.LapsRemaining < 2.0f
-                            ? new SolidColorBrush(Color.FromRgb(255, 51, 51))   // Red - URGENT
-                            : new SolidColorBrush(Color.FromRgb(255, 128, 0));  // Orange - SOON
+                        pitWindowText.Foreground = data.LapsRemaining < 2.0f ? _brushRed : _brushOrange;
                     }
                 }
                 else
                 {
                     // No valid data yet
                     pitWindowText.Text = "--";
-                    pitWindowText.Foreground = new SolidColorBrush(Color.FromRgb(102, 102, 102)); // Gray
+                    pitWindowText.Foreground = _brushGray;
                 }
             }
             
@@ -729,23 +839,28 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 }
             }
 
-            // Fuel pressure (optional) - Show bar value with color coding only (percentage removed per user request)
-            var pressureText = FindName("PressureText") as TextBlock;
-            if (pressureText != null)
+            // Fuel pressure (optional) - Show bar value with color coding only (percentage removed per user request) - Phase 3.2: Only update if changed
+            if (HasChanged(data.FuelPressure, _prevFuelPressure) || HasChanged(data.FuelPressureDropPct, _prevFuelPressureDropPct))
             {
-                // Show pressure value only (no percentage - it's broken and unnecessary for visual display)
-                pressureText.Text = $"{data.FuelPressure:F2} bar";
-                
-                // Color coding based on pressure drop (Enhanced Phase 2.1)
-                // Critical: >20% drop (red, imminent sputtering)
-                // Warning: 10-20% drop (orange, low fuel risk)
-                // Normal: <10% drop (green, safe)
-                pressureText.Foreground = data.FuelPressureDropPct switch
+                var pressureText = FindName("PressureText") as TextBlock;
+                if (pressureText != null)
                 {
-                    > 20f => new SolidColorBrush(Color.FromRgb(255, 51, 51)),   // Red - Critical
-                    > 10f => new SolidColorBrush(Color.FromRgb(255, 128, 0)),   // Orange - Warning
-                    _ => new SolidColorBrush(Color.FromRgb(0, 255, 0))          // Green - Normal
-                };
+                    // Show pressure value only (no percentage - it's broken and unnecessary for visual display)
+                    pressureText.Text = $"{data.FuelPressure:F2} bar";
+
+                    // Color coding based on pressure drop (Enhanced Phase 2.1)
+                    // Critical: >20% drop (red, imminent sputtering)
+                    // Warning: 10-20% drop (orange, low fuel risk)
+                    // Normal: <10% drop (green, safe)
+                    pressureText.Foreground = data.FuelPressureDropPct switch
+                    {
+                        > 20f => _brushRed,      // Red - Critical
+                        > 10f => _brushOrange,   // Orange - Warning
+                        _ => _brushGreen         // Green - Normal
+                    };
+                }
+                _prevFuelPressure = data.FuelPressure;
+                _prevFuelPressureDropPct = data.FuelPressureDropPct;
             }
 
             // Update sparklines
@@ -859,16 +974,16 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     if (!data.CanSaveFuelToFinish)
                     {
                         // Target is impossible (>15% reduction needed) - always show warning
-                        rect.Fill = new SolidColorBrush(Color.FromRgb(255, 111, 0)); // Orange - impossible target
+                        rect.Fill = _brushOrangeDark;
                     }
                     else
                     {
                         // Target is achievable - color by progress: Green (≥70%), Yellow (30-70%), Red (<30%)
                         rect.Fill = data.SavingProgress switch
                         {
-                            >= 70f => new SolidColorBrush(Color.FromRgb(76, 175, 80)),  // Green
-                            >= 30f => new SolidColorBrush(Color.FromRgb(255, 193, 7)),  // Yellow
-                            _ => new SolidColorBrush(Color.FromRgb(244, 67, 54))        // Red
+                            >= 70f => _brushGreenDark,
+                            >= 30f => _brushYellowLight,
+                            _ => _brushRedLight
                         };
                     }
                 }
@@ -879,9 +994,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             if (currentSavingRateText != null)
             {
                 currentSavingRateText.Text = $"{data.CurrentSavingRate:F2}L/lap";
-                currentSavingRateText.Foreground = data.SavingProgress >= 50f
-                    ? new SolidColorBrush(Color.FromRgb(76, 175, 80))  // Green
-                    : new SolidColorBrush(Color.FromRgb(255, 128, 0)); // Orange
+                currentSavingRateText.Foreground = data.SavingProgress >= 50f ? _brushGreenDark : _brushOrange;
             }
 
             // Update saving progress percentage
@@ -926,10 +1039,10 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 {
                     strategicAlertBorder.Background = data.AlertSeverity switch
                     {
-                        3 => new SolidColorBrush(Color.FromRgb(183, 28, 28)),    // Critical - Dark Red
-                        2 => new SolidColorBrush(Color.FromRgb(255, 111, 0)),    // Warning - Orange
-                        1 => new SolidColorBrush(Color.FromRgb(27, 94, 32)),     // Info - Dark Green
-                        _ => new SolidColorBrush(Color.FromRgb(66, 66, 66))      // None - Gray
+                        3 => _brushRedDark,          // Critical - Dark Red
+                        2 => _brushOrangeDark,       // Warning - Orange
+                        1 => _brushGreenVeryDark,    // Info - Dark Green
+                        _ => _brushGrayDark          // None - Gray
                     };
                 }
             }
@@ -1000,15 +1113,15 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     // Color based on urgency
                     if (data.FuelCriticalityScore > 95f)
                     {
-                        optimalPitLapText.Foreground = new SolidColorBrush(Color.FromRgb(255, 51, 51)); // Red - Critical
+                        optimalPitLapText.Foreground = _brushRed; // Red - Critical
                     }
                     else if (data.FuelCriticalityScore > 80f)
                     {
-                        optimalPitLapText.Foreground = new SolidColorBrush(Color.FromRgb(255, 128, 0)); // Orange - Urgent
+                        optimalPitLapText.Foreground = _brushOrange; // Orange - Urgent
                     }
                     else
                     {
-                        optimalPitLapText.Foreground = new SolidColorBrush(Color.FromRgb(0, 217, 255)); // Cyan - Strategic
+                        optimalPitLapText.Foreground = _brushCyan; // Cyan - Strategic
                     }
                 }
 
@@ -1373,10 +1486,10 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             return fuelPct switch
             {
-                >= 0.5f => new SolidColorBrush(Color.FromRgb(0, 128, 128)),    // Teal (good)
-                >= 0.25f => new SolidColorBrush(Color.FromRgb(255, 255, 0)),   // Yellow
-                >= 0.1f => new SolidColorBrush(Color.FromRgb(255, 128, 0)),    // Orange
-                _ => new SolidColorBrush(Color.FromRgb(255, 51, 51))           // Red
+                >= 0.5f => _brushTeal,      // Teal (good)
+                >= 0.25f => _brushYellow,   // Yellow
+                >= 0.1f => _brushOrange,    // Orange
+                _ => _brushRed              // Red
             };
         }
 
@@ -1387,8 +1500,8 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             return laps switch
             {
-                >= 2.0f => new SolidColorBrush(Color.FromRgb(255, 128, 0)),    // Orange - SOON
-                _ => new SolidColorBrush(Color.FromRgb(255, 51, 51))           // Red - URGENT
+                >= 2.0f => _brushOrange,    // Orange - SOON
+                _ => _brushRed              // Red - URGENT
             };
         }
 
@@ -1399,9 +1512,9 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             return delta switch
             {
-                > 0.5f => new SolidColorBrush(Color.FromRgb(0, 128, 128)),     // Teal (we have more)
-                > -0.5f => new SolidColorBrush(Color.FromRgb(255, 255, 0)),    // Yellow (close)
-                _ => new SolidColorBrush(Color.FromRgb(255, 128, 0))           // Orange (we have less)
+                > 0.5f => _brushTeal,       // Teal (we have more)
+                > -0.5f => _brushYellow,    // Yellow (close)
+                _ => _brushOrange           // Orange (we have less)
             };
         }
 
@@ -1457,18 +1570,37 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         public void ResetCalculations()
         {
             _fuelCalculator.Reset();
-            
+
             // Reset sparkline historical min/max tracking
             _liveSparklineMinEver = float.MaxValue;
             _liveSparklineMaxEver = float.MinValue;
             _lapSparklineMinEver = float.MaxValue;
             _lapSparklineMaxEver = float.MinValue;
-            
+
             // Clear sparkline data
             _liveUsageHistory.Clear();
             _lapUsageHistory.Clear();
             _lastUsageValue = 0f;
             _lastCurrentFuel = 0f;
+
+            // Reset dirty field tracking (Phase 3.2)
+            _prevCurrentFuel = -1f;
+            _prevFuelPct = -1f;
+            _prevFuelUsedLastLap = -1f;
+            _prevLapToLapDelta = float.NaN;
+            _prevAvgFuelPerLap_L5 = -1f;
+            _prevAvgFuelPerLap_L10 = -1f;
+            _prevAvgFuelPerLap_Session = -1f;
+            _prevLapsRemaining = -1f;
+            _prevFuelNeededToFinish = -1f;
+            _prevFuelToAddAtPit = -1f;
+            _prevFuelPressure = -1f;
+            _prevFuelPressureDropPct = -1f;
+            _prevCurrentLap = -1;
+            _prevOptimalPitLap = -1;
+            _prevPitWindowStart = -1;
+            _prevPitWindowEnd = -1;
+            _prevLatestPitLap = -1;
         }
 
         /// <summary>
