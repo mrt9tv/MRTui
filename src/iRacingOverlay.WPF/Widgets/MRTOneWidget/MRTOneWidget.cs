@@ -138,8 +138,12 @@ public class MRTOneWidget : WidgetBase
     // PHASE 1: Proximity detection services
     private readonly ProximityCalculator _proximityCalculator;
     private readonly LateralSpotter _lateralSpotter;
-    
-    // PHASE 2: Visual Enhancement Elements (all optional/toggleable)
+
+    // PHASE 2: Helper classes for clean architecture
+    private readonly MRTOneStateManager _stateManager;
+    private MRTOneVisualEffects? _visualEffects;
+
+    // PHASE 2: Visual Enhancement Elements (managed by VisualEffects helper)
     private Ellipse? _rpmIndicatorBead;  // Small circle that travels on gauge showing current RPM
     private DispatcherTimer? _rpmBeadAnimationTimer;  // Animation timer for RPM bead
     
@@ -182,32 +186,13 @@ public class MRTOneWidget : WidgetBase
     private bool _blinkState = false;
     private bool _radarBlinkState = false;
     
-    // Track radar zone states for blinking critical warnings
-    private ProximityZone _currentFrontZone = ProximityZone.Clear;
-    private ProximityZone _currentRearZone = ProximityZone.Clear;
-    
-    // ABS state tracking to prevent flicker (initialized to -1 to force initial opacity set)
-    private int _lastLeftABSValue = -1;
-    private int _lastRightABSValue = -1;
-    
-    // Traction Control state tracking to prevent flicker (initialized to -999 to force initial opacity set)
-    private int _lastLeftTCValue = -999;
-    private int _lastRightTCValue = -999;
-    
-    // Wheel Lockup state tracking to prevent flicker (initialized to -1 to force initial opacity set)
-    private int _lastLeftLockupValue = -1;
-    private int _lastRightLockupValue = -1;
-    
-    // Brake bias overlay state tracking
-    private float _lastBrakeBias = -1f;                 // Cache last value (detect changes)
-    private bool _brakeBiasInitialized = false;         // Track if we've received first value (prevent trigger on connection)
+    // Brake bias overlay UI state (not in StateManager - widget-specific)
     private DispatcherTimer? _brakeBiasHideTimer;       // Auto-hide timer
     private bool _brakeBiasVisible = false;             // Current visibility state
 
-    // Pit limiter state tracking (PHASE 2: Enhancement #4)
+    // Pit limiter blink UI state (actual state tracked in StateManager)
     private readonly DispatcherTimer _pitLimiterBlinkTimer;
     private bool _pitLimiterBlinkState = false;
-    private bool _isPitLimiterActive = false;
 
     // Theme colors
     private System.Windows.Media.Color _primaryColor;   // Teal #008080
@@ -218,6 +203,9 @@ public class MRTOneWidget : WidgetBase
     
     public MRTOneWidget(ITelemetryService telemetryService, WidgetConfig? config = null) : base(telemetryService, config)
     {
+        // Initialize PHASE 2 helper classes
+        _stateManager = new MRTOneStateManager();
+
         // Initialize proximity detection services
         _proximityCalculator = new ProximityCalculator();
         _lateralSpotter = new LateralSpotter();
@@ -779,7 +767,7 @@ public class MRTOneWidget : WidgetBase
         _radarBlinkState = !_radarBlinkState;
 
         // Apply FAST blink effect to FRONT radar square if VeryClose (<4m)
-        if (_currentFrontZone == ProximityZone.VeryClose)
+        var (frontZone, rearZone) = _stateManager.GetCurrentZones(); if (frontZone == ProximityZone.VeryClose)
         {
             _radarFront.Opacity = _radarBlinkState ? 1.0 : 0.3;
         }
@@ -789,7 +777,7 @@ public class MRTOneWidget : WidgetBase
         }
 
         // Apply FAST blink effect to REAR radar square if VeryClose (<4m)
-        if (_currentRearZone == ProximityZone.VeryClose)
+        if (rearZone == ProximityZone.VeryClose)
         {
             _radarBack.Opacity = _radarBlinkState ? 1.0 : 0.3;
         }
@@ -806,7 +794,7 @@ public class MRTOneWidget : WidgetBase
             return;
 
         // Only blink if feature is enabled AND pit limiter is active
-        if (!_settings.EnablePitLimiterIndicator || !_isPitLimiterActive)
+        if (!_settings.EnablePitLimiterIndicator || !_stateManager.IsPitLimiterActive)
             return;
 
         _pitLimiterBlinkState = !_pitLimiterBlinkState;
@@ -1051,15 +1039,15 @@ public class MRTOneWidget : WidgetBase
             float currentBrakeBias = data.BrakeBias;
             
             // First time seeing brake bias value - just initialize, don't show overlay
-            if (!_brakeBiasInitialized)
+            var biasChange = _stateManager.CheckBrakeBiasChange(currentBrakeBias); if (biasChange.ShowOverlay)
             {
-                _lastBrakeBias = currentBrakeBias;
-                _brakeBiasInitialized = true;
+                
+                
             }
             // Subsequent changes - only show if value actually changed (user adjusted it)
-            else if (Math.Abs(currentBrakeBias - _lastBrakeBias) > 0.01f) // Changed by >0.01%
+            else if (Math.Abs(currentBrakeBias - biasChange.Value) > 0.01f) // Changed by >0.01%
             {
-                _lastBrakeBias = currentBrakeBias;
+                
                 
                 // Update display value (use InvariantCulture to ensure "." decimal separator)
                 _brakeBiasValue.Text = currentBrakeBias.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "%";
@@ -1089,16 +1077,15 @@ public class MRTOneWidget : WidgetBase
             _leftValueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(_leftField.Value, leftValue, data, _primaryColor, _secondaryColor));
             
             // ABS special handling: Fade to background when inactive, bright when active
-            // Only update opacity if ABS state actually changed (prevents flicker from rapid SDK updates)
+            // Use StateManager to prevent flicker with cached state comparison
             if (_leftField.Value == TelemetryField.ABSActive && leftValue is int absValue)
             {
-                if (absValue != _lastLeftABSValue)
+                var absState = _stateManager.GetABSOpacity(absValue, 0);
+                if (absState.HasChanged)
                 {
-                    _leftValueText.Opacity = absValue == 1 ? 1.0 : 0.3; // Bright when ON, dim when OFF
-                    _leftLabelText.Opacity = absValue == 1 ? 1.0 : 0.3; // Sync label opacity
-                    _lastLeftABSValue = absValue; // Cache state to prevent redundant updates
+                    _leftValueText.Opacity = absState.LeftOpacity;
+                    _leftLabelText.Opacity = absState.LeftOpacity;
                 }
-                // Note: If state hasn't changed, keep current opacity (don't reset)
             }
             // Traction Control special handling: 
             // - Dim when N/A (car doesn't have TC) or OFF (TC = 0)
@@ -1114,17 +1101,15 @@ public class MRTOneWidget : WidgetBase
                     _ => -1
                 };
                 
-                if (tcValue != _lastLeftTCValue)
+                var tcState = _stateManager.GetTCOpacity(tcValue, 0);
+                if (tcState.HasChanged)
                 {
-                    // Opacity: 0.3 when N/A or OFF, 1.0 when enabled
-                    _leftValueText.Opacity = (tcValue < 0 || tcValue == 0) ? 0.3 : 1.0;
-                    _leftLabelText.Opacity = (tcValue < 0 || tcValue == 0) ? 0.3 : 1.0;
-                    
+                    _leftValueText.Opacity = tcState.LeftOpacity;
+                    _leftLabelText.Opacity = tcState.LeftOpacity;
+
                     // Color: Orange when TC > 0 (enabled), Teal when OFF/N/A
                     Color tcColor = tcValue > 0 ? _secondaryColor : _primaryColor;
                     _leftValueText.Foreground = new SolidColorBrush(tcColor);
-                    
-                    _lastLeftTCValue = tcValue; // Cache state to prevent redundant updates
                 }
                 // Note: If state hasn't changed, keep current opacity (don't reset)
             }
@@ -1132,12 +1117,11 @@ public class MRTOneWidget : WidgetBase
             // Only update opacity when state changes (prevents flicker from rapid oscillation)
             else if (_leftField.Value == TelemetryField.WheelLock && leftValue is int lockupValue)
             {
-                if (lockupValue != _lastLeftLockupValue)
+                var lockupState = _stateManager.GetLockupOpacity(lockupValue, 0);
+                if (lockupState.HasChanged)
                 {
-                    // Opacity: 0.3 when no lockup (value=0), 1.0 when locked (value=1)
-                    _leftValueText.Opacity = lockupValue == 1 ? 1.0 : 0.3; // Bright when LOCKED, dim when OK
-                    _leftLabelText.Opacity = lockupValue == 1 ? 1.0 : 0.3; // Sync label opacity
-                    _lastLeftLockupValue = lockupValue; // Cache to prevent redundant updates
+                    _leftValueText.Opacity = lockupState.LeftOpacity;
+                    _leftLabelText.Opacity = lockupState.LeftOpacity;
                 }
             }
             else if (_leftField.Value != TelemetryField.ABSActive && _leftField.Value != TelemetryField.FuelLevel && _leftField.Value != TelemetryField.TractionControl && _leftField.Value != TelemetryField.WheelLock)
@@ -1160,16 +1144,15 @@ public class MRTOneWidget : WidgetBase
             _rightValueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(_rightField.Value, rightValue, data, _primaryColor, _secondaryColor));
             
             // ABS special handling: Fade to background when inactive, bright when active
-            // Only update opacity if ABS state actually changed (prevents flicker from rapid SDK updates)
+            // Use StateManager to prevent flicker with cached state comparison
             if (_rightField.Value == TelemetryField.ABSActive && rightValue is int absValue)
             {
-                if (absValue != _lastRightABSValue)
+                var absStateRight = _stateManager.GetABSOpacity(0, absValue);
+                if (absStateRight.HasChanged)
                 {
-                    _rightValueText.Opacity = absValue == 1 ? 1.0 : 0.3; // Bright when ON, dim when OFF
-                    _rightLabelText.Opacity = absValue == 1 ? 1.0 : 0.3; // Sync label opacity
-                    _lastRightABSValue = absValue; // Cache state to prevent redundant updates
+                    _rightValueText.Opacity = absStateRight.RightOpacity;
+                    _rightLabelText.Opacity = absStateRight.RightOpacity;
                 }
-                // Note: If state hasn't changed, keep current opacity (don't reset)
             }
             // Traction Control special handling:
             // - Dim when N/A (car doesn't have TC) or OFF (TC = 0)
@@ -1185,17 +1168,15 @@ public class MRTOneWidget : WidgetBase
                     _ => -1
                 };
                 
-                if (tcValue != _lastRightTCValue)
+                var tcStateRight = _stateManager.GetTCOpacity(0, tcValue);
+                if (tcStateRight.HasChanged)
                 {
-                    // Opacity: 0.3 when N/A or OFF, 1.0 when enabled
-                    _rightValueText.Opacity = (tcValue < 0 || tcValue == 0) ? 0.3 : 1.0;
-                    _rightLabelText.Opacity = (tcValue < 0 || tcValue == 0) ? 0.3 : 1.0;
-                    
+                    _rightValueText.Opacity = tcStateRight.RightOpacity;
+                    _rightLabelText.Opacity = tcStateRight.RightOpacity;
+
                     // Color: Orange when TC > 0 (enabled), Teal when OFF/N/A
                     Color tcColor = tcValue > 0 ? _secondaryColor : _primaryColor;
                     _rightValueText.Foreground = new SolidColorBrush(tcColor);
-                    
-                    _lastRightTCValue = tcValue; // Cache state to prevent redundant updates
                 }
                 // Note: If state hasn't changed, keep current opacity (don't reset)
             }
@@ -1225,20 +1206,16 @@ public class MRTOneWidget : WidgetBase
         
         // PRIORITY 1: Pit limiter (if enabled) overrides RPM zone colors - PHASE 2: Enhancement #4
         bool pitLimiterActive = data.PitSpeedLimiterActive;
-        if (pitLimiterActive != _isPitLimiterActive)
+        var pitLimiterUpdate = _stateManager.UpdatePitLimiter(pitLimiterActive);
+        if (pitLimiterUpdate.Changed && !pitLimiterUpdate.IsActive)
         {
-            _isPitLimiterActive = pitLimiterActive;
-            
-            if (!pitLimiterActive)
-            {
-                // Pit limiter deactivated - reset blink state (color will restore below)
-                _pitLimiterBlinkState = false;
-            }
+            // Pit limiter deactivated - reset blink state (color will restore below)
+            _pitLimiterBlinkState = false;
         }
-        
+
         // Only update RPM zone color if pit limiter is NOT active (or feature is disabled)
         // When pit limiter is active and feature enabled, the blink timer handles the color
-        if (!_settings.EnablePitLimiterIndicator || !_isPitLimiterActive)
+        if (!_settings.EnablePitLimiterIndicator || !_stateManager.IsPitLimiterActive)
         {
             // Update gauge circle color based on RPM zone
             var rpm = data.RPM;
@@ -1385,8 +1362,8 @@ public class MRTOneWidget : WidgetBase
         var rearZone = _proximityCalculator.GetRearZone(data);
         
         // Track current zones for blinking animation
-        _currentFrontZone = frontZone;
-        _currentRearZone = rearZone;
+        _stateManager.UpdateProximityZones(frontZone, rearZone);
+        
         
         _radarFront.Fill = GetZoneColor(frontZone);
         _radarBack.Fill = GetZoneColor(rearZone);
@@ -1438,8 +1415,9 @@ public class MRTOneWidget : WidgetBase
                 return;
             }
         
-        // Only show fuel display if we have valid data (at least 1 lap completed for averages)
-        if (fuelData.CurrentFuel > 0 && fuelData.HasSufficientData)
+        // Show fuel display as soon as we have ANY data (even if CurrentFuel is 0)
+        // This fixes the issue where display never appeared while driving
+        if (fuelData.HasSufficientData)
         {
             // Build comprehensive fuel display (compact multi-line format)
             var fuelText = new System.Text.StringBuilder();
@@ -1595,9 +1573,10 @@ public class MRTOneWidget : WidgetBase
             
             _fuelDisplay.Foreground = new SolidColorBrush(Color.FromArgb(200, fuelColor.R, fuelColor.G, fuelColor.B));
         }
-        else if (fuelData.CurrentFuel > 0)
+        else if (fuelData.CurrentFuel > 0 || fuelData.TankCapacity > 0)
         {
             // Show minimal info if we have fuel but not enough data for averages
+            // OR if tank capacity is known but fuel reading isn't available yet
             _fuelDisplay.Text = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
             _fuelDisplay.Visibility = Visibility.Visible;
             _fuelDisplay.Foreground = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)); // Dimmed white
@@ -1636,27 +1615,6 @@ public class MRTOneWidget : WidgetBase
         if (status == ConnectionStatus.Disconnected)
         {
             // Reset brake bias state
-            _brakeBiasInitialized = false;
-            _lastBrakeBias = -1f;
-
-            // Reset ABS state tracking
-            _lastLeftABSValue = -1;
-            _lastRightABSValue = -1;
-
-            // Reset Traction Control state tracking
-            _lastLeftTCValue = -999;
-            _lastRightTCValue = -999;
-
-            // Reset Wheel Lockup state tracking
-            _lastLeftLockupValue = -1;
-            _lastRightLockupValue = -1;
-
-            // Reset proximity zones
-            _currentFrontZone = ProximityZone.Clear;
-            _currentRearZone = ProximityZone.Clear;
-
-            // Reset pit limiter state
-            _isPitLimiterActive = false;
         }
     }
     

@@ -22,19 +22,20 @@ public static class MRTOneFuelDisplay
     public static FuelDisplayResult GenerateFuelDisplay(FuelData? fuelData, bool showStrategy)
     {
         // Early exit if no data
-        if (fuelData == null || fuelData.CurrentFuel <= 0)
+        if (fuelData == null)
         {
-            if (fuelData?.CurrentFuel > 0 && !fuelData.HasSufficientData)
-            {
-                // Show minimal info if we have fuel but not enough data for averages
-                string minimalText = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
-                return new FuelDisplayResult(minimalText, Color.FromArgb(150, 255, 255, 255), true);
-            }
-
             return new FuelDisplayResult("", Colors.Transparent, false);
         }
+        
+        // Show minimal info if we have fuel but not enough data for averages
+        // OR if tank capacity is known but fuel reading isn't available yet
+        if (!fuelData.HasSufficientData && (fuelData.CurrentFuel > 0 || fuelData.TankCapacity > 0))
+        {
+            string minimalText = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
+            return new FuelDisplayResult(minimalText, Color.FromArgb(150, 255, 255, 255), true);
+        }
 
-        // Only show if we have sufficient data
+        // Only show full display if we have sufficient data
         if (!fuelData.HasSufficientData)
         {
             return new FuelDisplayResult("", Colors.Transparent, false);
