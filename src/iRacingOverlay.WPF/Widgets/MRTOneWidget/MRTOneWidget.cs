@@ -193,6 +193,23 @@ public class MRTOneWidget : WidgetBase
     // Pit limiter blink UI state (actual state tracked in StateManager)
     private readonly DispatcherTimer _pitLimiterBlinkTimer;
     private bool _pitLimiterBlinkState = false;
+    
+    // State tracking for special fields (ABS, TC, Wheel Lock, Brake Bias)
+    private int _lastLeftABSValue = -1;
+    private int _lastRightABSValue = -1;
+    private int _lastLeftTCValue = -999;
+    private int _lastRightTCValue = -999;
+    private int _lastLeftLockupValue = -1;
+    private int _lastRightLockupValue = -1;
+    private bool _brakeBiasInitialized = false;
+    private float _lastBrakeBias = -1f;
+    
+    // Radar proximity zone tracking
+    private ProximityZone _currentFrontZone = ProximityZone.Clear;
+    private ProximityZone _currentRearZone = ProximityZone.Clear;
+    
+    // Pit limiter active state
+    private bool _isPitLimiterActive = false;
 
     // Theme colors
     private System.Windows.Media.Color _primaryColor;   // Teal #008080
