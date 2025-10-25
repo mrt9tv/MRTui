@@ -46,8 +46,31 @@ public static class MRTOneFuelDisplay
         // Line 1: Current fuel and tank capacity
         fuelText.AppendLine($"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L ({fuelData.FuelPct:F0}%)");
 
-        // Line 2: Averages (Last, L5, L10, Session)
-        fuelText.AppendLine($"AVG: L:{fuelData.AvgFuelPerLap_Last:F2} | 5:{fuelData.AvgFuelPerLap_L5:F2} | 10:{fuelData.AvgFuelPerLap_L10:F2} | S:{fuelData.AvgFuelPerLap_Session:F2}");
+        // Line 2: Averages (Last, L5 with trend, L10 with trend, Session)
+        // Calculate trend indicators for L5 and L10 (+ if increasing, - if decreasing)
+        string l5Trend = "";
+        string l10Trend = "";
+        
+        // Compare current with last lap to show trend
+        if (fuelData.LapToLapDelta != 0)
+        {
+            // L5 trend: If last lap fuel is higher than L5 average, it means L5 is decreasing (good!)
+            // If last lap fuel is lower than L5 average, it means L5 is increasing (bad!)
+            float l5Delta = fuelData.AvgFuelPerLap_Last - fuelData.AvgFuelPerLap_L5;
+            if (Math.Abs(l5Delta) > 0.01f) // Only show if meaningful difference
+            {
+                l5Trend = l5Delta > 0 ? " +" : " -";
+            }
+            
+            // L10 trend: Same logic as L5
+            float l10Delta = fuelData.AvgFuelPerLap_Last - fuelData.AvgFuelPerLap_L10;
+            if (Math.Abs(l10Delta) > 0.01f) // Only show if meaningful difference
+            {
+                l10Trend = l10Delta > 0 ? " +" : " -";
+            }
+        }
+        
+        fuelText.AppendLine($"AVG: L:{fuelData.AvgFuelPerLap_Last:F2} | 5:{fuelData.AvgFuelPerLap_L5:F2}{l5Trend} | 10:{fuelData.AvgFuelPerLap_L10:F2}{l10Trend} | S:{fuelData.AvgFuelPerLap_Session:F2}");
 
         // Line 3: Min/Max and laps remaining with iRacing delta
         string lapsDeltaStr = fuelData.LapsDifference >= 0
@@ -170,9 +193,18 @@ public static class MRTOneFuelDisplay
             strategy.AppendLine($"2-STOP: NOT POSSIBLE (tank too small for race distance)");
         }
 
-        // Optimal window (minimize risk with 10% safety margin)
-        int conservativePitLap = (int)Math.Floor(lapsOnCurrentFuel * 0.9f);
-        strategy.AppendLine($"⚠ SAFE WINDOW: Pit by L{conservativePitLap} (90% fuel buffer)");
+        // Pit Window (show as range if available, otherwise show conservative pit lap)
+        if (fuelData.PitWindowStart > 0 && fuelData.PitWindowEnd > 0 && fuelData.PitWindowStart <= fuelData.PitWindowEnd)
+        {
+            // Show window as range (e.g., "PIT WINDOW 10-15")
+            strategy.AppendLine($"⚠ PIT WINDOW: L{fuelData.PitWindowStart}-{fuelData.PitWindowEnd}");
+        }
+        else
+        {
+            // Fallback: Calculate conservative pit lap if window not available
+            int conservativePitLap = (int)Math.Floor(lapsOnCurrentFuel * 0.9f);
+            strategy.AppendLine($"⚠ SAFE WINDOW: Pit by L{conservativePitLap} (90% fuel buffer)");
+        }
 
         return strategy.ToString();
     }
