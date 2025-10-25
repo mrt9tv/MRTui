@@ -142,10 +142,6 @@ public class MRTOneWidget : WidgetBase
     // PHASE 2: Helper classes for clean architecture
     private readonly MRTOneStateManager _stateManager;
     private MRTOneVisualEffects? _visualEffects;
-
-    // PHASE 2: Visual Enhancement Elements (managed by VisualEffects helper)
-    private Ellipse? _rpmIndicatorBead;  // Small circle that travels on gauge showing current RPM
-    private DispatcherTimer? _rpmBeadAnimationTimer;  // Animation timer for RPM bead
     
     // Dynamic text displays for top/center/bottom
     private readonly StackPanel _topStack;
@@ -193,23 +189,6 @@ public class MRTOneWidget : WidgetBase
     // Pit limiter blink UI state (actual state tracked in StateManager)
     private readonly DispatcherTimer _pitLimiterBlinkTimer;
     private bool _pitLimiterBlinkState = false;
-    
-    // State tracking for special fields (ABS, TC, Wheel Lock, Brake Bias)
-    private int _lastLeftABSValue = -1;
-    private int _lastRightABSValue = -1;
-    private int _lastLeftTCValue = -999;
-    private int _lastRightTCValue = -999;
-    private int _lastLeftLockupValue = -1;
-    private int _lastRightLockupValue = -1;
-    private bool _brakeBiasInitialized = false;
-    private float _lastBrakeBias = -1f;
-    
-    // Radar proximity zone tracking
-    private ProximityZone _currentFrontZone = ProximityZone.Clear;
-    private ProximityZone _currentRearZone = ProximityZone.Clear;
-    
-    // Pit limiter active state
-    private bool _isPitLimiterActive = false;
 
     // Theme colors
     private System.Windows.Media.Color _primaryColor;   // Teal #008080
@@ -354,7 +333,7 @@ public class MRTOneWidget : WidgetBase
         Canvas.SetLeft(_radarRight, LayoutConstants.RADAR_BACK_TOP);
         Canvas.SetTop(_radarRight, LayoutConstants.RADAR_CENTER_OFFSET);
         outerCanvas.Children.Add(_radarRight);
-        
+
         // PHASE 2: Apply visual enhancements based on settings
         ApplyVisualEnhancements();
         
@@ -406,6 +385,9 @@ public class MRTOneWidget : WidgetBase
             TextAlignment = TextAlignment.Center
         };
         _mainGrid.Children.Add(_centerValueText);
+
+        // PHASE 2: Initialize visual effects helper (after _gaugeCircle and _centerValueText created)
+        _visualEffects = new MRTOneVisualEffects(_mainGrid, _gaugeCircle, _centerValueText, _secondaryColor);
 
         // Brake bias transient overlay (hidden by default, appears when value changes)
         // Shows only the value (no label) with transparent background to avoid visual conflicts
@@ -876,33 +858,29 @@ public class MRTOneWidget : WidgetBase
         {
             _leftValueText.Opacity = 0.3; // Start dimmed (inactive state)
             _leftLabelText.Opacity = 0.3;
-            _lastLeftABSValue = -1; // Reset cache to force update on first telemetry
         }
         else if (_leftField == TelemetryField.WheelLock)
         {
             _leftValueText.Opacity = 0.3; // Start dimmed (no lockup state)
             _leftLabelText.Opacity = 0.3;
             _leftValueText.Foreground = new SolidColorBrush(_primaryColor); // Start with teal (inactive)
-            _lastLeftLockupValue = -1; // Reset cache to force update on first telemetry
         }
         else
         {
             _leftValueText.Opacity = 1.0; // Normal opacity for other fields
             _leftLabelText.Opacity = 1.0;
         }
-        
+
         if (_rightField == TelemetryField.ABSActive)
         {
             _rightValueText.Opacity = 0.3; // Start dimmed (inactive state)
             _rightLabelText.Opacity = 0.3;
-            _lastRightABSValue = -1; // Reset cache to force update on first telemetry
         }
         else if (_rightField == TelemetryField.WheelLock)
         {
             _rightValueText.Opacity = 0.3; // Start dimmed (no lockup state)
             _rightLabelText.Opacity = 0.3;
             _rightValueText.Foreground = new SolidColorBrush(_primaryColor); // Start with teal (inactive)
-            _lastRightLockupValue = -1; // Reset cache to force update on first telemetry
         }
         else
         {
@@ -1054,21 +1032,15 @@ public class MRTOneWidget : WidgetBase
         if (AppSettings.Instance.ShowBrakeBiasOverlay)
         {
             float currentBrakeBias = data.BrakeBias;
-            
-            // First time seeing brake bias value - just initialize, don't show overlay
-            var biasChange = _stateManager.CheckBrakeBiasChange(currentBrakeBias); if (biasChange.ShowOverlay)
+
+            // Use StateManager to check if brake bias changed (handles initialization logic)
+            var biasChange = _stateManager.CheckBrakeBiasChange(currentBrakeBias);
+
+            if (biasChange.ShowOverlay)
             {
-                
-                
-            }
-            // Subsequent changes - only show if value actually changed (user adjusted it)
-            else if (Math.Abs(currentBrakeBias - biasChange.Value) > 0.01f) // Changed by >0.01%
-            {
-                
-                
                 // Update display value (use InvariantCulture to ensure "." decimal separator)
-                _brakeBiasValue.Text = currentBrakeBias.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "%";
-                
+                _brakeBiasValue.Text = biasChange.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
                 // Show overlay and hide center + left/right sections (keep top/bottom visible)
                 if (!_brakeBiasVisible)
                 {
@@ -1079,7 +1051,7 @@ public class MRTOneWidget : WidgetBase
                     // Keep top and bottom sections visible
                     _brakeBiasVisible = true;
                 }
-                
+
                 // Reset hide timer (keep visible while adjusting)
                 _brakeBiasHideTimer?.Stop();
                 _brakeBiasHideTimer?.Start();
@@ -1201,12 +1173,11 @@ public class MRTOneWidget : WidgetBase
             // Only update opacity when state changes (prevents flicker from rapid oscillation)
             else if (_rightField.Value == TelemetryField.WheelLock && rightValue is int lockupValue)
             {
-                if (lockupValue != _lastRightLockupValue)
+                var lockupStateRight = _stateManager.GetLockupOpacity(0, lockupValue);
+                if (lockupStateRight.HasChanged)
                 {
-                    // Opacity: 0.3 when no lockup (value=0), 1.0 when locked (value=1)
-                    _rightValueText.Opacity = lockupValue == 1 ? 1.0 : 0.3; // Bright when LOCKED, dim when OK
-                    _rightLabelText.Opacity = lockupValue == 1 ? 1.0 : 0.3; // Sync label opacity
-                    _lastRightLockupValue = lockupValue; // Cache to prevent redundant updates
+                    _rightValueText.Opacity = lockupStateRight.RightOpacity;
+                    _rightLabelText.Opacity = lockupStateRight.RightOpacity;
                 }
             }
             else if (_rightField.Value != TelemetryField.ABSActive && _rightField.Value != TelemetryField.FuelLevel && _rightField.Value != TelemetryField.TractionControl && _rightField.Value != TelemetryField.WheelLock)
@@ -1278,6 +1249,9 @@ public class MRTOneWidget : WidgetBase
         {
             UpdateRadarSquares(data);
         }
+
+        // PHASE 2: Update visual effects with latest telemetry (for RPM bead animation)
+        _visualEffects?.UpdateTelemetryData(data);
     }
     
     /// <summary>
@@ -1424,185 +1398,21 @@ public class MRTOneWidget : WidgetBase
             
             // Get fuel data from telemetry service (with null safety)
             var fuelData = _telemetryService?.CurrentFuelData;
-            
-            // Additional null check for fuel data
-            if (fuelData == null)
+
+            // Use MRTOneFuelDisplay to generate formatted fuel text and color
+            var displayResult = MRTOneFuelDisplay.GenerateFuelDisplay(fuelData, _settings.EnableFuelStrategy);
+
+            // Apply the result to the UI
+            if (displayResult.IsVisible)
             {
-                _fuelDisplay.Visibility = Visibility.Collapsed;
-                return;
-            }
-        
-        // Show fuel display as soon as we have ANY data (even if CurrentFuel is 0)
-        // This fixes the issue where display never appeared while driving
-        if (fuelData.HasSufficientData)
-        {
-            // Build comprehensive fuel display (compact multi-line format)
-            var fuelText = new System.Text.StringBuilder();
-            
-            // Line 1: Current fuel and tank capacity
-            fuelText.AppendLine($"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L ({fuelData.FuelPct:F0}%)");
-            
-            // Line 2: Averages (Last, L5 with trend, L10 with trend, Session)
-            // Calculate trend indicators for L5 and L10 (+ if increasing, - if decreasing)
-            string l5Trend = "";
-            string l10Trend = "";
-            
-            // Compare current with last lap to show trend
-            if (fuelData.LapToLapDelta != 0)
-            {
-                // L5 trend: If last lap fuel is higher than L5 average, it means L5 is decreasing (good!)
-                // If last lap fuel is lower than L5 average, it means L5 is increasing (bad!)
-                float l5Delta = fuelData.AvgFuelPerLap_Last - fuelData.AvgFuelPerLap_L5;
-                if (Math.Abs(l5Delta) > 0.01f) // Only show if meaningful difference
-                {
-                    l5Trend = l5Delta > 0 ? " +" : " -";
-                }
-                
-                // L10 trend: Same logic as L5
-                float l10Delta = fuelData.AvgFuelPerLap_Last - fuelData.AvgFuelPerLap_L10;
-                if (Math.Abs(l10Delta) > 0.01f) // Only show if meaningful difference
-                {
-                    l10Trend = l10Delta > 0 ? " +" : " -";
-                }
-            }
-            
-            fuelText.AppendLine($"AVG: L:{fuelData.AvgFuelPerLap_Last:F2} | 5:{fuelData.AvgFuelPerLap_L5:F2}{l5Trend} | 10:{fuelData.AvgFuelPerLap_L10:F2}{l10Trend} | S:{fuelData.AvgFuelPerLap_Session:F2}");
-            
-            // Line 3: Min/Max and laps remaining (1 decimal for precision) with iRacing delta
-            string lapsDeltaStr = fuelData.LapsDifference >= 0 
-                ? $"+{fuelData.LapsDifference:F1}" 
-                : $"{fuelData.LapsDifference:F1}";
-            fuelText.AppendLine($"RANGE: {fuelData.MinFuelPerLap:F2}-{fuelData.MaxFuelPerLap:F2}L | LAPS: {fuelData.LapsRemaining:F1} (iR: {fuelData.IRacingLapsRemaining:F1}, Δ {lapsDeltaStr})");
-            
-            // Line 4: Delta to finish and fuel needed (TO GO + NEED - prominently shown)
-            if (fuelData.RaceLapsRemaining > 0)
-            {
-                // RACE MODE: TO GO = FuelDeltaToFinish (accounts for race laps + buffer + 0.3L finish threshold)
-                string deltaStr = fuelData.FuelDeltaToFinish >= 0 
-                    ? $"+{fuelData.FuelDeltaToFinish:F2}L" 
-                    : $"{fuelData.FuelDeltaToFinish:F2}L";
-                
-                // NEED: Calculate fuel needed WITHOUT buffer, just race laps + 0.3L finish threshold
-                // This gives the minimum fuel to finish (no safety buffer)
-                float fuelNeededNoBuffer = (fuelData.RaceLapsRemaining * fuelData.AvgFuelPerLap_L5) + fuelData.FuelSputteringThreshold;
-                float fuelToAddNoBuffer = Math.Max(0, fuelNeededNoBuffer - fuelData.CurrentFuel);
-                
-                string needStr = fuelToAddNoBuffer > 0.1f  // >0.1L threshold to avoid showing 0.0L
-                    ? $"{fuelToAddNoBuffer:F2}L" 
-                    : "OK";
-                
-                fuelText.AppendLine($"TO FINISH: {fuelData.FuelNeededToFinish:F2}L ({deltaStr}) | NEED {needStr}");
+                _fuelDisplay.Text = displayResult.Text;
+                _fuelDisplay.Foreground = new SolidColorBrush(displayResult.ForegroundColor);
+                _fuelDisplay.Visibility = Visibility.Visible;
             }
             else
             {
-                // QUALIFYING/PRACTICE MODE: 5-lap reference for TO GO
-                float fivelapFuel = fuelData.AvgFuelPerLap_L5 * 5;
-                float deltaToFiveLaps = fuelData.CurrentFuel - fivelapFuel;
-                string deltaStr = deltaToFiveLaps >= 0 
-                    ? $"+{deltaToFiveLaps:F2}L" 
-                    : $"{deltaToFiveLaps:F2}L";
-                fuelText.AppendLine($"5-LAP REF: {fivelapFuel:F2}L ({deltaStr})");
+                _fuelDisplay.Visibility = Visibility.Collapsed;
             }
-            
-            // Line 5: Green/Yellow flag averages (if available)
-            if (fuelData.GreenFlagLapCount > 0 || fuelData.YellowFlagLapCount > 0)
-            {
-                string flagInfo = "";
-                if (fuelData.GreenFlagLapCount > 0)
-                    flagInfo += $"GREEN: {fuelData.GreenFlagAverage:F2}L ({fuelData.GreenFlagLapCount})";
-                if (fuelData.YellowFlagLapCount > 0)
-                    flagInfo += (flagInfo.Length > 0 ? " | " : "") + $"YELLOW: {fuelData.YellowFlagAverage:F2}L ({fuelData.YellowFlagLapCount})";
-                fuelText.AppendLine(flagInfo);
-            }
-            
-            // PHASE 2: Multi-Stint Strategy (Toggle-able via Visual Settings)
-            if (_settings.EnableFuelStrategy && fuelData.RaceLapsRemaining > 0 && fuelData.AvgFuelPerLap_L5 > 0)
-            {
-                fuelText.AppendLine(""); // Blank line separator
-                fuelText.AppendLine("═══ PIT STRATEGY ═══");
-                
-                // Calculate stint scenarios
-                float avgFuel = fuelData.AvgFuelPerLap_L5;
-                float tankCap = fuelData.TankCapacity;
-                int totalLaps = fuelData.RaceLapsRemaining;
-                float currentFuel = fuelData.CurrentFuel;
-                
-                // NO-STOP Strategy (if possible)
-                if (fuelData.CanFinishWithoutStop)
-                {
-                    fuelText.AppendLine($"✓ NO-STOP: Current fuel sufficient ({fuelData.FuelDeltaToFinish:+0.0;-0.0}L surplus)");
-                }
-                
-                // 1-STOP Strategy
-                float lapsOnCurrentFuel = currentFuel / avgFuel;
-                float lapsOnFullTank = tankCap / avgFuel;
-                
-                if (lapsOnCurrentFuel + lapsOnFullTank >= totalLaps)
-                {
-                    // Can finish with 1 stop
-                    int optimalPitLap = (int)Math.Floor(lapsOnCurrentFuel);
-                    int lapsAfterPit = totalLaps - optimalPitLap;
-                    float fuelToAdd = lapsAfterPit * avgFuel;
-                    fuelText.AppendLine($"1-STOP: Pit @ L{optimalPitLap} → Add {fuelToAdd:F1}L");
-                }
-                else
-                {
-                    fuelText.AppendLine($"1-STOP: NOT POSSIBLE (need {(totalLaps * avgFuel - currentFuel - tankCap):F1}L more capacity)");
-                }
-                
-                // 2-STOP Strategy
-                if (lapsOnFullTank * 2 >= totalLaps)
-                {
-                    // Calculate optimal 2-stop windows
-                    float lapsPerStint = totalLaps / 3.0f; // Divide race into 3 stints
-                    int firstPit = (int)Math.Min(lapsOnCurrentFuel, lapsPerStint);
-                    int secondPit = firstPit + (int)lapsOnFullTank;
-                    float firstStopFuel = Math.Min(tankCap, lapsPerStint * avgFuel);
-                    float secondStopFuel = Math.Min(tankCap, (totalLaps - secondPit) * avgFuel);
-                    fuelText.AppendLine($"2-STOP: L{firstPit} ({firstStopFuel:F1}L), L{secondPit} ({secondStopFuel:F1}L)");
-                }
-                else
-                {
-                    fuelText.AppendLine($"2-STOP: NOT POSSIBLE (tank too small for race distance)");
-                }
-                
-                // Pit Window (show as range if available, otherwise show conservative pit lap)
-                if (fuelData.PitWindowStart > 0 && fuelData.PitWindowEnd > 0 && fuelData.PitWindowStart <= fuelData.PitWindowEnd)
-                {
-                    // Show window as range (e.g., "PIT WINDOW 10-15")
-                    fuelText.AppendLine($"⚠ PIT WINDOW: L{fuelData.PitWindowStart}-{fuelData.PitWindowEnd}");
-                }
-                else
-                {
-                    // Fallback: Calculate conservative pit lap if window not available
-                    int conservativePitLap = (int)Math.Floor(lapsOnCurrentFuel * 0.9f); // 10% safety margin
-                    fuelText.AppendLine($"⚠ SAFE WINDOW: Pit by L{conservativePitLap} (90% fuel buffer)");
-                }
-            }
-            
-            _fuelDisplay.Text = fuelText.ToString().TrimEnd();
-            _fuelDisplay.Visibility = Visibility.Visible;
-            
-            // Simplified color-code based on laps remaining (orange ≥2 laps, red <2 laps)
-            Color fuelColor = fuelData.LapsRemaining >= 2
-                ? Color.FromRgb(255, 128, 0)   // Orange - SOON
-                : Colors.Red;                   // Red - URGENT
-            
-            _fuelDisplay.Foreground = new SolidColorBrush(Color.FromArgb(200, fuelColor.R, fuelColor.G, fuelColor.B));
-        }
-        else if (fuelData.CurrentFuel > 0 || fuelData.TankCapacity > 0)
-        {
-            // Show minimal info if we have fuel but not enough data for averages
-            // OR if tank capacity is known but fuel reading isn't available yet
-            _fuelDisplay.Text = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
-            _fuelDisplay.Visibility = Visibility.Visible;
-            _fuelDisplay.Foreground = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)); // Dimmed white
-        }
-        else
-        {
-            // Hide fuel display if no valid data yet
-            _fuelDisplay.Visibility = Visibility.Collapsed;
-        }
         }
         catch (Exception ex)
         {
@@ -1631,7 +1441,8 @@ public class MRTOneWidget : WidgetBase
         // Reset all cached state when disconnecting to prevent stale data on reconnect
         if (status == ConnectionStatus.Disconnected)
         {
-            // Reset brake bias state
+            // Reset all state tracking via StateManager
+            _stateManager.ResetAllState();
         }
     }
     
@@ -1641,6 +1452,9 @@ public class MRTOneWidget : WidgetBase
         _primaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.PrimaryColor);
         _secondaryColor = (Color)ColorConverter.ConvertFromString(AppSettings.Instance.SecondaryColor);
         _backgroundOpacity = AppSettings.Instance.DefaultOpacity;
+
+        // PHASE 2: Sync color changes to visual effects
+        _visualEffects?.UpdateSecondaryColor(_secondaryColor);
         
         // Update circle fill opacity
         _gaugeCircle.Fill = new SolidColorBrush(Color.FromArgb(
@@ -1745,245 +1559,36 @@ public class MRTOneWidget : WidgetBase
         // Enhancement 1: Gradient Background
         if (_settings.EnableGradientBackground)
         {
-            ApplyGradientBackground();
+            _visualEffects?.ApplyGradientBackground(_backgroundOpacity);
         }
         else
         {
-            // Revert to solid background
-            _gaugeCircle.Fill = new SolidColorBrush(Color.FromArgb(
-                (byte)(255 * _backgroundOpacity), 20, 20, 20));
+            _visualEffects?.RemoveGradientBackground(_backgroundOpacity);
         }
         
-        // Enhancement 2: Shift Point Ring
+        // Enhancement 2: Shift Point Ring (RPM Bead)
         if (_settings.EnableShiftPointRing)
         {
-            CreateShiftPointRing();
+            _visualEffects?.CreateRPMBead();
         }
         else
         {
-            RemoveShiftPointRing();
+            _visualEffects?.RemoveRPMBead();
         }
-        
+
         // Enhancement 3: Glow Effects
         if (_settings.EnableGlowEffects)
         {
-            ApplyGlowEffects();
+            _visualEffects?.ApplyGlowEffects(_primaryColor);
         }
         else
         {
-            RemoveGlowEffects();
+            _visualEffects?.RemoveGlowEffects();
         }
         
         // Enhancement 4: Fuel Display - trigger update instead of just toggling visibility
         // Let UpdateFuelDisplay() handle visibility based on both settings AND data availability
         UpdateFuelDisplay();
-    }
-    
-    // ============================================
-    // Enhancement 1: Gradient Background
-    // ============================================
-    private void ApplyGradientBackground()
-    {
-        if (_gaugeCircle == null) return; // Guard against early call
-        
-        var gradient = new RadialGradientBrush();
-        gradient.GradientOrigin = new Point(0.5, 0.5);
-        gradient.Center = new Point(0.5, 0.5);
-        gradient.RadiusX = 0.5;
-        gradient.RadiusY = 0.5;
-        
-        // Center (lighter) to edge (darker) gradient
-        gradient.GradientStops.Add(new GradientStop(
-            Color.FromArgb((byte)(255 * _backgroundOpacity), 30, 30, 30), 0.0));
-        gradient.GradientStops.Add(new GradientStop(
-            Color.FromArgb((byte)(255 * _backgroundOpacity), 10, 10, 10), 1.0));
-        
-        _gaugeCircle.Fill = gradient;
-    }
-    
-    // ============================================
-    // Enhancement 2: Animated RPM Indicator Bead
-    // Small circle that travels ON the gauge circle showing current RPM
-    // Animates from bottom (6 o'clock) to top (12 o'clock) = 180° arc
-    // ============================================
-    private void CreateShiftPointRing()
-    {
-        // Remove existing elements if present
-        RemoveShiftPointRing();
-        
-        // Create small circular bead that travels on the gauge circle
-        // Moves from bottom (0% RPM) to top center (100% RPM)
-        _rpmIndicatorBead = new Ellipse
-        {
-            Width = LayoutConstants.RPM_BEAD_SIZE,
-            Height = LayoutConstants.RPM_BEAD_SIZE,
-            Fill = new SolidColorBrush(_secondaryColor),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            RenderTransform = new TranslateTransform(),
-            Visibility = Visibility.Collapsed  // Start hidden, will show after first position update
-        };
-
-        // Add bead to grid (above gauge circle but below text)
-        _mainGrid.Children.Insert(1, _rpmIndicatorBead);
-
-        // Create animation timer (smoother at 30 FPS)
-        _rpmBeadAnimationTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.RPM_ANIMATION_INTERVAL_MS)
-        };
-        _rpmBeadAnimationTimer.Tick += UpdateShiftPointRing;
-        _rpmBeadAnimationTimer.Start();
-        
-        // Immediately update position to avoid flash at center
-        UpdateShiftPointRing(null, EventArgs.Empty);
-    }
-    
-    private void RemoveShiftPointRing()
-    {
-        if (_rpmIndicatorBead != null)
-        {
-            _mainGrid.Children.Remove(_rpmIndicatorBead);
-            _rpmIndicatorBead = null;
-        }
-        
-        if (_rpmBeadAnimationTimer != null)
-        {
-            _rpmBeadAnimationTimer.Stop();
-            _rpmBeadAnimationTimer.Tick -= UpdateShiftPointRing;
-            _rpmBeadAnimationTimer = null;
-        }
-    }
-    
-    // Update bead position based on current RPM
-    // Bead travels from bottom (90° = 0% RPM) to top center (270° = 100% RPM)
-    private void UpdateShiftPointRing(object? sender, EventArgs e)
-    {
-        if (_rpmIndicatorBead == null || _lastTelemetryData == null || _gaugeCircle == null)
-            return;
-        
-        var rpm = _lastTelemetryData.RPM;
-        var zone = ShiftPointCalculator.GetRPMZone(
-            rpm, 
-            _lastTelemetryData.Gear, 
-            _lastTelemetryData.PlayerCarSLFirstRPM, 
-            _lastTelemetryData.PlayerCarSLShiftRPM, 
-            _lastTelemetryData.PlayerCarSLLastRPM, 
-            _lastTelemetryData.PlayerCarSLBlinkRPM);
-        
-        // Use actual engine redline from telemetry if available (most accurate)
-        // Fall back to estimated redline only if telemetry doesn't provide it
-        double redline = _lastTelemetryData.EngineRedlineRPM > 0 
-            ? _lastTelemetryData.EngineRedlineRPM 
-            : ShiftPointCalculator.GetEstimatedRedline();
-        
-        // Safety check: ensure redline is reasonable (not too low)
-        if (redline < 3000)
-        {
-            redline = 8000; // Use safe default if redline seems invalid
-        }
-        
-        // Don't show bead if we don't have valid RPM data
-        if (rpm <= 0 || redline <= 0)
-        {
-            _rpmIndicatorBead.Visibility = Visibility.Collapsed;
-            return;
-        }
-        
-        // Map 0-100% RPM to 0-100% of arc (FULL RANGE, not compressed)
-        double percentage = Math.Min(rpm / redline, 1.0);  // Clamp to 100%
-        
-        // Map percentage to angle on RIGHT HALF of circle (90° to 270°)
-        // 0% RPM = 90° (bottom), 50% RPM = 180° (right), 100% RPM = 270° (top center)
-        double angle = 90 + (percentage * 180);
-        double angleRad = angle * Math.PI / 180;
-        
-        // Position bead ON the gauge circle using RenderTransform
-        double centerX = _gaugeCircle.ActualWidth / 2;
-        double centerY = _gaugeCircle.ActualHeight / 2;
-        double gaugeRadius = (Math.Min(_gaugeCircle.ActualWidth, _gaugeCircle.ActualHeight) / 2);
-        
-        // Adjust radius slightly inward to center bead ON the stroke
-        // This prevents clipping and ensures perfect alignment
-        double adjustedRadius = gaugeRadius - (_gaugeCircle.StrokeThickness / 2);
-        
-        // Calculate bead position on circle
-        double beadX = adjustedRadius * Math.Cos(angleRad);
-        double beadY = adjustedRadius * Math.Sin(angleRad);
-        
-        // Round to nearest pixel for crisp rendering and force perfect centering at top
-        // Smoothly transition to centered as we approach top (no flickering)
-        if (angle >= LayoutConstants.RPM_CENTER_ANGLE_THRESHOLD)  // Above 94.4% RPM, start centering horizontally
-        {
-            // Gradually reduce horizontal offset as we approach 270°
-            // This prevents flickering at high RPM
-            double centeringFactor = Math.Min(1.0, (angle - LayoutConstants.RPM_CENTER_ANGLE_THRESHOLD) / LayoutConstants.RPM_CENTER_SMOOTHING);  // 0 at threshold, 1 at 270°
-            beadX = beadX * (1.0 - centeringFactor);  // Smoothly approach X=0
-            beadX = Math.Round(beadX);
-        }
-        else
-        {
-            beadX = Math.Round(beadX);
-        }
-        beadY = Math.Round(beadY);
-        
-        // Apply transform to move bead from center to calculated position
-        if (_rpmIndicatorBead.RenderTransform is TranslateTransform transform)
-        {
-            transform.X = beadX;
-            transform.Y = beadY;
-        }
-        
-        // Make bead visible after positioning (prevents flash at center on creation)
-        _rpmIndicatorBead.Visibility = Visibility.Visible;
-        
-        // Color based on zone (matches gauge circle colors)
-        Color beadColor = zone switch
-        {
-            ShiftPointCalculator.RPMZone.Danger => Colors.Red,
-            ShiftPointCalculator.RPMZone.Optimal => _secondaryColor, // Orange
-            ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,
-            _ => _primaryColor // Teal for safe zone
-        };
-        _rpmIndicatorBead.Fill = new SolidColorBrush(beadColor);
-    }
-    
-    // ============================================
-    // Enhancement 3: Glow Effects
-    // ============================================
-    private void ApplyGlowEffects()
-    {
-        // Add subtle glow to center value (gear) - with null check
-        if (_centerValueText != null)
-        {
-            _centerValueText.Effect = new DropShadowEffect
-            {
-                Color = _primaryColor,
-                BlurRadius = LayoutConstants.GLOW_BLUR_RADIUS_CENTER,
-                ShadowDepth = 0,
-                Opacity = LayoutConstants.GLOW_OPACITY_CENTER
-            };
-        }
-
-        // Add subtle glow to gauge circle border - with null check
-        if (_gaugeCircle != null)
-        {
-            _gaugeCircle.Effect = new DropShadowEffect
-            {
-                Color = _primaryColor,
-                BlurRadius = LayoutConstants.GLOW_BLUR_RADIUS_GAUGE,
-                ShadowDepth = 0,
-                Opacity = LayoutConstants.GLOW_OPACITY_GAUGE
-            };
-        }
-    }
-    
-    private void RemoveGlowEffects()
-    {
-        if (_centerValueText != null)
-            _centerValueText.Effect = null;
-        if (_gaugeCircle != null)
-            _gaugeCircle.Effect = null;
     }
     
     protected override void OnClosed(EventArgs e)
@@ -1992,10 +1597,7 @@ public class MRTOneWidget : WidgetBase
         _blinkTimer?.Stop();
         _radarBlinkTimer?.Stop();
         _pitLimiterBlinkTimer?.Stop();
-        
-        // Clean up Phase 2 resources
-        RemoveShiftPointRing();
-        
+
         AppSettings.Instance.SettingsChanged -= OnSettingsChanged;
         base.OnClosed(e);
     }
