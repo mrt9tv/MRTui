@@ -11,39 +11,42 @@
 
 Refactoring `FuelCalculatorService` from a 3,178-line monolith to a clean ~500-line orchestrator with modular sub-services.
 
-### Current State (After Phase 4)
+### Current State (After Phase 6)
 
 | Component | Location | Lines | Status |
 |-----------|----------|-------|--------|
-| `FuelCalculatorService` | `Services/` | **1,848** | 🟡 Phase 4 complete (-1,330 lines, 42% reduced) |
-| `FuelAveragingService` | `Services/Fuel/` | 259 | ✅ Extracted & called |
+| `FuelCalculatorService` | `Services/` | **1,745** | 🟡 Phase 6 complete (-1,433 lines, 45% reduced) |
+| `FuelAveragingService` | `Services/Fuel/` | 258 | ✅ Extracted & called |
 | `FuelOutlierDetector` | `Services/Fuel/` | 293 | ✅ Extracted & called |
-| `PitStrategyService` | `Services/Fuel/` | 527 | ✅ Extracted & wired (Phase 1) |
-| `FuelSavingCalculator` | `Services/Fuel/` | 211 | ✅ Extracted & called |
+| `PitStrategyService` | `Services/Fuel/` | 526 | ✅ Extracted & wired (Phase 1) |
+| `FuelSavingCalculator` | `Services/Fuel/` | 210 | ✅ Extracted & called |
 | `DeltaTrackingService` | `Services/Fuel/` | 278 | ✅ Extracted & wired |
 | `DynamicBufferCalculator` | `Services/Fuel/` | 214 | ✅ Extracted & wired |
 | `LapDeltaTracker` | `Services/Fuel/` | 134 | ✅ Extracted & called |
 
 ---
 
-## Duplicate Methods - Status
+## Dead Code Removed
 
-These methods in `FuelCalculatorService` were **duplicated** with extracted services:
+| Item | Type | Lines | Status |
+|------|------|-------|--------|
+| `CalculateDeltaTracking()` | Method | 261 | ✅ REMOVED |
+| `CalculateFuelSaving()` | Method | 184 | ✅ REMOVED |
+| `CalculateOptimalPitLap()` | Method | 303 | ✅ REMOVED |
+| `CalculatePitExitPosition()` | Method | 172 | ✅ REMOVED |
+| `CalculateMultiStopStrategy()` | Method | 137 | ✅ REMOVED |
+| `CalculatePartialRefuelOptimization()` | Method | 186 | ✅ REMOVED |
+| `CalculateDynamicBufferLaps()` | Method | 153 | ✅ REMOVED |
+| `GenerateStrategicAlerts()` | Method | 85 | ✅ REMOVED |
+| `GetDeltaHistory()` | Method | 4 | ✅ REMOVED |
+| `_deltaHistory` | Field | 2 | ✅ REMOVED |
+| `_virtualLapsCompleted` | Field (buggy) | 1 | ✅ REMOVED |
+| `_lastDelta`, `_sessionStatsLoaded`, etc. | Fields | 5 | ✅ REMOVED |
+| `DeltaHistoryRecord.cs` | Model class | 42 | ✅ REMOVED |
+| Duplicate `FuelAverages` creation | Code dup | 10 | ✅ REMOVED |
 
-| Method | Original Line | ~Lines | Service Replacement | Status |
-|--------|---------------|--------|---------------------|--------|
-| `CalculateAverages()` | 869 | 135 | `FuelAveragingService` | ✅ Keep (orchestrates) |
-| `CalculateStrategy()` | 1004 | 99 | None (unique logic) | ✅ Keep as-is |
-| ~~`CalculateDeltaTracking()`~~ | ~~1112~~ | ~~261~~ | `DeltaTrackingService` | ✅ REMOVED (Phase 3) |
-| ~~`CalculateFuelSaving()`~~ | ~~1364~~ | ~~184~~ | `FuelSavingCalculator` | ✅ REMOVED (Phase 4) |
-| ~~`CalculateOptimalPitLap()`~~ | ~~1727~~ | ~~303~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
-| ~~`CalculatePitExitPosition()`~~ | ~~2058~~ | ~~172~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
-| ~~`CalculateMultiStopStrategy()`~~ | ~~2231~~ | ~~137~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
-| ~~`CalculatePartialRefuelOptimization()`~~ | ~~2368~~ | ~~186~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
-| ~~`CalculateDynamicBufferLaps()`~~ | ~~1600~~ | ~~153~~ | `DynamicBufferCalculator` | ✅ REMOVED (Phase 2) |
-
-**Lines removed**: 1,330 lines (Phases 1-4)
-**Current size**: 1,848 lines (target: ~500)
+**Total lines removed**: 1,433 lines (Phases 1-6)
+**Current size**: 1,745 lines (target: ~500)
 
 ---
 
@@ -166,7 +169,7 @@ If issues are found:
 | `22b4366` | 1 | Wire up PitStrategyService, remove 733 lines |
 | `009a28b` | 2-4 | Remove dead code methods, 598 lines |
 | `73aa7b2` | 5 | Remove unused fields and methods, 91 lines |
-| - | 6 | Advanced cleanup (optional) |
+| `6859c4c` | 6 | Fix _virtualLapsCompleted bug, remove dead code |
 
 ---
 
@@ -174,10 +177,12 @@ If issues are found:
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
-| Lines | 3,178 | 1,757 | -1,421 (45%) |
+| Lines | 3,178 | 1,745 | -1,433 (45%) |
 | Warnings | 4 | 0 | ✅ Clean |
 | Dead Methods | 9 | 0 | ✅ Removed |
+| Dead Models | 1 | 0 | ✅ Removed |
 | Services Wired | 2 | 6 | ✅ All |
+| Bugs Fixed | 0 | 1 | ✅ _virtualLapsCompleted |
 
 ---
 
