@@ -120,7 +120,7 @@ public class FuelCalculatorService
         _persistenceService = new SessionPersistenceService();
         _fuelAveragingService = new FuelAveragingService();
         _outlierDetector = new FuelOutlierDetector();
-        _pitStrategyService = new PitStrategyService();
+        _pitStrategyService = new PitStrategyService(_persistenceService);  // Pass persistence for pit time predictions
         _fuelSavingCalculator = new FuelSavingCalculator(_persistenceService);
         _lapDeltaTracker = new LapDeltaTracker();
         _deltaTrackingService = new DeltaTrackingService();
@@ -539,9 +539,18 @@ public class FuelCalculatorService
 
             CalculateStrategy();
 
-            // Calculate pit strategy (optimal pit lap and multi-stop strategy)
-            CalculateOptimalPitLap(telemetry);
-            CalculateMultiStopStrategy(telemetry);
+            // Calculate pit strategy using extracted service (Phase 1 refactor)
+            var fuelAverages = new FuelAverages
+            {
+                Current = CurrentData.AvgFuelPerLap,
+                Last = CurrentData.AvgFuelPerLap_Last,
+                L5 = CurrentData.AvgFuelPerLap_L5,
+                L10 = CurrentData.AvgFuelPerLap_L10,
+                EMA = CurrentData.AvgFuelPerLap_EMA,
+                Session = CurrentData.AvgFuelPerLap_Session
+            };
+            var pitStrategy = _pitStrategyService.Calculate(telemetry, CurrentData, fuelAverages, _lapHistory);
+            ApplyPitStrategyToCurrentData(pitStrategy);
 
             // Track delta using service (Phase 5) - simplified for now
             var deltaData = _deltaTrackingService.Track(
@@ -1635,11 +1644,19 @@ public class FuelCalculatorService
             CurrentData.AlertSeverity = 0;
         }
         
-        // Calculate optimal pit lap (minimize time loss based on track position)
-        CalculateOptimalPitLap(telemetry);
-        
-        // Calculate multi-stop strategy comparison (Phase 5)
-        CalculateMultiStopStrategy(telemetry);
+        // Calculate pit strategy using extracted service (Phase 1 refactor)
+        // Note: Reuse averages built earlier for efficiency
+        var pitAverages = new FuelAverages
+        {
+            Current = CurrentData.AvgFuelPerLap,
+            Last = CurrentData.AvgFuelPerLap_Last,
+            L5 = CurrentData.AvgFuelPerLap_L5,
+            L10 = CurrentData.AvgFuelPerLap_L10,
+            EMA = CurrentData.AvgFuelPerLap_EMA,
+            Session = CurrentData.AvgFuelPerLap_Session
+        };
+        var pitStrategyResult = _pitStrategyService.Calculate(telemetry, CurrentData, pitAverages, _lapHistory);
+        ApplyPitStrategyToCurrentData(pitStrategyResult);
     }
     
     /// <summary>
@@ -1719,710 +1736,14 @@ public class FuelCalculatorService
         CurrentData.StrategicAlert = null;
         CurrentData.AlertSeverity = 0;
     }
-    
-    /// <summary>
-    /// Calculate optimal pit lap to minimize time loss (Phase 5.B Enhanced)
-    /// Multi-factor optimization: fuel criticality, dynamic track position cost, yellow flag prediction, pit window
-    /// </summary>
-    private void CalculateOptimalPitLap(TelemetryData telemetry)
-    {
-        // CRITICAL FIX: Only block pit window if RaceLapsRemaining <= 0 (not in a race)
-        // DO NOT block if CanFinishWithoutStop = true, because:
-        // 1. User might have large tank but start with partial fuel (needs pit window)
-        // 2. Strategic pitting for tires/damage/undercut is valuable even with enough fuel
-        // 3. Pit window provides race strategy insight beyond just fuel emergencies
-        if (CurrentData.RaceLapsRemaining <= 0)
-        {
-            // Debug logging to diagnose why pit window isn't showing
-            LogDebug($"⚠️ PIT WINDOW BLOCKED: RaceLapsRemaining = {CurrentData.RaceLapsRemaining} (SessionLaps={telemetry.SessionLaps}, LapsCompleted={telemetry.LapsCompleted}, IsTimedSession={CurrentData.IsTimedSession}, AvgLapTime={CurrentData.AverageLapTime:F2}s, TimeRemaining={CurrentData.SessionTimeRemaining:F0}s)");
-            
-            CurrentData.OptimalPitLap = 0;
-            CurrentData.OptimalPitReason = null;
-            CurrentData.EarliestPitLap = 0;
-            CurrentData.LatestPitLap = 0;
-            CurrentData.PitWindowStart = 0;
-            CurrentData.PitWindowEnd = 0;
-            CurrentData.PitWindowReason = null;
-            return;
-        }
-        
-        // Log if we can finish without stop (for debugging, but don't block calculation)
-        if (CurrentData.CanFinishWithoutStop)
-        {
-            LogDebug($"ℹ️ PIT WINDOW: CanFinishWithoutStop = true, but calculating pit window anyway (FuelDeltaToFinish={CurrentData.FuelDeltaToFinish:F2}L, CurrentFuel={CurrentData.CurrentFuel:F2}L, FuelNeededToFinish={CurrentData.FuelNeededToFinish:F2}L, LapsRemaining={CurrentData.LapsRemaining:F2})");
-        }
-        
-        float avgFuel = CurrentData.AvgFuelPerLap_L5;
-        if (avgFuel <= 0)
-        {
-            CurrentData.OptimalPitLap = 0;
-            CurrentData.OptimalPitReason = null;
-            CurrentData.EarliestPitLap = 0;
-            CurrentData.LatestPitLap = 0;
-            CurrentData.PitWindowStart = 0;
-            CurrentData.PitWindowEnd = 0;
-            CurrentData.PitWindowReason = null;
-            return;
-        }
-        
-        int currentLap = telemetry.LapsCompleted;
-        float lapsOnCurrentFuel = CurrentData.LapsRemaining;
-        int raceLapsRemaining = CurrentData.RaceLapsRemaining;
-        
-        // ===== SECTION 1: FUEL CRITICALITY ANALYSIS =====
-        // Score 0-100 based on laps of fuel remaining
-        float fuelCriticality;
-        if (lapsOnCurrentFuel < 1.0f)
-            fuelCriticality = 100f; // CRITICAL
-        else if (lapsOnCurrentFuel < 2.0f)
-            fuelCriticality = 80f + (2f - lapsOnCurrentFuel) * 20f; // 80-100: URGENT
-        else if (lapsOnCurrentFuel < 5.0f)
-            fuelCriticality = 50f + (5f - lapsOnCurrentFuel) * 10f; // 50-80: MODERATE
-        else if (lapsOnCurrentFuel < 10.0f)
-            fuelCriticality = 20f + (10f - lapsOnCurrentFuel) * 6f; // 20-50: COMFORTABLE
-        else
-            fuelCriticality = Math.Max(0f, 20f - (lapsOnCurrentFuel - 10f)); // 0-20: PLENTY
-        
-        CurrentData.FuelCriticalityScore = fuelCriticality;
-        LogDebug($"FUEL CRITICALITY: {fuelCriticality:F1}/100 ({lapsOnCurrentFuel:F1} laps remaining)");
-        
-        // ===== SECTION 2: DYNAMIC TRACK POSITION COST =====
-        // Calculate field percentile for dynamic position cost (scales to any field size)
-        int totalCars = 0;
-        int playerPosition = 0;
-        
-        if (telemetry.CarIdxPosition != null && telemetry.CarIdxPosition.Length > 0)
-        {
-            // Count total active cars (position > 0)
-            totalCars = telemetry.CarIdxPosition.Count(p => p > 0);
-            
-            // Get player position
-            if (telemetry.PlayerCarIdx >= 0 && telemetry.PlayerCarIdx < telemetry.CarIdxPosition.Length)
-            {
-                playerPosition = telemetry.CarIdxPosition[telemetry.PlayerCarIdx];
-            }
-        }
-        
-        CurrentData.RacePosition = playerPosition;
-        CurrentData.TotalCars = totalCars;
-        
-        // Calculate percentile-based position cost
-        float positionCost = 15f; // Default moderate cost
-        if (totalCars > 1 && playerPosition > 0)
-        {
-            float percentile = (float)playerPosition / totalCars;
-            
-            if (percentile <= 0.10f)        // Top 10% (P1-P4 in 40-car race)
-                positionCost = 25f;          // Preserve position at all costs
-            else if (percentile <= 0.25f)   // Top 25% (P5-P10 in 40-car)
-                positionCost = 20f;          // High value position
-            else if (percentile <= 0.50f)   // Top 50% (P11-P20 in 40-car)
-                positionCost = 15f;          // Moderate cost
-            else if (percentile <= 0.75f)   // 50-75% (P21-P30 in 40-car)
-                positionCost = 10f;          // Low cost
-            else                             // Bottom 25% (P31+ in 40-car)
-                positionCost = 5f;           // Undercut opportunity
-            
-            LogDebug($"TRACK POSITION: P{playerPosition}/{totalCars} ({percentile*100:F0}th percentile) = {positionCost}s cost");
-        }
-        else
-        {
-            LogDebug($"TRACK POSITION: Unknown (using default {positionCost}s cost)");
-        }
-        
-        CurrentData.TrackPositionCost = positionCost;
-        
-        // ===== SECTION 3: ENHANCED YELLOW FLAG PROBABILITY PREDICTION =====
-        // Multi-factor model considering frequency, field size, race progress, and incident rate
-        bool yellowExpected = false;
-        int lapsUntilYellow = 0;
-        float yellowProbability = 0f;
 
-        if (_lapHistory.Count > 10)
-        {
-            // FACTOR 1: Historical Frequency (base probability)
-            float frequencyProbability = 0f;
-            float yellowFrequency = 0f;
-            int lapsSinceLastYellow = 0;
-
-            if (CurrentData.YellowFlagLapCount > 0)
-            {
-                int totalLaps = _lapHistory.Count;
-                yellowFrequency = (float)totalLaps / CurrentData.YellowFlagLapCount;
-
-                var lastYellowLap = _lapHistory.LastOrDefault(l => l.IsYellowFlagLap);
-                lapsSinceLastYellow = lastYellowLap != null ? (currentLap - lastYellowLap.LapNumber) : totalLaps;
-
-                // Frequency-based probability (0-1)
-                frequencyProbability = Math.Min(1.0f, lapsSinceLastYellow / yellowFrequency);
-            }
-
-            // FACTOR 2: Field Size (more cars = higher incident probability)
-            // Large fields (>30 cars): +20% probability boost
-            // Medium fields (15-30): baseline
-            // Small fields (<15): -20% probability reduction
-            float fieldSizeModifier = 1.0f;
-            if (totalCars > 30)
-                fieldSizeModifier = 1.2f;  // +20% for large fields
-            else if (totalCars > 15)
-                fieldSizeModifier = 1.0f;  // Baseline for medium fields
-            else if (totalCars > 0)
-                fieldSizeModifier = 0.8f;  // -20% for small fields
-
-            // FACTOR 3: Race Progress (more yellows early in race)
-            // First 25% of laps: +30% probability (start chaos)
-            // 25-50%: +10% (still settling)
-            // 50-75%: baseline
-            // Last 25%: +20% (desperation moves)
-            float progressModifier = 1.0f;
-            if (raceLapsRemaining > 0 && telemetry.SessionLaps > 0)
-            {
-                float raceProgress = (float)(telemetry.LapsCompleted) / telemetry.SessionLaps;
-                if (raceProgress < 0.25f)
-                    progressModifier = 1.3f;  // Early race chaos
-                else if (raceProgress < 0.5f)
-                    progressModifier = 1.1f;  // Still settling
-                else if (raceProgress > 0.75f)
-                    progressModifier = 1.2f;  // Late-race desperation
-                else
-                    progressModifier = 1.0f;  // Mid-race baseline
-            }
-
-            // FACTOR 4: Recent Incident Rate (last 5 laps)
-            // High incident rate = higher yellow probability
-            var last5Laps = _lapHistory.TakeLast(5).ToList();
-            int recentIncidents = last5Laps.Sum(l => l.IncidentsDuringLap);
-            float incidentModifier = 1.0f;
-            if (recentIncidents >= 3)
-                incidentModifier = 1.5f;  // +50% if 3+ incidents in last 5 laps
-            else if (recentIncidents >= 1)
-                incidentModifier = 1.2f;  // +20% if any incidents
-
-            // COMBINED PROBABILITY: Base * Modifiers
-            yellowProbability = frequencyProbability * fieldSizeModifier * progressModifier * incidentModifier;
-            yellowProbability = Math.Clamp(yellowProbability, 0f, 1.0f); // Cap at 100%
-
-            // Predict yellow if combined probability exceeds threshold
-            yellowExpected = yellowProbability > 0.7f;  // Lower threshold (70%) due to multi-factor confidence
-
-            if (yellowExpected && yellowFrequency > 0)
-            {
-                lapsUntilYellow = (int)Math.Ceiling(yellowFrequency - lapsSinceLastYellow);
-            }
-
-            LogDebug($"YELLOW FLAG PREDICTION: Freq={yellowFrequency:F1} laps, Since last={lapsSinceLastYellow}, " +
-                     $"Field={totalCars} cars ({fieldSizeModifier:F2}x), Progress={progressModifier:F2}x, " +
-                     $"Incidents={recentIncidents} ({incidentModifier:F2}x) → {yellowProbability*100:F0}% ({(yellowExpected ? "EXPECTED" : "unlikely")})");
-        }
-
-        CurrentData.YellowFlagExpected = yellowExpected;
-        CurrentData.LapsUntilYellow = lapsUntilYellow;
-        CurrentData.YellowFlagProbability = yellowProbability;
-        
-        // ===== SECTION 4: PIT WINDOW CALCULATION =====
-        // Calculate earliest/optimal/latest pit laps based on fuel needs and race length
-        
-        // Latest: Just before running out (with 1 lap safety buffer)
-        // This is the CONSTRAINT - must pit before fuel runs out
-        CurrentData.LatestPitLap = currentLap + Math.Max(1, (int)Math.Floor(lapsOnCurrentFuel) - 1);
-        
-        // Earliest: When we've used enough fuel to add race-ending fuel (with buffer)
-        // CRITICAL FIX: Add sputtering threshold to match CalculateStrategy() calculation (line 803)
-        // Must account for unusable fuel below sputtering threshold
-        float sputteringThreshold = CurrentData.FuelSputteringThreshold;
-        float fuelNeededToFinish = (raceLapsRemaining + CurrentData.FuelBufferLaps) * avgFuel + sputteringThreshold;
-        // FIX: Account for sputtering threshold - can't use fuel below threshold even with full tank
-        float fuelToUse = (CurrentData.TankCapacity - sputteringThreshold) - fuelNeededToFinish;
-        int lapsToUseExcessFuel = fuelToUse > 0 ? (int)Math.Floor(fuelToUse / avgFuel) : 0;
-        int calculatedEarliestPitLap = currentLap + Math.Max(1, lapsToUseExcessFuel);
-        
-        // CRITICAL FIX: EarliestPitLap CANNOT exceed LatestPitLap (fuel constraint)
-        // If tank is large but current fuel is low, earliest must respect fuel reality
-        CurrentData.EarliestPitLap = Math.Min(calculatedEarliestPitLap, CurrentData.LatestPitLap);
-        
-        // Optimal pit window: 3-5 lap green zone in middle of earliest/latest
-        int midPoint = (CurrentData.EarliestPitLap + CurrentData.LatestPitLap) / 2;
-        CurrentData.PitWindowStart = Math.Max(CurrentData.EarliestPitLap, midPoint - 2);
-        CurrentData.PitWindowEnd = Math.Min(CurrentData.LatestPitLap, midPoint + 2);
-
-        // FIX: Validate pit window isn't inverted (PitWindowStart > PitWindowEnd)
-        if (CurrentData.PitWindowStart > CurrentData.PitWindowEnd)
-        {
-            LogDebug($"⚠️ PIT WINDOW INVERTED: Start L{CurrentData.PitWindowStart} > End L{CurrentData.PitWindowEnd} - swapping");
-            (CurrentData.PitWindowStart, CurrentData.PitWindowEnd) = (CurrentData.PitWindowEnd, CurrentData.PitWindowStart);
-        }
-
-        LogDebug($"PIT WINDOW: Earliest=L{CurrentData.EarliestPitLap}, Optimal=L{CurrentData.PitWindowStart}-L{CurrentData.PitWindowEnd}, Latest=L{CurrentData.LatestPitLap}");
-        
-        // ===== SECTION 5: STRATEGIC DECISION TREE =====
-        int optimalPitLap;
-        string pitReason;
-        
-        // Priority 1: Critical fuel (< 1.5 laps) - PIT IMMEDIATELY
-        // ===== STRATEGIC DECISION TREE: PRIORITY-BASED PIT TIMING =====
-        // Priority 0: ONE LAP TO GREEN (HIGHEST PRIORITY!)
-        // This is THE most critical pit timing decision in racing - pit on pace lap before restart
-        if ((_currentFlagStatus == LapFlagStatus.OneLapToGreen || _currentFlagStatus == LapFlagStatus.GreenHeld) 
-            && lapsOnCurrentFuel > 2f)
-        {
-            optimalPitLap = currentLap; // Pit THIS lap (on pace lap) - NOT next lap!
-            pitReason = "🟢 ONE LAP TO GREEN - PIT NOW before restart!";
-            CurrentData.PitWindowReason = "Critical restart window - pit under yellow saves 10-20s";
-            LogDebug($"ONE LAP TO GREEN DETECTED: Recommending immediate pit (saves position loss on restart)");
-        }
-        // Priority 1: Critical Fuel (Criticality > 95)
-        else if (fuelCriticality > 95f)
-        {
-            optimalPitLap = currentLap; // Pit THIS lap - NOT next lap!
-            pitReason = $"CRITICAL FUEL ({lapsOnCurrentFuel:F1} laps) - PIT NOW!";
-            CurrentData.PitWindowReason = "Critical fuel - no pit window";
-        }
-        // Priority 2: Under yellow with low fuel (< 10 laps) - SEIZE OPPORTUNITY
-        else if (CurrentData.IsUnderYellow && lapsOnCurrentFuel < 10f)
-        {
-            optimalPitLap = currentLap; // Pit THIS lap - NOT next lap!
-            pitReason = $"Yellow flag opportunity (save {positionCost:F0}s vs green flag pit)";
-            CurrentData.PitWindowReason = "Yellow flag - pit now to avoid position loss";
-        }
-        // Priority 3: Yellow expected soon + fuel comfortable - DELAY FOR YELLOW
-        else if (yellowExpected && lapsOnCurrentFuel > 5f && lapsUntilYellow <= 5)
-        {
-            optimalPitLap = currentLap + Math.Max(1, lapsUntilYellow);
-            pitReason = $"Yellow expected in ~{lapsUntilYellow} laps ({yellowProbability*100:F0}% probability)";
-            CurrentData.PitWindowReason = $"Delay {lapsUntilYellow} laps for predicted yellow";
-        }
-        // Priority 4: Top position (top 25%) - PIT LATE IN WINDOW
-        else if (positionCost >= 20f)
-        {
-            optimalPitLap = CurrentData.PitWindowEnd; // Maximize track time in good position
-            pitReason = $"Top position (P{playerPosition}) - pit late to preserve track time";
-            CurrentData.PitWindowReason = $"High position cost ({positionCost}s) - extend stint";
-        }
-        // Priority 5: Back of pack (bottom 50%) - PIT EARLY FOR UNDERCUT
-        else if (positionCost <= 10f && CurrentData.PitWindowStart <= CurrentData.LatestPitLap - 3)
-        {
-            optimalPitLap = CurrentData.PitWindowStart; // Early pit for undercut
-            pitReason = $"Undercut opportunity (P{playerPosition}) - pit early for fresh tire advantage";
-            CurrentData.PitWindowReason = $"Low position cost ({positionCost}s) - undercut strategy";
-        }
-        // Default: Mid-window pit (balanced strategy)
-        else
-        {
-            optimalPitLap = midPoint;
-            pitReason = $"Balanced strategy - pit at mid-window (L{CurrentData.PitWindowStart}-{CurrentData.PitWindowEnd})";
-            CurrentData.PitWindowReason = "Standard pit window";
-        }
-        
-        // CRITICAL VALIDATION: Optimal pit lap CANNOT exceed latest pit lap (fuel constraint)
-        // Strategic decisions must respect fuel reality - can't pit at lap 16 if fuel runs out at lap 10!
-        if (optimalPitLap > CurrentData.LatestPitLap)
-        {
-            LogDebug($"⚠️ FUEL CONSTRAINT OVERRIDE: Strategic choice L{optimalPitLap} exceeds fuel limit L{CurrentData.LatestPitLap} - adjusting to latest safe lap");
-            optimalPitLap = CurrentData.LatestPitLap;
-            pitReason = $"Fuel limited - must pit by L{optimalPitLap} (originally wanted {pitReason})";
-            CurrentData.PitWindowReason = "Fuel constraint override";
-        }
-        
-        CurrentData.OptimalPitLap = optimalPitLap;
-        CurrentData.OptimalPitReason = pitReason;
-        
-        // ===== SECTION 5D: PIT EXIT POSITION PREDICTION =====
-        // Calculate projected position after pit stop with class filtering
-        CalculatePitExitPosition(telemetry);
-        
-        // ===== SECTION 6: PIT DELTA ESTIMATION (NOW VS LATER) =====
-        // Compare: Pitting now vs pitting at optimal lap
-        int lapsUntilOptimalPit = Math.Max(0, optimalPitLap - currentLap);
-        
-        // Fuel weight penalty: More fuel = slower lap times (car-class-specific penalty)
-        float fuelWeightPenalty = FuelWeightDatabase.GetFuelWeightPenalty(CurrentData.CarClassId);
-        float currentFuelWeight = CurrentData.CurrentFuel * fuelWeightPenalty; // seconds per lap
-        float optimalFuelWeight = (CurrentData.CurrentFuel - (lapsUntilOptimalPit * avgFuel)) * fuelWeightPenalty;
-        float fuelWeightAdvantage = (currentFuelWeight - optimalFuelWeight) * lapsUntilOptimalPit;
-        
-        // Position cost: Pitting now under green vs pitting under yellow/late
-        float positionAdvantage = CurrentData.IsUnderYellow ? positionCost : 0f;
-        
-        // Net delta: Positive = better to pit now, Negative = better to wait
-        CurrentData.PitDeltaNowVsLater = positionAdvantage - fuelWeightAdvantage;
-        CurrentData.PitDeltaComparisonLaps = lapsUntilOptimalPit;
-        
-        LogDebug($"STRATEGIC DECISION: Optimal=L{optimalPitLap}, Reason={pitReason}");
-        LogDebug($"PIT DELTA: Now vs L{optimalPitLap} = {CurrentData.PitDeltaNowVsLater:F1}s (Position:{positionAdvantage:F1}s, FuelWeight:{-fuelWeightAdvantage:F1}s)");
-    }
-    
-    /// <summary>
-    /// Calculate projected position after pit stop with class filtering (Phase 5D)
-    /// Uses CarIdxF2Time gaps, pit stop time, and filters by player's car class
-    /// </summary>
-    private void CalculatePitExitPosition(TelemetryData telemetry)
-    {
-        // Reset pit exit data
-        CurrentData.PitExitPosition = 0;
-        CurrentData.PitExitGapDescription = null;
-        CurrentData.PitExitPositionValid = false;
-        
-        // Validation: Need position arrays, pit time data, and car numbers
-        if (telemetry.CarIdxPosition == null || telemetry.CarIdxF2Time == null ||
-            telemetry.CarIdxClass == null || telemetry.CarIdxToCarNumber == null)
-        {
-            LogDebug("PIT EXIT: Missing telemetry arrays");
-            return;
-        }
-        
-        // Get pit stop time from SessionPersistenceService
-        var sessionStats = _persistenceService?.GetStatistics(telemetry.TrackName, telemetry.PlayerCarClass);
-        float pitStopTime = sessionStats?.AverageTotalPitTime ?? 30f; // Default 30s if no historical data
-        
-        if (pitStopTime <= 0)
-        {
-            LogDebug("PIT EXIT: Invalid pit stop time");
-            return;
-        }
-        
-        int playerCarIdx = telemetry.PlayerCarIdx;
-        int playerClass = telemetry.PlayerCarClass;
-        int playerPosition = CurrentData.RacePosition;
-        
-        if (playerPosition <= 0 || playerCarIdx < 0)
-        {
-            LogDebug("PIT EXIT: Invalid player position or car index");
-            return;
-        }
-        
-        // Get player's gap to leader (F2Time)
-        float playerGapToLeader = telemetry.CarIdxF2Time[playerCarIdx];
-        
-        // Calculate player's projected time after pit stop
-        float playerProjectedTime = playerGapToLeader + pitStopTime;
-        
-        // Find cars in player's class and calculate exit position
-        var classCarData = new List<(int carIdx, int position, float gapToLeader, string carNumber)>();
-        
-        for (int i = 0; i < telemetry.CarIdxPosition.Length; i++)
-        {
-            int pos = telemetry.CarIdxPosition[i];
-            
-            // Skip invalid positions, player, and other classes
-            if (pos <= 0 || i == playerCarIdx)
-                continue;
-                
-            // CLASS FILTERING: Only include cars in player's class
-            if (telemetry.CarIdxClass[i] != playerClass)
-                continue;
-            
-            float gap = telemetry.CarIdxF2Time[i];
-            string carNumber = telemetry.CarIdxToCarNumber.TryGetValue(i, out var num) ? num : $"Car{i}";
-            
-            classCarData.Add((i, pos, gap, carNumber));
-        }
-        
-        // Sort by gap to leader (ascending - leader first)
-        classCarData = classCarData.OrderBy(c => c.gapToLeader).ToList();
-        
-        // Calculate projected position
-        int projectedPosition = 1; // Start at P1
-        int carAheadIdx = -1;
-        int carBehindIdx = -1;
-        
-        foreach (var car in classCarData)
-        {
-            if (car.gapToLeader < playerProjectedTime)
-            {
-                projectedPosition++;
-                carAheadIdx = car.carIdx; // Track last car ahead
-            }
-            else
-            {
-                if (carBehindIdx == -1)
-                    carBehindIdx = car.carIdx; // Track first car behind
-            }
-        }
-        
-        CurrentData.PitExitPosition = projectedPosition;
-        CurrentData.PitExitPositionValid = true;
-        
-        // Build gap description (abbreviated): "+4s #14 | -10s #9"
-        var gapParts = new List<string>();
-        
-        if (carAheadIdx >= 0)
-        {
-            float gapToCarAhead = playerProjectedTime - telemetry.CarIdxF2Time[carAheadIdx];
-            string carNum = telemetry.CarIdxToCarNumber.TryGetValue(carAheadIdx, out var num) ? num : $"{carAheadIdx}";
-            gapParts.Add($"+{gapToCarAhead:F0}s #{carNum}");
-        }
-        
-        if (carBehindIdx >= 0)
-        {
-            float gapFromCarBehind = telemetry.CarIdxF2Time[carBehindIdx] - playerProjectedTime;
-            string carNum = telemetry.CarIdxToCarNumber.TryGetValue(carBehindIdx, out var num) ? num : $"{carBehindIdx}";
-            
-            if (gapParts.Count > 0)
-                gapParts.Add($"-{gapFromCarBehind:F0}s #{carNum}");
-            else
-                gapParts.Add($"+{gapFromCarBehind:F0}s #{carNum}");
-        }
-        
-        if (gapParts.Count > 0)
-        {
-            CurrentData.PitExitGapDescription = string.Join(" | ", gapParts);
-        }
-        
-        // ===== PIT STATUS DETECTION (Option B) =====
-        // Detect cars currently on pit road (class-filtered)
-        CurrentData.CarsPitting.Clear();
-        if (telemetry.CarIdxOnPitRoad != null)
-        {
-            for (int i = 0; i < telemetry.CarIdxOnPitRoad.Length; i++)
-            {
-                // Skip player and other classes
-                if (i == playerCarIdx || telemetry.CarIdxClass[i] != playerClass)
-                    continue;
-                
-                // Check if car is on pit road
-                if (telemetry.CarIdxOnPitRoad[i])
-                {
-                    string carNum = telemetry.CarIdxToCarNumber.TryGetValue(i, out var num) ? num : $"Car{i}";
-                    CurrentData.CarsPitting.Add(carNum);
-                }
-            }
-        }
-        
-        // ===== CONFIDENCE SCORE CALCULATION (Option B) =====
-        // Calculate confidence based on data quality and race conditions
-        float confidence = 100f;
-        
-        // Factor 1: Pit time data quality (40% weight)
-        if (pitStopTime == 30f) // Using default fallback
-            confidence -= 40f;
-        else if (sessionStats?.PitStopsRecorded < 3)
-            confidence -= 20f; // Limited historical data
-        
-        // Factor 2: Position data completeness (30% weight)
-        int carsInClass = classCarData.Count;
-        if (carsInClass < 5)
-            confidence -= 30f;
-        else if (carsInClass < 10)
-            confidence -= 15f;
-        
-        // Factor 3: Race conditions (30% weight)
-        if (CurrentData.IsUnderYellow)
-            confidence -= 30f; // Unpredictable during yellow
-        else if (telemetry.LapsCompleted < 3)
-            confidence -= 20f; // Start/restart chaos
-        
-        CurrentData.PitExitConfidenceScore = Math.Max(0, confidence);
-        
-        // Set confidence icon
-        CurrentData.PitExitConfidenceIcon = CurrentData.PitExitConfidenceScore switch
-        {
-            >= 80f => "🟢", // High confidence
-            >= 50f => "🟡", // Medium confidence
-            _ => "🔴"       // Low confidence
-        };
-        
-        LogDebug($"PIT EXIT: P{playerPosition} → P{projectedPosition} after {pitStopTime:F1}s stop | {CurrentData.PitExitGapDescription ?? "No gaps"} | Confidence: {CurrentData.PitExitConfidenceScore:F0}% {CurrentData.PitExitConfidenceIcon} | Pitting: {CurrentData.CarsPitting.Count} cars");
-    }
-    
-    /// <summary>
-    /// Calculate multi-stop strategy comparison (1-stop, 2-stop, 3-stop) (Phase 5)
-    /// Determines optimal number of stops based on fuel capacity, stint length, and pit stop time
-    /// </summary>
-    private void CalculateMultiStopStrategy(TelemetryData telemetry)
-    {
-        if (CurrentData.RaceLapsRemaining <= 0 || CurrentData.AvgFuelPerLap <= 0)
-        {
-            CurrentData.RecommendedStops = 0;
-            CurrentData.RecommendedStopsReason = "No pit stops needed";
-            return;
-        }
-        
-        float avgFuel = CurrentData.AvgFuelPerLap;
-        float avgLapTime = CurrentData.AverageLapTime > 0 ? CurrentData.AverageLapTime : 90f; // Default 90s if unknown
-        int raceLapsRemaining = CurrentData.RaceLapsRemaining;
-        int currentLap = telemetry.LapsCompleted;
-        
-        // Pit stop times (use historical data if available)
-        float fuelOnlyStop = CurrentData.FuelOnlyStopTime > 0 ? CurrentData.FuelOnlyStopTime : 
-                             (CurrentData.EstimatedPitStopTime > 0 ? CurrentData.EstimatedPitStopTime : 30f);
-        float fuelAndTiresStop = CurrentData.FuelAndTiresStopTime > 0 ? CurrentData.FuelAndTiresStopTime : fuelOnlyStop + 10f;
-        
-        CurrentData.FuelOnlyStopTime = fuelOnlyStop;
-        CurrentData.FuelAndTiresStopTime = fuelAndTiresStop;
-        
-        float tankCapacity = CurrentData.TankCapacity;
-        float maxStintLaps = tankCapacity / avgFuel;
-        
-        // ===== 1-STOP STRATEGY =====
-        if (raceLapsRemaining <= maxStintLaps * 2)
-        {
-            // 1-stop is possible
-            float stint1Laps = Math.Min(CurrentData.LapsRemaining, raceLapsRemaining / 2f);
-            CurrentData.OneStopPitLap = currentLap + (int)Math.Floor(stint1Laps);
-            
-            float stint2Laps = raceLapsRemaining - stint1Laps;
-            CurrentData.OneStopFuelToAdd = Math.Min(tankCapacity, stint2Laps * avgFuel + CurrentData.FuelBufferLaps * avgFuel);
-            
-            // Total time: Racing laps + 1 pit stop
-            CurrentData.OneStopTotalTime = (raceLapsRemaining * avgLapTime) + fuelOnlyStop;
-            
-            LogDebug($"1-STOP: Pit L{CurrentData.OneStopPitLap}, Add {CurrentData.OneStopFuelToAdd:F1}L, Time: {CurrentData.OneStopTotalTime:F0}s");
-        }
-        else
-        {
-            CurrentData.OneStopTotalTime = float.MaxValue; // Not possible
-        }
-        
-        // ===== 2-STOP STRATEGY =====
-        if (raceLapsRemaining <= maxStintLaps * 3)
-        {
-            // 2-stop is possible
-            float lapsPerStint = raceLapsRemaining / 3f;
-            CurrentData.TwoStopPit1Lap = currentLap + (int)Math.Floor(Math.Min(CurrentData.LapsRemaining, lapsPerStint));
-            CurrentData.TwoStopPit2Lap = CurrentData.TwoStopPit1Lap + (int)Math.Floor(lapsPerStint);
-            CurrentData.TwoStopFuelPerStint = Math.Min(tankCapacity, lapsPerStint * avgFuel);
-            
-            // Total time: Racing laps + 2 pit stops
-            CurrentData.TwoStopTotalTime = (raceLapsRemaining * avgLapTime) + (fuelOnlyStop * 2);
-            
-            LogDebug($"2-STOP: Pit L{CurrentData.TwoStopPit1Lap} & L{CurrentData.TwoStopPit2Lap}, Fuel: {CurrentData.TwoStopFuelPerStint:F1}L/stint, Time: {CurrentData.TwoStopTotalTime:F0}s");
-        }
-        else
-        {
-            CurrentData.TwoStopTotalTime = float.MaxValue;
-        }
-        
-        // ===== 3-STOP STRATEGY (Endurance) =====
-        if (raceLapsRemaining > maxStintLaps * 3)
-        {
-            // 3-stop required or optimal
-            float lapsPerStint = raceLapsRemaining / 4f;
-            int pit1 = currentLap + (int)Math.Floor(Math.Min(CurrentData.LapsRemaining, lapsPerStint));
-            int pit2 = pit1 + (int)Math.Floor(lapsPerStint);
-            int pit3 = pit2 + (int)Math.Floor(lapsPerStint);
-            
-            CurrentData.ThreeStopPitLaps = $"{pit1},{pit2},{pit3}";
-            CurrentData.ThreeStopFuelPerStint = Math.Min(tankCapacity, lapsPerStint * avgFuel);
-            
-            // Total time: Racing laps + 3 pit stops
-            CurrentData.ThreeStopTotalTime = (raceLapsRemaining * avgLapTime) + (fuelOnlyStop * 3);
-            
-            LogDebug($"3-STOP: Pit L{pit1}, L{pit2}, L{pit3}, Fuel: {CurrentData.ThreeStopFuelPerStint:F1}L/stint, Time: {CurrentData.ThreeStopTotalTime:F0}s");
-        }
-        else
-        {
-            CurrentData.ThreeStopTotalTime = float.MaxValue;
-        }
-        
-        // ===== DETERMINE RECOMMENDED STRATEGY =====
-        float[] strategyTimes = { CurrentData.OneStopTotalTime, CurrentData.TwoStopTotalTime, CurrentData.ThreeStopTotalTime };
-        float bestTime = strategyTimes.Min();
-        
-        if (bestTime == float.MaxValue)
-        {
-            CurrentData.RecommendedStops = 0;
-            CurrentData.RecommendedStopsReason = "Can finish without pit stop";
-        }
-        else if (bestTime == CurrentData.OneStopTotalTime)
-        {
-            CurrentData.RecommendedStops = 1;
-            CurrentData.RecommendedStopsReason = $"1-stop optimal (Total: {bestTime / 60:F1} min)";
-        }
-        else if (bestTime == CurrentData.TwoStopTotalTime)
-        {
-            CurrentData.RecommendedStops = 2;
-            float delta = CurrentData.TwoStopTotalTime - CurrentData.OneStopTotalTime;
-            if (delta < 5f) // Very close
-                CurrentData.RecommendedStopsReason = $"2-stop marginal ({delta:F1}s faster than 1-stop)";
-            else
-                CurrentData.RecommendedStopsReason = $"2-stop optimal ({delta:F0}s faster than 1-stop)";
-        }
-        else // 3-stop
-        {
-            CurrentData.RecommendedStops = 3;
-            float delta = CurrentData.ThreeStopTotalTime - CurrentData.TwoStopTotalTime;
-            if (delta < 5f)
-                CurrentData.RecommendedStopsReason = $"3-stop marginal ({delta:F1}s faster than 2-stop)";
-            else
-                CurrentData.RecommendedStopsReason = $"3-stop required (long race)";
-        }
-        
-        // Time difference between best and second-best
-        var sortedTimes = strategyTimes.Where(t => t < float.MaxValue).OrderBy(t => t).ToList();
-        if (sortedTimes.Count >= 2)
-        {
-            CurrentData.StrategyTimeDifference = sortedTimes[1] - sortedTimes[0];
-        }
-        
-        LogDebug($"STRATEGY RECOMMENDATION: {CurrentData.RecommendedStops} stops - {CurrentData.RecommendedStopsReason}");
-
-        // ENHANCEMENT: Partial refuel optimization (calculate optimal fuel load)
-        CalculatePartialRefuelOptimization(raceLapsRemaining, avgFuel, avgLapTime);
-    }
-
-    /// <summary>
-    /// Calculate partial refuel optimization (ENHANCEMENT)
-    /// Determines if partial refuel is faster than full tank based on fuel weight penalty
-    /// Sometimes adding less fuel is faster overall due to lighter car weight
-    /// </summary>
-    private void CalculatePartialRefuelOptimization(int lapsRemaining, float avgFuel, float avgLapTime)
-    {
-        if (lapsRemaining <= 0 || CurrentData.CanFinishWithoutStop || avgFuel <= 0)
-            return;
-
-        // Calculate exact fuel needed to finish (with sputtering threshold, no buffer for optimization)
-        float fuelToFinish = lapsRemaining * avgFuel + CurrentData.FuelSputteringThreshold;
-        float fuelDeficit = fuelToFinish - CurrentData.CurrentFuel;
-
-        if (fuelDeficit <= 0)
-            return; // Already have enough fuel
-
-        // Get fuel flow rate from session stats (or use default)
-        float fuelFlowRate = _sessionStats?.AverageFuelFlowRate ?? 2.5f; // L/s
-
-        // Car-specific fuel weight penalty (kg per liter affects lap time)
-        // Formula car: ~0.06s/lap per liter, GT3: ~0.03s/lap per liter, NASCAR: ~0.015s/lap per liter
-        // Use car-class-specific penalty from database
-        float fuelWeightPenalty = FuelWeightDatabase.GetFuelWeightPenalty(CurrentData.CarClassId);
-
-        // === OPTION 1: FULL TANK ===
-        float fullTankFuel = Math.Min(CurrentData.TankCapacity, CurrentData.TankCapacity - CurrentData.CurrentFuel);
-        float fullTankRefuelTime = fullTankFuel / fuelFlowRate;
-        float fullTankAvgWeight = (CurrentData.CurrentFuel + fullTankFuel) / 2f; // Average weight during stint
-        float fullTankWeightPenalty = fullTankAvgWeight * fuelWeightPenalty * lapsRemaining;
-        float fullTankTotalLoss = fullTankRefuelTime + fullTankWeightPenalty;
-
-        // === OPTION 2: PARTIAL REFUEL (exact amount needed) ===
-        float partialFuel = fuelDeficit;
-        float partialRefuelTime = partialFuel / fuelFlowRate;
-        float partialAvgWeight = (CurrentData.CurrentFuel + partialFuel) / 2f;
-        float partialWeightPenalty = partialAvgWeight * fuelWeightPenalty * lapsRemaining;
-        float partialTotalLoss = partialRefuelTime + partialWeightPenalty;
-
-        // Compare strategies
-        float timeSaved = fullTankTotalLoss - partialTotalLoss;
-
-        if (timeSaved > 2f) // Partial refuel saves >2 seconds
-        {
-            CurrentData.FuelToAddAtPit = partialFuel;
-            CurrentData.AlternativeStrategyInfo =
-                $"Partial fill ({partialFuel:F1}L) saves {timeSaved:F1}s vs full tank ({fullTankFuel:F1}L)";
-            LogDebug($"PARTIAL REFUEL: Add {partialFuel:F1}L (saves {timeSaved:F1}s vs full {fullTankFuel:F1}L)");
-            LogDebug($"  Partial: Refuel {partialRefuelTime:F1}s + Weight {partialWeightPenalty:F1}s = {partialTotalLoss:F1}s");
-            LogDebug($"  Full: Refuel {fullTankRefuelTime:F1}s + Weight {fullTankWeightPenalty:F1}s = {fullTankTotalLoss:F1}s");
-        }
-        else if (timeSaved < -2f) // Full tank is faster
-        {
-            CurrentData.AlternativeStrategyInfo =
-                $"Full tank faster (saves {Math.Abs(timeSaved):F1}s vs partial {partialFuel:F1}L)";
-            LogDebug($"FULL TANK: Better strategy (saves {Math.Abs(timeSaved):F1}s vs partial {partialFuel:F1}L)");
-        }
-        else // Marginal difference (<2s)
-        {
-            CurrentData.AlternativeStrategyInfo =
-                $"Partial vs full marginal ({Math.Abs(timeSaved):F1}s difference)";
-        }
-    }
+    // ===== PHASE 1 REFACTOR: Pit Strategy methods removed =====
+    // The following methods have been consolidated into PitStrategyService:
+    // - CalculateOptimalPitLap (303 lines) 
+    // - CalculatePitExitPosition (172 lines)
+    // - CalculateMultiStopStrategy (137 lines)  
+    // - CalculatePartialRefuelOptimization (186 lines)
+    // Total: ~798 lines removed, replaced with single PitStrategyService.Calculate() call
 
     /// <summary>
     /// Update fuel pressure tracking and establish baseline (Enhanced Phase 2.1)
@@ -3144,6 +2465,54 @@ public class FuelCalculatorService
         {
             CurrentData.ProjectedLapFuel = 0;
         }
+    }
+
+    /// <summary>
+    /// Apply pit strategy results from PitStrategyService to CurrentData
+    /// Phase 1 refactor: Single source of truth for pit strategy
+    /// </summary>
+    private void ApplyPitStrategyToCurrentData(PitStrategy strategy)
+    {
+        // Basic pit strategy
+        CurrentData.OptimalPitLap = strategy.OptimalPitLap;
+        CurrentData.OptimalPitReason = strategy.OptimalPitReason;
+        CurrentData.FuelToAddAtPit = strategy.FuelToAddAtPit;
+        CurrentData.CanFinishWithoutStop = strategy.CanFinishWithoutStop;
+        
+        // Pit window
+        CurrentData.EarliestPitLap = strategy.EarliestPitLap;
+        CurrentData.LatestPitLap = strategy.LatestPitLap;
+        CurrentData.PitWindowStart = strategy.PitWindowStart;
+        CurrentData.PitWindowEnd = strategy.PitWindowEnd;
+        CurrentData.PitWindowReason = strategy.PitWindowReason;
+        
+        // Position prediction
+        CurrentData.PitExitPosition = strategy.PitExitPosition;
+        CurrentData.PitExitGapDescription = strategy.PitExitGapDescription;
+        CurrentData.PitExitPositionValid = strategy.PitExitPositionValid;
+        CurrentData.RacePosition = strategy.RacePosition;
+        CurrentData.TotalCars = strategy.TotalCars;
+        
+        // Multi-stop strategy
+        CurrentData.OneStopTotalTime = strategy.OneStopTotalTime;
+        CurrentData.TwoStopTotalTime = strategy.TwoStopTotalTime;
+        CurrentData.ThreeStopTotalTime = strategy.ThreeStopTotalTime;
+        CurrentData.RecommendedStopsReason = strategy.MultiStopRecommendation;
+        
+        // Analysis factors
+        CurrentData.FuelCriticalityScore = strategy.FuelCriticalityScore;
+        CurrentData.TrackPositionCost = strategy.TrackPositionCost;
+        CurrentData.YellowFlagExpected = strategy.YellowFlagProbability > 50f;
+        CurrentData.LapsUntilYellow = strategy.EstimatedLapsUntilYellow;
+        
+        // Partial refuel (if available)
+        // Note: PartialRefuelRecommendation could map to AlternativeStrategyInfo
+        if (!string.IsNullOrEmpty(strategy.PartialRefuelRecommendation))
+        {
+            CurrentData.AlternativeStrategyInfo = strategy.PartialRefuelRecommendation;
+        }
+        
+        LogDebug($"[STRATEGY] Pit lap {strategy.OptimalPitLap}: {strategy.OptimalPitReason}");
     }
 
     /// <summary>
