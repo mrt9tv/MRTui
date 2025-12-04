@@ -18,6 +18,7 @@ public class FuelCalculatorService
     private bool _wasOnPitRoadLastUpdate = false;
     private bool _justLeftPits = false;
     private int _lapsCompletedWhenProcessed = -1; // Prevent duplicate lap processing
+    private bool _justProcessedLap = false; // Flag for triggering full calculation this frame
     private int _lastLoggedSessionLaps = -1; // Track last logged SessionLaps value to avoid spam logging
 
     // FIX: Save fuel level BEFORE entering pit road to prevent refueling from contaminating lap calculations
@@ -60,9 +61,7 @@ public class FuelCalculatorService
     // Incident tracking for outlier detection
     private int _lastIncidentCount = 0;  // Track incident count to detect new incidents during laps
     
-    // Delta tracking for convergence analysis and historical accuracy (Phase 3)
-    private readonly List<DeltaHistoryRecord> _deltaHistory = new();
-    private const int MAX_DELTA_HISTORY = 50;  // Keep last 50 laps of delta data
+    // Delta tracking for convergence analysis (delegated to DeltaTrackingService)
     
     // Pit stop tracking state machine
     private readonly SessionPersistenceService _persistenceService;
@@ -92,7 +91,6 @@ public class FuelCalculatorService
     
     // Pit lap accuracy fix (Phase 1: FUEL_PIT_LAP_AND_FLAGS_FIX.md)
     private float _lastLapDistPct = 0f;  // Track lap distance percentage from previous update
-    private int _virtualLapsCompleted = 0;  // Lap counter relative to pit entry (not start/finish)
     
     // Grid start lap detection - track LapDistPct when lap starts to detect partial laps
     private float _lapDistPctAtLapStart = 0f;  // LapDistPct when current lap started
@@ -456,6 +454,7 @@ public class FuelCalculatorService
                     _fuelAtLapStart = telemetry.FuelLevel; // Reset for lap 1
                     _pittedThisLap = false; // Reset flag
                     _lapsCompletedWhenProcessed = 0; // Mark lap 0 as processed
+                    _justProcessedLap = true; // Trigger full calculation
                     _sessionStateAtLapStart = telemetry.SessionState; // Save for next lap
                     _lapDistPctAtLapStart = telemetry.LapDistPct; // Save starting position for lap 1
                     LogDebug($"   _fuelAtLapStart reset to {_fuelAtLapStart:F2}L for lap 1");
@@ -465,6 +464,7 @@ public class FuelCalculatorService
                     // Call lap completion with refueling flag and pit flag
                     OnLapCompleted(telemetry, isRefueling, _pittedThisLap, _fuelBeforeEnteringPits);
                     _lapsCompletedWhenProcessed = telemetry.LapsCompleted;
+                    _justProcessedLap = true; // Trigger full calculation
                     _pittedThisLap = false; // Reset for next lap
                     _fuelBeforeEnteringPits = 0f; // Reset saved fuel
                 }
@@ -507,7 +507,8 @@ public class FuelCalculatorService
         //   - Marked with IsLiveUpdate = true
 
         // Detect if we should do full calculation or live update
-        bool shouldDoFullCalculation = _virtualLapsCompleted != _lapsCompletedWhenProcessed || isRefueling;
+        bool shouldDoFullCalculation = _justProcessedLap || isRefueling;
+        _justProcessedLap = false; // Reset flag after checking
 
         if (shouldDoFullCalculation)
         {
@@ -535,7 +536,7 @@ public class FuelCalculatorService
 
             CalculateStrategy();
 
-            // Calculate pit strategy using extracted service (Phase 1 refactor)
+            // Build FuelAverages object for services (used by pit strategy and fuel saving)
             var fuelAverages = new FuelAverages
             {
                 Current = CurrentData.AvgFuelPerLap,
@@ -545,34 +546,26 @@ public class FuelCalculatorService
                 EMA = CurrentData.AvgFuelPerLap_EMA,
                 Session = CurrentData.AvgFuelPerLap_Session
             };
+            
+            // Calculate pit strategy using extracted service (Phase 1 refactor)
             var pitStrategy = _pitStrategyService.Calculate(telemetry, CurrentData, fuelAverages, _lapHistory);
             ApplyPitStrategyToCurrentData(pitStrategy);
 
-            // Track delta using service (Phase 5) - simplified for now
+            // Track delta using service (Phase 5)
             var deltaData = _deltaTrackingService.Track(
                 CurrentData.LapsRemaining,
                 CurrentData.IRacingLapsRemaining,
                 telemetry.LapsCompleted + 1
             );
-            // Delta properties can be added to FuelData if needed
 
-            // Calculate fuel saving using service (Phase 4) - simplified for now
-            var averages = new FuelAverages
-            {
-                Current = CurrentData.AvgFuelPerLap,
-                Last = CurrentData.AvgFuelPerLap_Last,
-                L5 = CurrentData.AvgFuelPerLap_L5,
-                L10 = CurrentData.AvgFuelPerLap_L10,
-                EMA = CurrentData.AvgFuelPerLap_EMA,
-                Session = CurrentData.AvgFuelPerLap_Session
-            };
+            // Calculate fuel saving using service (Phase 4)
             var strategy = new PitStrategy
             {
                 OptimalPitLap = CurrentData.OptimalPitLap,
                 FuelToAddAtPit = CurrentData.FuelToAddAtPit,
                 CanFinishWithoutStop = CurrentData.CanFinishWithoutStop
             };
-            var savingData = _fuelSavingCalculator.Calculate(telemetry, CurrentData, averages, strategy);
+            var savingData = _fuelSavingCalculator.Calculate(telemetry, CurrentData, fuelAverages, strategy);
 
             // Phase 6: Copy all fuel saving properties to CurrentData
             CurrentData.NeedsFuelSaving = savingData.NeedsFuelSaving;
@@ -1470,7 +1463,6 @@ public class FuelCalculatorService
     public void Reset()
     {
         _lapHistory.Clear();
-        _deltaHistory.Clear();  // Clear delta tracking history
         CurrentData = new FuelData();
         _fuelAtLapStart = 0;
         _lastFuelLevel = 0;
@@ -1479,6 +1471,7 @@ public class FuelCalculatorService
         _currentFlagStatus = LapFlagStatus.Green;
         _wasOnPitRoadLastUpdate = false;
         _justLeftPits = false;
+        _justProcessedLap = false;
         _baselineFuelPressureEstablished = false;
         _fuelPressureHistory.Clear();
         _lapsCompletedWhenProcessed = -1;
@@ -1575,11 +1568,6 @@ public class FuelCalculatorService
     /// Get lap history for analysis/export
     /// </summary>
     public IReadOnlyList<FuelLapHistory> GetLapHistory() => _lapHistory.AsReadOnly();
-    
-    /// <summary>
-    /// Get delta history for convergence analysis and post-race accuracy evaluation
-    /// </summary>
-    public IReadOnlyList<DeltaHistoryRecord> GetDeltaHistory() => _deltaHistory.AsReadOnly();
     
     /// <summary>
     /// Apply temperature correction to fuel consumption averages (ENHANCEMENT)
