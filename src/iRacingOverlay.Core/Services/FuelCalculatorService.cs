@@ -63,15 +63,11 @@ public class FuelCalculatorService
     // Delta tracking for convergence analysis and historical accuracy (Phase 3)
     private readonly List<DeltaHistoryRecord> _deltaHistory = new();
     private const int MAX_DELTA_HISTORY = 50;  // Keep last 50 laps of delta data
-    private float _lastDelta = 0f;  // Track previous delta for convergence calculation
     
     // Pit stop tracking state machine
     private readonly SessionPersistenceService _persistenceService;
     private PitStopData? _currentPitStop = null;
     private SessionStatistics? _sessionStats = null;
-    private string _currentTrackName = "";
-    private int _currentCarClassId = -1;
-    private bool _sessionStatsLoaded = false;
     
     // Pit stop state tracking
     private enum PitStopState
@@ -1105,97 +1101,12 @@ public class FuelCalculatorService
         }
     }
 
-    // ===== PHASE 3 REFACTOR: Delta tracking methods removed =====
-    // The following methods have been consolidated into extracted services:
-    // - CalculateDeltaTracking (~252 lines) → DeltaTrackingService.Track()
-    // - CalculateFuelSaving (~291 lines) → FuelSavingCalculator.Calculate()
-    // These were dead code (never called) after Phase 1 refactoring
-    
-    /// <summary>
-    /// Generate strategic alerts based on fuel saving status and pit strategy comparison
-    /// </summary>
-    private void GenerateStrategicAlerts()
-    {
-        // Critical: Pit this lap (fuel too low) - check BEFORE running out!
-        // FIX: Check at LapsRemaining < 1.2 to give warning BEFORE the fuel runs out, not after
-        if (CurrentData.LapsRemaining < 1.2f && !CurrentData.CanFinishWithoutStop)
-        {
-            CurrentData.StrategicAlert = "⚠️ PIT THIS LAP - CRITICAL FUEL";
-            CurrentData.AlertSeverity = 3;
-            LogDebug("STRATEGIC ALERT: PIT THIS LAP");
-            return;
-        }
-        
-        // ===== FUEL SAVING IMPOSSIBLE → RECOMMEND PIT STRATEGY =====
-        if (CurrentData.NeedsFuelSaving && !CurrentData.CanSaveFuelToFinish)
-        {
-            // Fuel saving target exceeds realistic capability (>15% reduction)
-            // Recommend optimal pit stop strategy instead
-            CurrentData.StrategicAlert = $"🔧 PIT LAP {CurrentData.OptimalPitLap}: Add {CurrentData.FuelToAddAtPit:F1}L (saving {CurrentData.FuelSavingTarget:F2}L/lap impossible)";
-            CurrentData.AlertSeverity = 2;
-            LogDebug($"STRATEGIC ALERT: Fuel saving impossible, recommend pit on lap {CurrentData.OptimalPitLap}");
-            return;
-        }
-        
-        // ===== PIT STOP FASTER THAN FUEL SAVING =====
-        if (CurrentData.NeedsFuelSaving && CurrentData.IsPittingFaster && Math.Abs(CurrentData.StrategyTimeDelta) > 5.0f)
-        {
-            // Pitting is >5 seconds faster than fuel saving
-            CurrentData.StrategicAlert = $"🔧 PIT FASTER: Lap {CurrentData.OptimalPitLap} saves {Math.Abs(CurrentData.StrategyTimeDelta):F0}s vs fuel saving";
-            CurrentData.AlertSeverity = 2;
-            LogDebug($"STRATEGIC ALERT: Pit stop {CurrentData.PitStopTimeLoss:F1}s vs fuel saving {CurrentData.FuelSavingTimeLoss:F1}s = pit {Math.Abs(CurrentData.StrategyTimeDelta):F1}s faster");
-            return;
-        }
-        
-        // Warning: Not saving enough fuel
-        if (CurrentData.NeedsFuelSaving && CurrentData.SavingProgress < 50f && CurrentData.LapsRemaining > 5)
-        {
-            float needsMore = CurrentData.FuelSavingTarget - CurrentData.CurrentSavingRate;
-            CurrentData.StrategicAlert = $"🔴 INCREASE SAVING: Need {needsMore:F2}L more per lap";
-            CurrentData.AlertSeverity = 2;
-            LogDebug($"STRATEGIC ALERT: Increase saving by {needsMore:F3}L/lap");
-            return;
-        }
-        
-        // Info: Fuel saving working (and faster than pitting)
-        if (CurrentData.NeedsFuelSaving && CurrentData.FuelSavingWorking)
-        {
-            if (!CurrentData.IsPittingFaster)
-            {
-                // Fuel saving is faster strategy
-                CurrentData.StrategicAlert = $"✅ FUEL SAVING WORKING: {CurrentData.ProjectedFuelDelta:F1}L surplus (saves {Math.Abs(CurrentData.StrategyTimeDelta):F0}s vs pit)";
-            }
-            else
-            {
-                // Fuel saving working but pitting would be faster (marginal difference <5s)
-                CurrentData.StrategicAlert = $"✅ FUEL SAVING WORKING: {CurrentData.ProjectedFuelDelta:F1}L surplus projected";
-            }
-            CurrentData.AlertSeverity = 1;
-            LogDebug($"STRATEGIC ALERT: Fuel saving working, projected surplus {CurrentData.ProjectedFuelDelta:F2}L");
-            return;
-        }
-        
-        // Warning: Need to start saving fuel (and it's the faster strategy)
-        if (CurrentData.NeedsFuelSaving && !CurrentData.FuelSavingWorking && !CurrentData.IsPittingFaster)
-        {
-            CurrentData.StrategicAlert = $"💡 SAVE {CurrentData.FuelSavingTarget:F2}L/LAP TO FINISH (saves {Math.Abs(CurrentData.StrategyTimeDelta):F0}s vs pit)";
-            CurrentData.AlertSeverity = 2;
-            LogDebug($"STRATEGIC ALERT: Need to save {CurrentData.FuelSavingTarget:F3}L/lap");
-            return;
-        }
-        
-        // No alert needed
-        CurrentData.StrategicAlert = null;
-        CurrentData.AlertSeverity = 0;
-    }
-
-    // ===== PHASE 1 REFACTOR: Pit Strategy methods removed =====
-    // The following methods have been consolidated into PitStrategyService:
-    // - CalculateOptimalPitLap (303 lines) 
-    // - CalculatePitExitPosition (172 lines)
-    // - CalculateMultiStopStrategy (137 lines)  
-    // - CalculatePartialRefuelOptimization (186 lines)
-    // Total: ~798 lines removed, replaced with single PitStrategyService.Calculate() call
+    // ===== DEAD CODE REMOVED IN REFACTORING =====
+    // Phase 1: Pit Strategy methods → PitStrategyService.Calculate()
+    //   - CalculateOptimalPitLap, CalculatePitExitPosition, CalculateMultiStopStrategy, CalculatePartialRefuelOptimization
+    // Phase 2-4: Dead code methods removed
+    //   - CalculateDynamicBufferLaps, CalculateDeltaTracking, CalculateFuelSaving
+    // Phase 5: GenerateStrategicAlerts (86 lines, never called - FuelSavingCalculator has its own version)
 
     /// <summary>
     /// Update fuel pressure tracking and establish baseline (Enhanced Phase 2.1)
@@ -1572,13 +1483,11 @@ public class FuelCalculatorService
         _fuelPressureHistory.Clear();
         _lapsCompletedWhenProcessed = -1;
         _lastIncidentCount = 0;  // Reset incident tracking
-        _lastDelta = 0f;  // Reset delta tracking
         _lapDistPctAtLapStart = 0f;  // Reset grid start lap tracking
         
         // Reset pit stop tracking
         _currentPitStop = null;
         _pitState = PitStopState.NotOnPitRoad;
-        _sessionStatsLoaded = false;
         
         // Phase 1: Reset FuelAveragingService EMA state
         _fuelAveragingService.Reset();

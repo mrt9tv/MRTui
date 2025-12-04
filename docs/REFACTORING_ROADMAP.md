@@ -3,6 +3,7 @@
 **Branch**: `refactor/modular-architecture`  
 **Status**: 🔄 IN PROGRESS  
 **Started**: December 4, 2025  
+**Last Updated**: December 4, 2025
 
 ---
 
@@ -10,38 +11,39 @@
 
 Refactoring `FuelCalculatorService` from a 3,178-line monolith to a clean ~500-line orchestrator with modular sub-services.
 
-### Current State
+### Current State (After Phase 4)
 
 | Component | Location | Lines | Status |
 |-----------|----------|-------|--------|
-| `FuelCalculatorService` | `Services/` | 3,178 | 🔴 Needs cleanup |
+| `FuelCalculatorService` | `Services/` | **1,848** | 🟡 Phase 4 complete (-1,330 lines, 42% reduced) |
 | `FuelAveragingService` | `Services/Fuel/` | 259 | ✅ Extracted & called |
 | `FuelOutlierDetector` | `Services/Fuel/` | 293 | ✅ Extracted & called |
-| `PitStrategyService` | `Services/Fuel/` | 527 | ⚠️ Extracted, NOT wired |
+| `PitStrategyService` | `Services/Fuel/` | 527 | ✅ Extracted & wired (Phase 1) |
 | `FuelSavingCalculator` | `Services/Fuel/` | 211 | ✅ Extracted & called |
-| `DeltaTrackingService` | `Services/Fuel/` | 278 | ⚠️ Extracted, partial use |
-| `DynamicBufferCalculator` | `Services/Fuel/` | 214 | ⚠️ Extracted, NOT wired |
+| `DeltaTrackingService` | `Services/Fuel/` | 278 | ✅ Extracted & wired |
+| `DynamicBufferCalculator` | `Services/Fuel/` | 214 | ✅ Extracted & wired |
 | `LapDeltaTracker` | `Services/Fuel/` | 134 | ✅ Extracted & called |
 
 ---
 
-## Duplicate Methods to Remove
+## Duplicate Methods - Status
 
-These methods in `FuelCalculatorService` are **duplicated** with extracted services:
+These methods in `FuelCalculatorService` were **duplicated** with extracted services:
 
-| Method | Line | ~Lines | Service Replacement | Action |
-|--------|------|--------|---------------------|--------|
-| `CalculateAverages()` | 869 | 135 | `FuelAveragingService` | ⚠️ Keep (orchestrates services) |
+| Method | Original Line | ~Lines | Service Replacement | Status |
+|--------|---------------|--------|---------------------|--------|
+| `CalculateAverages()` | 869 | 135 | `FuelAveragingService` | ✅ Keep (orchestrates) |
 | `CalculateStrategy()` | 1004 | 99 | None (unique logic) | ✅ Keep as-is |
-| `CalculateDeltaTracking()` | 1103 | 252 | `DeltaTrackingService` | 🗑️ **REMOVE** - duplicate |
-| `CalculateFuelSaving()` | 1355 | 372 | `FuelSavingCalculator` | 🗑️ **REMOVE** - duplicate |
-| `CalculateOptimalPitLap()` | 1727 | 331 | `PitStrategyService` | 🗑️ **REMOVE** - duplicate |
-| `CalculatePitExitPosition()` | 2058 | 173 | `PitStrategyService` | 🗑️ **REMOVE** - duplicate |
-| `CalculateMultiStopStrategy()` | 2231 | 137 | `PitStrategyService` | 🗑️ **REMOVE** - duplicate |
-| `CalculatePartialRefuelOptimization()` | 2368 | 185 | `PitStrategyService` | 🗑️ **REMOVE** - duplicate |
-| `CalculateDynamicBufferLaps()` | 2553 | 160 | `DynamicBufferCalculator` | 🗑️ **REMOVE** - duplicate |
+| ~~`CalculateDeltaTracking()`~~ | ~~1112~~ | ~~261~~ | `DeltaTrackingService` | ✅ REMOVED (Phase 3) |
+| ~~`CalculateFuelSaving()`~~ | ~~1364~~ | ~~184~~ | `FuelSavingCalculator` | ✅ REMOVED (Phase 4) |
+| ~~`CalculateOptimalPitLap()`~~ | ~~1727~~ | ~~303~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
+| ~~`CalculatePitExitPosition()`~~ | ~~2058~~ | ~~172~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
+| ~~`CalculateMultiStopStrategy()`~~ | ~~2231~~ | ~~137~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
+| ~~`CalculatePartialRefuelOptimization()`~~ | ~~2368~~ | ~~186~~ | `PitStrategyService` | ✅ REMOVED (Phase 1) |
+| ~~`CalculateDynamicBufferLaps()`~~ | ~~1600~~ | ~~153~~ | `DynamicBufferCalculator` | ✅ REMOVED (Phase 2) |
 
-**Estimated lines to remove**: ~1,610 lines (50% reduction!)
+**Lines removed**: 1,330 lines (Phases 1-4)
+**Current size**: 1,848 lines (target: ~500)
 
 ---
 
@@ -51,63 +53,67 @@ These methods in `FuelCalculatorService` are **duplicated** with extracted servi
 - [x] Grid start lap detection - exclude partial first laps from averages
 - [x] Commit: `953d98e`
 
-### 🔄 Phase 1: Wire Up PitStrategyService
+### ✅ Phase 1: Wire Up PitStrategyService (COMPLETE)
 **Goal**: Use `PitStrategyService` instead of inline methods
 
 **Tasks**:
-- [ ] Update `Update()` to call `_pitStrategyService.Calculate()`
-- [ ] Map `PitStrategy` results to `CurrentData`
-- [ ] Remove inline methods:
-  - [ ] `CalculateOptimalPitLap()` (line 1727)
-  - [ ] `CalculatePitExitPosition()` (line 2058)
-  - [ ] `CalculateMultiStopStrategy()` (line 2231)
-  - [ ] `CalculatePartialRefuelOptimization()` (line 2368)
-- [ ] Test pit strategy still works correctly
+- [x] Update `Update()` to call `_pitStrategyService.Calculate()`
+- [x] Add `ApplyPitStrategyToCurrentData()` helper to map results
+- [x] Pass `SessionPersistenceService` to constructor for pit time predictions
+- [x] Remove inline methods:
+  - [x] `CalculateOptimalPitLap()` (~303 lines)
+  - [x] `CalculatePitExitPosition()` (~172 lines)
+  - [x] `CalculateMultiStopStrategy()` (~137 lines)
+  - [x] `CalculatePartialRefuelOptimization()` (~186 lines)
+- [x] Build verified: 0 errors, 0 warnings
 
-**Expected reduction**: ~826 lines
+**Result**: 733 lines removed (3179 → 2446)
+**Commit**: `22b4366`
 
-### 🔲 Phase 2: Wire Up DynamicBufferCalculator
-**Goal**: Use `DynamicBufferCalculator` instead of inline method
-
-**Tasks**:
-- [ ] Update `Update()` to call `_bufferCalculator.Calculate()`
-- [ ] Map `BufferData` results to `CurrentData`
-- [ ] Remove `CalculateDynamicBufferLaps()` (line 2553)
-- [ ] Test dynamic buffer calculations
-
-**Expected reduction**: ~160 lines
-
-### 🔲 Phase 3: Remove Duplicate DeltaTracking
-**Goal**: Remove inline `CalculateDeltaTracking()`, use service exclusively
+### ✅ Phase 2: Remove Dead DynamicBufferCalculator Code (COMPLETE)
+**Goal**: Remove inline method - service already wired
 
 **Tasks**:
-- [ ] Verify `DeltaTrackingService.Track()` provides all needed data
-- [ ] Remove `CalculateDeltaTracking()` (line 1103)
-- [ ] Ensure convergence analysis still works
+- [x] Verified `_bufferCalculator.Calculate()` already called in Update()
+- [x] Removed `CalculateDynamicBufferLaps()` (153 lines, never called = dead code)
+- [x] Build verified
 
-**Expected reduction**: ~252 lines
+**Result**: 153 lines removed (2,446 → 2,293)
 
-### 🔲 Phase 4: Remove Duplicate FuelSaving
-**Goal**: Remove inline `CalculateFuelSaving()`, use service exclusively
-
-**Tasks**:
-- [ ] Verify `FuelSavingCalculator.Calculate()` provides all needed data
-- [ ] Remove `CalculateFuelSaving()` (line 1355)
-- [ ] Ensure fuel saving mode still works
-
-**Expected reduction**: ~372 lines
-
-### 🔲 Phase 5: Final Cleanup
-**Goal**: Clean orchestrator, remove dead code
+### ✅ Phase 3: Remove Dead DeltaTracking Code (COMPLETE)
+**Goal**: Remove inline `CalculateDeltaTracking()` - never called = dead code
 
 **Tasks**:
+- [x] Searched for call sites - found only definition at line 1112
+- [x] Removed `CalculateDeltaTracking()` (261 lines)
+- [x] Build verified
+
+**Result**: 261 lines removed
+
+### ✅ Phase 4: Remove Dead FuelSaving Code (COMPLETE)
+**Goal**: Remove inline `CalculateFuelSaving()` - never called = dead code
+
+**Tasks**:
+- [x] Searched for call sites - found only definition at line 1364
+- [x] Removed `CalculateFuelSaving()` (184 lines)
+- [x] Build verified
+
+**Result**: 184 lines removed
+**Combined Commit (Phase 2-4)**: `009a28b` - 598 lines removed (2,446 → 1,848)
+
+### 🔄 Phase 5: Final Cleanup (IN PROGRESS)
+**Goal**: Clean orchestrator, remove dead code, approach 500 lines
+
+**Tasks**:
+- [x] Identified unused fields via build warnings: `_lastDelta`, `_sessionStatsLoaded`, `_currentCarClassId`
 - [ ] Remove unused private fields
-- [ ] Simplify `Update()` method to clean orchestration
-- [ ] Update XML documentation
+- [ ] Review `Update()` method for simplification
+- [ ] Remove any remaining dead code paths
+- [ ] Clean up overly complex helper methods
 - [ ] Run full test suite
 - [ ] Verify all widgets still work
 
-**Target**: `FuelCalculatorService` ≤ 500 lines
+**Target**: `FuelCalculatorService` ≤ 500 lines (currently: 1,848)
 
 ---
 
@@ -147,11 +153,9 @@ If issues are found:
 | Commit | Phase | Description |
 |--------|-------|-------------|
 | `953d98e` | 0 | Grid start lap detection fix |
-| - | 1 | Wire up PitStrategyService |
-| - | 2 | Wire up DynamicBufferCalculator |
-| - | 3 | Remove duplicate DeltaTracking |
-| - | 4 | Remove duplicate FuelSaving |
-| - | 5 | Final cleanup |
+| `22b4366` | 1 | Wire up PitStrategyService, remove 733 lines |
+| `009a28b` | 2-4 | Remove dead code methods, 598 lines |
+| - | 5 | Final cleanup (in progress) |
 
 ---
 
