@@ -6,12 +6,14 @@ using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
+using iRacingOverlay.Core.Services.Tire;
 using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Views;
 using iRacingOverlay.WPF.ViewModels;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
 using iRacingOverlay.WPF.Widgets.PitStrategyWindow;
+using iRacingOverlay.WPF.Widgets.RaceStrategy;
 
 namespace iRacingOverlay.WPF;
 

@@ -62,6 +62,7 @@ public enum TelemetryField
     CurrentLapTime,
     DeltaToSessionBest,
     DeltaToBestLap,
+    LapDistPct,          // Track position as percentage (0.0-1.0)
     
     // Session
     SessionTime,
@@ -69,6 +70,7 @@ public enum TelemetryField
     SessionLaps,
     SessionLapsRemaining,
     SessionNum,
+    IncidentCount,       // Player's incident count (for safety rating)
     
     // Tires - Temperature (average per tire)
     TireTempLF,

@@ -53,7 +53,12 @@ public enum WidgetType
     /// <summary>
     /// Tire temperatures and wear - Future MVP 3+
     /// </summary>
-    Tires
+    Tires,
+
+    /// <summary>
+    /// Race Strategy Widget - Phase 10 (Multi-stint planning, what-if scenarios)
+    /// </summary>
+    RaceStrategy
 }
 
 /// <summary>
@@ -71,6 +76,7 @@ public static class WidgetTypeExtensions
             WidgetType.MRTOne => "MRT One",
             WidgetType.Data => "Data Widget",
             WidgetType.Fuel => "Fuel Calculator",
+            WidgetType.RaceStrategy => "Race Strategy",
             WidgetType.TelemetryTable => "Telemetry Table",
             WidgetType.RPMGauge => "RPM Gauge",
             WidgetType.Temperature => "Temperature",

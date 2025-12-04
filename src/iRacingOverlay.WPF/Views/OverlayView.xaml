@@ -321,7 +321,15 @@
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
                                                  ToolTip="Show 4-way radar indicators (left/right/front/back) around MRT One circle"/>
-                                        
+
+                                        <!-- PHASE 4.2: Enhanced Radar Visibility -->
+                                        <CheckBox Content="Enhanced Radar Visibility"
+                                                 IsChecked="{Binding EnableEnhancedRadar, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 IsEnabled="{Binding IsActive}"
+                                                 ToolTip="Larger radar squares (16px vs 12px) and thicker borders (2px vs 1px) for better visibility"/>
+
                                         <!-- Brake Bias Notification -->
                                         <CheckBox Content="Brake Bias Notification"
                                                  IsChecked="{Binding Settings.ShowBrakeBiasOverlay, Mode=TwoWay}"
@@ -362,26 +370,19 @@
                                           Foreground="{StaticResource LightText}"
                                           Margin="0,0,0,15"/>
 
-                                <!-- Layout Selection -->
+                                <!-- Layout Selection (Dropdown) -->
                                 <StackPanel Margin="0,0,0,15">
                                     <TextBlock Text="Widget Layout"
                                               FontSize="12"
                                               Foreground="{StaticResource LightText}"
                                               Margin="0,0,0,8"/>
-                                    <RadioButton Content="📏 Tower (180x280)"
-                                               IsChecked="{Binding FuelWidgetLayoutTower, Mode=TwoWay}"
-                                               Foreground="{StaticResource LightText}"
-                                               Margin="0,0,0,5"
-                                               IsEnabled="{Binding IsActive}"/>
-                                    <RadioButton Content="📐 Bar (380x120)"
-                                               IsChecked="{Binding FuelWidgetLayoutBar, Mode=TwoWay}"
-                                               Foreground="{StaticResource LightText}"
-                                               Margin="0,0,0,5"
-                                               IsEnabled="{Binding IsActive}"/>
-                                    <RadioButton Content="▦ Grid (260x200)"
-                                               IsChecked="{Binding FuelWidgetLayoutGrid, Mode=TwoWay}"
-                                               Foreground="{StaticResource LightText}"
-                                               IsEnabled="{Binding IsActive}"/>
+                                    <ComboBox ItemsSource="{Binding FuelWidgetAvailableLayouts}"
+                                             SelectedItem="{Binding FuelWidgetSelectedLayout, Mode=TwoWay}"
+                                             IsEnabled="{Binding IsActive}"
+                                             Background="{StaticResource DarkBackground}"
+                                             Foreground="{StaticResource LightText}"
+                                             BorderBrush="{StaticResource TealPrimary}"
+                                             Padding="8,5"/>
                                 </StackPanel>
 
                                 <!-- Display Options -->
@@ -408,15 +409,55 @@
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
                                                  IsEnabled="{Binding IsActive}"/>
-                                        <CheckBox Content="Show Last 10 laps average"
-                                                 IsChecked="{Binding FuelWidget_ShowL10, Mode=TwoWay}"
+                                        <CheckBox Content="Show fuel range (min-max)"
+                                                 IsChecked="{Binding FuelWidget_ShowRange, Mode=TwoWay}"
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
+                                                 ToolTip="Display minimum and maximum fuel consumption per lap"
                                                  IsEnabled="{Binding IsActive}"/>
-                                        <CheckBox Content="Show session average"
-                                                 IsChecked="{Binding FuelWidget_ShowSession, Mode=TwoWay}"
+                                        <CheckBox Content="Show fuel saving badge"
+                                                 IsChecked="{Binding FuelWidget_ShowSavingBadge, Mode=TwoWay}"
                                                  Foreground="{StaticResource LightText}"
                                                  Margin="0,0,0,5"
+                                                 ToolTip="Show badge when fuel saving is needed to finish"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show strategy recommendation"
+                                                 IsChecked="{Binding FuelWidget_ShowStrategyRecommendation, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 ToolTip="Display optimal pit strategy (NO-STOP/1-STOP)"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show pit exit position"
+                                                 IsChecked="{Binding FuelWidget_ShowPitExitPosition, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 ToolTip="Show predicted position and gaps after pit stop"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show lift points"
+                                                 IsChecked="{Binding FuelWidget_ShowLiftPoints, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 ToolTip="Show where to lift/coast to save fuel"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show saving alerts"
+                                                 IsChecked="{Binding FuelWidget_ShowSavingAlerts, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 ToolTip="Show strategic fuel saving alerts and warnings"
+                                                 IsEnabled="{Binding IsActive}"/>
+
+                                        <!-- Sparkline Visibility Toggles -->
+                                        <CheckBox Content="Show &quot;LIVE (5s)&quot; sparkline"
+                                                 IsChecked="{Binding FuelWidget_ShowLiveSparkline, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 ToolTip="Show real-time fuel consumption sparkline (5 seconds)"
+                                                 IsEnabled="{Binding IsActive}"/>
+                                        <CheckBox Content="Show &quot;LAPS (5)&quot; sparkline"
+                                                 IsChecked="{Binding FuelWidget_ShowLapSparkline, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,0,0,5"
+                                                 ToolTip="Show last 5 laps fuel consumption sparkline"
                                                  IsEnabled="{Binding IsActive}"/>
                                         
                                         <!-- Pit Strategy Master Toggle -->
@@ -493,6 +534,14 @@
                                                    Style="{StaticResource MRT.Slider}"
                                                    IsEnabled="{Binding IsActive}"/>
                                         </StackPanel>
+
+                                        <!-- Dynamic Buffer Toggle -->
+                                        <CheckBox Content="Enable dynamic buffer"
+                                                 IsChecked="{Binding FuelWidget_EnableDynamicBuffer, Mode=TwoWay}"
+                                                 Foreground="{StaticResource LightText}"
+                                                 Margin="0,10,0,0"
+                                                 ToolTip="Automatically adjust buffer based on driving consistency, weather, and yellows"
+                                                 IsEnabled="{Binding IsActive}"/>
                                     </StackPanel>
                                 </Border>
 

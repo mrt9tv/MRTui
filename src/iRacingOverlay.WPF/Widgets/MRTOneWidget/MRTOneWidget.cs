@@ -44,12 +44,18 @@ public class MRTOneWidget : WidgetBase
         public const double RADAR_OFFSET = 14;
 
         // === Radar Square Specifications ===
-        /// <summary>Width of radar spotter squares</summary>
+        /// <summary>Width of radar spotter squares (legacy mode)</summary>
         public const double RADAR_SQUARE_SIZE = 12;
-        /// <summary>Radar square stroke thickness</summary>
+        /// <summary>Radar square stroke thickness (legacy mode)</summary>
         public const double RADAR_STROKE_THICKNESS = 1;
         /// <summary>Radar square corner radius for slight rounding</summary>
         public const double RADAR_CORNER_RADIUS = 2;
+
+        // === Enhanced Radar Specifications (Phase 4.2) ===
+        /// <summary>Width of enhanced radar spotter squares (33% larger for better visibility)</summary>
+        public const double RADAR_SQUARE_SIZE_ENHANCED = 16;
+        /// <summary>Enhanced radar square stroke thickness (2x thicker for better visibility)</summary>
+        public const double RADAR_STROKE_THICKNESS_ENHANCED = 2;
         /// <summary>Distance from edge of canvas to radar squares (provides spacing from circle)</summary>
         public const double RADAR_EDGE_OFFSET = 2;
         /// <summary>Center position for vertical radar squares (canvas center minus half square size)</summary>
@@ -557,7 +563,7 @@ public class MRTOneWidget : WidgetBase
         // (SizeChanged event won't fire if size was set before event handler was attached)
         if (Width > 0 && Height > 0)
         {
-            double scale = Math.Min(Width / LayoutConstants.CANVAS_WIDTH, Height / LayoutConstants.CANVAS_WIDTH);
+            double scale = Math.Min(Width / LayoutConstants.CANVAS_WIDTH, Height / LayoutConstants.CANVAS_HEIGHT);
             outerCanvas.LayoutTransform = new ScaleTransform(scale, scale);
         }
 
@@ -599,6 +605,10 @@ public class MRTOneWidget : WidgetBase
         
         // Apply visibility settings
         ApplyVisibilitySettings();
+        
+        // REMOVED: Height override that was preventing saved size from persisting
+        // The base class (WidgetBase) correctly loads both Width and Height from saved config
+        // Overriding Height here broke size persistence on restart
     }
     
     public override WidgetType WidgetType => WidgetType.MRTOne;
@@ -614,18 +624,19 @@ public class MRTOneWidget : WidgetBase
             {
                 var json = JsonSerializer.Serialize(settingsObj);
                 var settings = JsonSerializer.Deserialize<MRTOneSettings>(json);
-                
+
                 if (settings != null)
                 {
                     return settings;
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore errors, return defaults
+            System.Diagnostics.Debug.WriteLine($"[MRTOne] Failed to load settings: {ex.Message}");
+            // Return defaults on error
         }
-        
+
         return MRTOneSettings.Default;
     }
     
@@ -714,13 +725,13 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Calculate scale factors based on original 228x228 design (200 + 28 for radar boxes)
-        double scaleX = ActualWidth / 228.0;
-        double scaleY = ActualHeight / 228.0;
+        // Calculate scale factors based on original canvas dimensions (228x308 - width x height with fuel display)
+        double scaleX = ActualWidth / LayoutConstants.CANVAS_WIDTH;
+        double scaleY = ActualHeight / LayoutConstants.CANVAS_HEIGHT;
         
         // Use uniform scale (smallest of the two to maintain aspect ratio)
         double scale = Math.Min(scaleX, scaleY);
-        
+
         // Apply scale transform to the outer canvas
         if (Content is Canvas canvas)
         {
@@ -902,6 +913,10 @@ public class MRTOneWidget : WidgetBase
     }
     
     
+    /// <summary>
+    /// Dynamically adjust center font size based on text content
+    /// Uses visual width calculation to account for character width variance
+    /// </summary>
     private void UpdateCenterFontSize()
     {
         if (string.IsNullOrEmpty(_centerValueText.Text))
@@ -911,19 +926,43 @@ public class MRTOneWidget : WidgetBase
         bool hasSideBoxes = (_leftField.HasValue || _rightField.HasValue);
         double baseSize = hasSideBoxes ? 42 : 56;
         
-        // Adjust based on text length
-        int textLength = _centerValueText.Text.Length;
-        double sizeMultiplier = textLength switch
+        // Calculate estimated visual width (consider character width variance)
+        double visualWeight = CalculateVisualWidth(_centerValueText.Text);
+        
+        // Adjust based on visual weight (not just string length)
+        double sizeMultiplier = visualWeight switch
         {
-            1 => 1.0,      // Single char (gear "5", "R", "N") - full size
-            2 => 0.85,     // Two chars (gear "10") - 85% size
-            3 => 0.70,     // Three chars (speed "247") - 70% size
-            4 => 0.60,     // Four chars (RPM "8500") - 60% size
-            >= 5 => 0.50,  // Five+ chars - 50% size
-            _ => 1.0
+            <= 1.5 => 1.0,      // Single char or narrow (I, 1, l) - full size
+            <= 3.0 => 0.85,     // Two chars or wide single (W, M) - 85% size
+            <= 5.0 => 0.70,     // Three chars - 70% size
+            <= 8.0 => 0.60,     // Four-six chars - 60% size
+            _ => 0.50           // Seven+ chars (lap times, temperatures) - 50% size
         };
         
         _centerValueText.FontSize = baseSize * scale * sizeMultiplier;
+    }
+    
+    /// <summary>
+    /// Calculate approximate visual width of text
+    /// Accounts for narrow chars (I, 1, l, i, ., :) and wide chars (W, M, m, @)
+    /// Returns weighted sum where average char = 1.0
+    /// </summary>
+    private double CalculateVisualWidth(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+            
+        double weight = 0;
+        foreach (char c in text)
+        {
+            weight += c switch
+            {
+                'I' or 'i' or 'l' or '1' or '.' or ',' or ':' or ';' or '\'' or '!' or '|' => 0.6,
+                'W' or 'M' or 'm' or '@' or '%' => 1.4,
+                _ => 1.0
+            };
+        }
+        return weight;
     }
     
     /// <summary>
@@ -932,8 +971,9 @@ public class MRTOneWidget : WidgetBase
     public void UpdateSize(double size)
     {
         Width = size;
-        Height = size;
-        
+        // Set height to accommodate fuel display below gauge (308px canvas vs 228px width)
+        Height = size * (LayoutConstants.CANVAS_HEIGHT / LayoutConstants.CANVAS_WIDTH);
+
         // Calculate scale factor based on default size of 200px
         double scale = size / 200.0;
         
@@ -1058,139 +1098,9 @@ public class MRTOneWidget : WidgetBase
             }
         }
         
-        // Update LEFT side box
-        if (_leftField.HasValue)
-        {
-            var leftValue = TelemetryDataMapper.GetValue(_leftField.Value, data, _telemetryService) ?? 0;
-            _leftValueText.Text = MRTOneDataFormatter.FormatValue(_leftField.Value, leftValue, data, AppSettings.Instance.UseMetricUnits);
-            _leftValueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(_leftField.Value, leftValue, data, _primaryColor, _secondaryColor));
-            
-            // ABS special handling: Fade to background when inactive, bright when active
-            // Use StateManager to prevent flicker with cached state comparison
-            if (_leftField.Value == TelemetryField.ABSActive && leftValue is int absValue)
-            {
-                var absState = _stateManager.GetABSOpacity(absValue, 0);
-                if (absState.HasChanged)
-                {
-                    _leftValueText.Opacity = absState.LeftOpacity;
-                    _leftLabelText.Opacity = absState.LeftOpacity;
-                }
-            }
-            // Traction Control special handling: 
-            // - Dim when N/A (car doesn't have TC) or OFF (TC = 0)
-            // - Orange when TC > 0 (enabled and potentially active)
-            // Only update when TC state changes (prevents flicker)
-            // BACKWARD COMPAT: Handle both int (new) and float (old binary during hot reload)
-            else if (_leftField.Value == TelemetryField.TractionControl)
-            {
-                int tcValue = leftValue switch
-                {
-                    int i => i,
-                    float f => (int)f, // Backward compat during hot reload
-                    _ => -1
-                };
-                
-                var tcState = _stateManager.GetTCOpacity(tcValue, 0);
-                if (tcState.HasChanged)
-                {
-                    _leftValueText.Opacity = tcState.LeftOpacity;
-                    _leftLabelText.Opacity = tcState.LeftOpacity;
-
-                    // Color: Orange when TC > 0 (enabled), Teal when OFF/N/A
-                    Color tcColor = tcValue > 0 ? _secondaryColor : _primaryColor;
-                    _leftValueText.Foreground = new SolidColorBrush(tcColor);
-                }
-                // Note: If state hasn't changed, keep current opacity (don't reset)
-            }
-            // Wheel Lockup special handling: Dim when OK, bright RED when locked
-            // Only update opacity when state changes (prevents flicker from rapid oscillation)
-            else if (_leftField.Value == TelemetryField.WheelLock && leftValue is int lockupValue)
-            {
-                var lockupState = _stateManager.GetLockupOpacity(lockupValue, 0);
-                if (lockupState.HasChanged)
-                {
-                    _leftValueText.Opacity = lockupState.LeftOpacity;
-                    _leftLabelText.Opacity = lockupState.LeftOpacity;
-                }
-            }
-            else if (_leftField.Value != TelemetryField.ABSActive && _leftField.Value != TelemetryField.FuelLevel && _leftField.Value != TelemetryField.TractionControl && _leftField.Value != TelemetryField.WheelLock)
-            {
-                // Only reset opacity for fields that don't have special blink handling
-                // (FuelLevel has blink timer, ABSActive has state-based opacity)
-                _leftValueText.Opacity = 1.0;
-                _leftLabelText.Opacity = 1.0;
-            }
-            
-            // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
-            _leftLabelText.Text = MRTOneDataFormatter.GetLabel(_leftField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
-        }
-        
-        // Update RIGHT side box
-        if (_rightField.HasValue)
-        {
-            var rightValue = TelemetryDataMapper.GetValue(_rightField.Value, data, _telemetryService) ?? 0;
-            _rightValueText.Text = MRTOneDataFormatter.FormatValue(_rightField.Value, rightValue, data, AppSettings.Instance.UseMetricUnits);
-            _rightValueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(_rightField.Value, rightValue, data, _primaryColor, _secondaryColor));
-            
-            // ABS special handling: Fade to background when inactive, bright when active
-            // Use StateManager to prevent flicker with cached state comparison
-            if (_rightField.Value == TelemetryField.ABSActive && rightValue is int absValue)
-            {
-                var absStateRight = _stateManager.GetABSOpacity(0, absValue);
-                if (absStateRight.HasChanged)
-                {
-                    _rightValueText.Opacity = absStateRight.RightOpacity;
-                    _rightLabelText.Opacity = absStateRight.RightOpacity;
-                }
-            }
-            // Traction Control special handling:
-            // - Dim when N/A (car doesn't have TC) or OFF (TC = 0)
-            // - Orange when TC > 0 (enabled and potentially active)
-            // Only update when TC state changes (prevents flicker)
-            // BACKWARD COMPAT: Handle both int (new) and float (old binary during hot reload)
-            else if (_rightField.Value == TelemetryField.TractionControl)
-            {
-                int tcValue = rightValue switch
-                {
-                    int i => i,
-                    float f => (int)f, // Backward compat during hot reload
-                    _ => -1
-                };
-                
-                var tcStateRight = _stateManager.GetTCOpacity(0, tcValue);
-                if (tcStateRight.HasChanged)
-                {
-                    _rightValueText.Opacity = tcStateRight.RightOpacity;
-                    _rightLabelText.Opacity = tcStateRight.RightOpacity;
-
-                    // Color: Orange when TC > 0 (enabled), Teal when OFF/N/A
-                    Color tcColor = tcValue > 0 ? _secondaryColor : _primaryColor;
-                    _rightValueText.Foreground = new SolidColorBrush(tcColor);
-                }
-                // Note: If state hasn't changed, keep current opacity (don't reset)
-            }
-            // Wheel Lockup special handling: Dim when OK, bright RED when locked
-            // Only update opacity when state changes (prevents flicker from rapid oscillation)
-            else if (_rightField.Value == TelemetryField.WheelLock && rightValue is int lockupValue)
-            {
-                var lockupStateRight = _stateManager.GetLockupOpacity(0, lockupValue);
-                if (lockupStateRight.HasChanged)
-                {
-                    _rightValueText.Opacity = lockupStateRight.RightOpacity;
-                    _rightLabelText.Opacity = lockupStateRight.RightOpacity;
-                }
-            }
-            else if (_rightField.Value != TelemetryField.ABSActive && _rightField.Value != TelemetryField.FuelLevel && _rightField.Value != TelemetryField.TractionControl && _rightField.Value != TelemetryField.WheelLock)
-            {
-                // Only reset opacity for fields that don't have special blink handling
-                // (FuelLevel has blink timer, ABSActive has state-based opacity)
-                _rightValueText.Opacity = 1.0;
-                _rightLabelText.Opacity = 1.0;
-            }
-            
-            // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
-            _rightLabelText.Text = MRTOneDataFormatter.GetLabel(_rightField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
-        }
+        // Update LEFT and RIGHT side boxes using extracted method
+        UpdateSideBox(_leftField, _leftValueText, _leftLabelText, data, isLeftBox: true);
+        UpdateSideBox(_rightField, _rightValueText, _rightLabelText, data, isLeftBox: false);
         
         // PRIORITY 1: Pit limiter (if enabled) overrides RPM zone colors - PHASE 2: Enhancement #4
         bool pitLimiterActive = data.PitSpeedLimiterActive;
@@ -1226,24 +1136,6 @@ public class MRTOneWidget : WidgetBase
             _gaugeCircle.Stroke = new SolidColorBrush(borderColor);
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
         // PHASE 1: Update 4-way radar spotter squares
         if (AppSettings.Instance.EnableLateralSpotter)
         {
@@ -1315,7 +1207,95 @@ public class MRTOneWidget : WidgetBase
             }
         }
     }
-    
+
+    /// <summary>
+    /// Update a side box (left or right) with telemetry data
+    /// Handles special cases: ABS, Traction Control, Wheel Lockup with state-based opacity
+    /// Extracted to eliminate duplication between left and right box updates
+    /// </summary>
+    private void UpdateSideBox(TelemetryField? field, TextBlock valueText, TextBlock labelText, TelemetryData data, bool isLeftBox)
+    {
+        if (!field.HasValue) return;
+
+        var value = TelemetryDataMapper.GetValue(field.Value, data, _telemetryService) ?? 0;
+        valueText.Text = MRTOneDataFormatter.FormatValue(field.Value, value, data, AppSettings.Instance.UseMetricUnits);
+        valueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(field.Value, value, data, _primaryColor, _secondaryColor));
+
+        // ABS special handling: Fade to background when inactive, bright when active
+        // Use StateManager to prevent flicker with cached state comparison
+        if (field.Value == TelemetryField.ABSActive && value is int absValue)
+        {
+            var absState = isLeftBox
+                ? _stateManager.GetABSOpacity(absValue, 0)
+                : _stateManager.GetABSOpacity(0, absValue);
+
+            if (absState.HasChanged)
+            {
+                var opacity = isLeftBox ? absState.LeftOpacity : absState.RightOpacity;
+                valueText.Opacity = opacity;
+                labelText.Opacity = opacity;
+            }
+        }
+        // Traction Control special handling:
+        // - Dim when N/A (car doesn't have TC) or OFF (TC = 0)
+        // - Orange when TC > 0 (enabled and potentially active)
+        // Only update when TC state changes (prevents flicker)
+        // BACKWARD COMPAT: Handle both int (new) and float (old binary during hot reload)
+        else if (field.Value == TelemetryField.TractionControl)
+        {
+            int tcValue = value switch
+            {
+                int i => i,
+                float f => (int)f, // Backward compat during hot reload
+                _ => -1
+            };
+
+            var tcState = isLeftBox
+                ? _stateManager.GetTCOpacity(tcValue, 0)
+                : _stateManager.GetTCOpacity(0, tcValue);
+
+            if (tcState.HasChanged)
+            {
+                var opacity = isLeftBox ? tcState.LeftOpacity : tcState.RightOpacity;
+                valueText.Opacity = opacity;
+                labelText.Opacity = opacity;
+
+                // Color: Orange when TC > 0 (enabled), Teal when OFF/N/A
+                Color tcColor = tcValue > 0 ? _secondaryColor : _primaryColor;
+                valueText.Foreground = new SolidColorBrush(tcColor);
+            }
+            // Note: If state hasn't changed, keep current opacity (don't reset)
+        }
+        // Wheel Lockup special handling: Dim when OK, bright RED when locked
+        // Only update opacity when state changes (prevents flicker from rapid oscillation)
+        else if (field.Value == TelemetryField.WheelLock && value is int lockupValue)
+        {
+            var lockupState = isLeftBox
+                ? _stateManager.GetLockupOpacity(lockupValue, 0)
+                : _stateManager.GetLockupOpacity(0, lockupValue);
+
+            if (lockupState.HasChanged)
+            {
+                var opacity = isLeftBox ? lockupState.LeftOpacity : lockupState.RightOpacity;
+                valueText.Opacity = opacity;
+                labelText.Opacity = opacity;
+            }
+        }
+        else if (field.Value != TelemetryField.ABSActive &&
+                 field.Value != TelemetryField.FuelLevel &&
+                 field.Value != TelemetryField.TractionControl &&
+                 field.Value != TelemetryField.WheelLock)
+        {
+            // Only reset opacity for fields that don't have special blink handling
+            // (FuelLevel has blink timer, ABSActive has state-based opacity)
+            valueText.Opacity = 1.0;
+            labelText.Opacity = 1.0;
+        }
+
+        // Update label text with units (e.g., "FUEL (L)", "OIL (°C)")
+        labelText.Text = MRTOneDataFormatter.GetLabel(field.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+    }
+
     /// <summary>
     /// PHASE 1: Update 4-way radar spotter squares based on proximity detection
     /// </summary>
@@ -1589,8 +1569,58 @@ public class MRTOneWidget : WidgetBase
         // Enhancement 4: Fuel Display - trigger update instead of just toggling visibility
         // Let UpdateFuelDisplay() handle visibility based on both settings AND data availability
         UpdateFuelDisplay();
+
+        // Enhancement 5: Enhanced Radar Visibility (Phase 4.2)
+        ApplyRadarVisibilitySettings();
     }
-    
+
+    /// <summary>
+    /// Apply radar visibility settings - Phase 4.2
+    /// Switches between legacy mode (12px squares, 1px stroke) and enhanced mode (16px squares, 2px stroke)
+    /// </summary>
+    private void ApplyRadarVisibilitySettings()
+    {
+        // Determine size and stroke based on enhanced radar setting
+        double squareSize = _settings.EnableEnhancedRadar
+            ? LayoutConstants.RADAR_SQUARE_SIZE_ENHANCED
+            : LayoutConstants.RADAR_SQUARE_SIZE;
+
+        double strokeThickness = _settings.EnableEnhancedRadar
+            ? LayoutConstants.RADAR_STROKE_THICKNESS_ENHANCED
+            : LayoutConstants.RADAR_STROKE_THICKNESS;
+
+        // Calculate position adjustments (center the larger squares)
+        double sizeDiff = LayoutConstants.RADAR_SQUARE_SIZE_ENHANCED - LayoutConstants.RADAR_SQUARE_SIZE;
+        double posOffset = sizeDiff / 2.0;  // Offset to keep squares centered
+
+        // Apply to all radar squares
+        // Front square (top)
+        _radarFront.Width = squareSize;
+        _radarFront.Height = squareSize;
+        _radarFront.StrokeThickness = strokeThickness;
+        Canvas.SetLeft(_radarFront, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+
+        // Back square (bottom)
+        _radarBack.Width = squareSize;
+        _radarBack.Height = squareSize;
+        _radarBack.StrokeThickness = strokeThickness;
+        Canvas.SetLeft(_radarBack, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+        Canvas.SetTop(_radarBack, LayoutConstants.RADAR_BACK_TOP - (_settings.EnableEnhancedRadar ? posOffset : 0));
+
+        // Left square
+        _radarLeft.Width = squareSize;
+        _radarLeft.Height = squareSize;
+        _radarLeft.StrokeThickness = strokeThickness;
+        Canvas.SetTop(_radarLeft, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+
+        // Right square
+        _radarRight.Width = squareSize;
+        _radarRight.Height = squareSize;
+        _radarRight.StrokeThickness = strokeThickness;
+        Canvas.SetLeft(_radarRight, LayoutConstants.CANVAS_WIDTH - LayoutConstants.RADAR_EDGE_OFFSET - squareSize);
+        Canvas.SetTop(_radarRight, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         // Clean up timers

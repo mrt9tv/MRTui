@@ -109,6 +109,12 @@ public class MRTOneSettings
     public bool EnableFuelStrategy { get; set; } = false;
 
     /// <summary>
+    /// Enable enhanced radar visibility (larger squares 16px vs 12px, thicker borders 2px vs 1px) - OFF by default (legacy mode)
+    /// </summary>
+    [JsonPropertyName("enableEnhancedRadar")]
+    public bool EnableEnhancedRadar { get; set; } = false;
+
+    /// <summary>
     /// Create default settings
     /// </summary>
     public static MRTOneSettings Default => new()
@@ -129,7 +135,8 @@ public class MRTOneSettings
         EnableGlowEffects = false,
         EnablePitLimiterIndicator = true,  // ON by default for safety
         EnableFuelDisplay = true,  // ON by default
-        EnableFuelStrategy = false  // OFF by default (advanced feature)
+        EnableFuelStrategy = false,  // OFF by default (advanced feature)
+        EnableEnhancedRadar = false  // OFF by default (legacy mode 12px squares)
     };
     
     /// <summary>

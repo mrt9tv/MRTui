@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using iRacingOverlay.Core.Services;
+using iRacingOverlay.Core.Services.Tire;
 using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Utils;
 
@@ -55,6 +56,9 @@ public partial class App : System.Windows.Application
 
                 // Register fuel calculator service
                 services.AddSingleton<FuelCalculatorService>();
+
+                // Register tire strategy service (Phase 8)
+                services.AddSingleton<TireStrategyService>();
 
                 // Register widget manager
                 services.AddSingleton<WidgetManager>();

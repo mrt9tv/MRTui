@@ -48,12 +48,14 @@ public class OverlayViewModel : INotifyPropertyChanged
         {
             new WidgetItemViewModel("MRT One", WidgetType.MRTOne, "🥇", _widgetManager),
             new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
-            new WidgetItemViewModel("Fuel Assist", WidgetType.Fuel, "⛽", _widgetManager)
+            new WidgetItemViewModel("Fuel Assist", WidgetType.Fuel, "⛽", _widgetManager),
+            new WidgetItemViewModel("Race Strategy", WidgetType.RaceStrategy, "🏁", _widgetManager)
         };
 
         // Subscribe to widget manager events
         _widgetManager.WidgetCreated += OnWidgetCreated;
         _widgetManager.WidgetRemoved += OnWidgetRemoved;
+        _widgetManager.WidgetVisibilityChanged += OnWidgetVisibilityChanged;
 
         // Update initial state for each widget
         foreach (var widget in Widgets)
@@ -92,6 +94,13 @@ public class OverlayViewModel : INotifyPropertyChanged
         {
             widget.UpdateState();
         }
+    }
+
+    private void OnWidgetVisibilityChanged(object? sender, EventArgs e)
+    {
+        // Update RaceStrategy widget state when visibility changes
+        var raceStrategyWidget = Widgets.FirstOrDefault(w => w.Type == WidgetType.RaceStrategy);
+        raceStrategyWidget?.UpdateState();
     }
 
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
@@ -141,6 +150,35 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ActivateButtonText));
                 OnPropertyChanged(nameof(ActivateButtonIcon));
+
+                // Special handling for RaceStrategy (standalone window)
+                if (Type == WidgetType.RaceStrategy)
+                {
+                    try
+                    {
+                        if (value)
+                        {
+                            // Create/show RaceStrategy widget
+                            _widgetManager.CreateWidget(Type);
+                        }
+                        else
+                        {
+                            // Hide RaceStrategy widget
+                            _widgetManager.HideRaceStrategyWidget();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Error toggling RaceStrategy: {ex}");
+                        System.Windows.MessageBox.Show($"Failed to open Race Strategy Widget: {ex.Message}", 
+                            "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                        
+                        // Revert toggle state
+                        _isActive = !value;
+                        OnPropertyChanged(nameof(IsActive));
+                    }
+                    return; // Don't process as normal WidgetBase
+                }
 
                 // Toggle widget on/off
                 if (value)
@@ -500,7 +538,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     private bool _enableShiftPointRing;
     private bool _enableGlowEffects;
     private bool _enableFuelDisplay;
-    
+    private bool _enableEnhancedRadar;  // Phase 4.2
+
     public bool EnableGradientBackground
     {
         get => _enableGradientBackground;
@@ -556,7 +595,21 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             }
         }
     }
-    
+
+    public bool EnableEnhancedRadar
+    {
+        get => _enableEnhancedRadar;
+        set
+        {
+            if (_enableEnhancedRadar != value)
+            {
+                _enableEnhancedRadar = value;
+                OnPropertyChanged();
+                if (!_isLoadingSettings) ApplySettings(); // Apply instantly
+            }
+        }
+    }
+
     /// <summary>
     /// Whether this is the MRT One widget (shows/hides settings UI)
     /// </summary>
@@ -568,6 +621,54 @@ public class WidgetItemViewModel : INotifyPropertyChanged
     public bool IsFuelAssistWidget => Type == WidgetType.Fuel;
 
     // Fuel Assist Widget Properties
+    
+    /// <summary>
+    /// Available layout options for Fuel Widget ComboBox
+    /// </summary>
+    public List<string> FuelWidgetAvailableLayouts { get; } = new List<string>
+    {
+        "Tower (180x280)",
+        "Bar (380x120)",
+        "Grid (260x200)"
+    };
+
+    /// <summary>
+    /// Selected layout for Fuel Widget (bound to ComboBox)
+    /// </summary>
+    public string FuelWidgetSelectedLayout
+    {
+        get
+        {
+            // Map internal layout value to display string
+            return AppSettings.Instance.FuelWidget_Layout switch
+            {
+                "Tower" => "Tower (180x280)",
+                "Bar" => "Bar (380x120)",
+                "Grid" => "Grid (260x200)",
+                _ => "Tower (180x280)"
+            };
+        }
+        set
+        {
+            // Map display string to internal value
+            var layoutValue = value switch
+            {
+                "Tower (180x280)" => "Tower",
+                "Bar (380x120)" => "Bar",
+                "Grid (260x200)" => "Grid",
+                _ => "Tower"
+            };
+            
+            if (AppSettings.Instance.FuelWidget_Layout != layoutValue)
+            {
+                AppSettings.Instance.FuelWidget_Layout = layoutValue;
+                AppSettings.Instance.Save();
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // Legacy radio button properties - kept for backward compatibility
     public bool FuelWidgetLayoutTower
     {
         get => AppSettings.Instance.FuelWidget_Layout == "Tower";
@@ -580,6 +681,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(FuelWidgetLayoutBar));
                 OnPropertyChanged(nameof(FuelWidgetLayoutGrid));
+                OnPropertyChanged(nameof(FuelWidgetSelectedLayout));
             }
         }
     }
@@ -596,6 +698,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(FuelWidgetLayoutTower));
                 OnPropertyChanged(nameof(FuelWidgetLayoutGrid));
+                OnPropertyChanged(nameof(FuelWidgetSelectedLayout));
             }
         }
     }
@@ -612,6 +715,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(FuelWidgetLayoutTower));
                 OnPropertyChanged(nameof(FuelWidgetLayoutBar));
+                OnPropertyChanged(nameof(FuelWidgetSelectedLayout));
             }
         }
     }
@@ -628,16 +732,58 @@ public class WidgetItemViewModel : INotifyPropertyChanged
         set { AppSettings.Instance.FuelWidget_ShowBar = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
     }
 
-    public bool FuelWidget_ShowL10
+    public bool FuelWidget_ShowRange
     {
-        get => AppSettings.Instance.FuelWidget_ShowL10;
-        set { AppSettings.Instance.FuelWidget_ShowL10 = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+        get => AppSettings.Instance.FuelWidget_ShowRange;
+        set { AppSettings.Instance.FuelWidget_ShowRange = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
     }
 
-    public bool FuelWidget_ShowSession
+    public bool FuelWidget_ShowSavingBadge
     {
-        get => AppSettings.Instance.FuelWidget_ShowSession;
-        set { AppSettings.Instance.FuelWidget_ShowSession = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+        get => AppSettings.Instance.FuelWidget_ShowSavingBadge;
+        set { AppSettings.Instance.FuelWidget_ShowSavingBadge = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowStrategyRecommendation
+    {
+        get => AppSettings.Instance.FuelWidget_ShowStrategyRecommendation;
+        set { AppSettings.Instance.FuelWidget_ShowStrategyRecommendation = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowLiveSparkline
+    {
+        get => AppSettings.Instance.FuelWidget_ShowLiveSparkline;
+        set { AppSettings.Instance.FuelWidget_ShowLiveSparkline = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowLapSparkline
+    {
+        get => AppSettings.Instance.FuelWidget_ShowLapSparkline;
+        set { AppSettings.Instance.FuelWidget_ShowLapSparkline = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowPitExitPosition
+    {
+        get => AppSettings.Instance.FuelWidget_ShowPitExitPosition;
+        set { AppSettings.Instance.FuelWidget_ShowPitExitPosition = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowLiftPoints
+    {
+        get => AppSettings.Instance.FuelWidget_ShowLiftPoints;
+        set { AppSettings.Instance.FuelWidget_ShowLiftPoints = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_ShowSavingAlerts
+    {
+        get => AppSettings.Instance.FuelWidget_ShowSavingAlerts;
+        set { AppSettings.Instance.FuelWidget_ShowSavingAlerts = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
+    }
+
+    public bool FuelWidget_EnableDynamicBuffer
+    {
+        get => AppSettings.Instance.FuelWidget_EnableDynamicBuffer;
+        set { AppSettings.Instance.FuelWidget_EnableDynamicBuffer = value; AppSettings.Instance.Save(); OnPropertyChanged(); }
     }
 
     // Legacy properties removed - individual field toggles no longer used
@@ -711,13 +857,28 @@ public class WidgetItemViewModel : INotifyPropertyChanged
 
     public void UpdateState()
     {
+        // Special handling for RaceStrategy (standalone window, not WidgetBase)
+        if (Type == WidgetType.RaceStrategy)
+        {
+            // For RaceStrategy, just check if it exists, don't try to read widget properties
+            var hasWidget = _widgetManager.HasWidgetType(Type);
+            if (_isActive != hasWidget)
+            {
+                _isActive = hasWidget;
+                OnPropertyChanged(nameof(IsActive));
+                OnPropertyChanged(nameof(ActivateButtonText));
+                OnPropertyChanged(nameof(ActivateButtonIcon));
+            }
+            return; // Don't try to read position/size/opacity from non-existent WidgetBase
+        }
+        
         // Check if widget is currently active
-        var hasWidget = _widgetManager.HasWidgetType(Type);
+        var hasWidget2 = _widgetManager.HasWidgetType(Type);
         
         // Only update if state changed (prevents infinite loop)
-        if (_isActive != hasWidget)
+        if (_isActive != hasWidget2)
         {
-            _isActive = hasWidget;
+            _isActive = hasWidget2;
             OnPropertyChanged(nameof(IsActive));
             OnPropertyChanged(nameof(ActivateButtonText));
             OnPropertyChanged(nameof(ActivateButtonIcon));
@@ -782,7 +943,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 _enableShiftPointRing = settings.EnableShiftPointRing;
                 _enableGlowEffects = settings.EnableGlowEffects;
                 _enableFuelDisplay = settings.EnableFuelDisplay;
-                
+                _enableEnhancedRadar = settings.EnableEnhancedRadar;  // Phase 4.2
+
                 // Notify all MRT One properties changed
                 OnPropertyChanged(nameof(TopSelectedField));
                 OnPropertyChanged(nameof(CenterSelectedField));
@@ -799,7 +961,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(EnableGradientBackground));
                 OnPropertyChanged(nameof(EnableShiftPointRing));
                 OnPropertyChanged(nameof(EnableGlowEffects));
-                
+                OnPropertyChanged(nameof(EnableEnhancedRadar));  // Phase 4.2
+
                 // Clear flag after loading complete
                 _isLoadingSettings = false;
             }
@@ -887,7 +1050,8 @@ public class WidgetItemViewModel : INotifyPropertyChanged
             EnableGradientBackground = true;  // ON by default
             EnableShiftPointRing = false;     // OFF by default
             EnableGlowEffects = false;        // OFF by default
-            
+            EnableEnhancedRadar = false;      // OFF by default (Phase 4.2)
+
             // Reset field selections to defaults
             TopSelectedField = "Speed";
             CenterSelectedField = "Gear";
@@ -973,9 +1137,10 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                     EnableGradientBackground = _enableGradientBackground,
                     EnableShiftPointRing = _enableShiftPointRing,
                     EnableGlowEffects = _enableGlowEffects,
-                    EnableFuelDisplay = _enableFuelDisplay
+                    EnableFuelDisplay = _enableFuelDisplay,
+                    EnableEnhancedRadar = _enableEnhancedRadar  // Phase 4.2
                 };
-                
+
                 // Apply to widget (this will update UI and save to config)
                 mrtOneWidget.UpdateWidgetSettings(newSettings);
                 

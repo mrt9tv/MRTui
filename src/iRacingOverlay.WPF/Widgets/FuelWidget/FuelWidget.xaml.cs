@@ -8,10 +8,11 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
+using iRacingOverlay.Core.Telemetry;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
 
-namespace iRacingOverlay.WPF.Widgets.FuelWidget
+namespace iRacingOverlay.WPF.Widgets.FuelWidgets
 {
     /// <summary>
     /// Enhanced Fuel Widget with FuelCalculatorService integration
@@ -20,15 +21,105 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
     /// </summary>
     public partial class FuelWidget : WidgetBase
     {
+        #region Layout Constants
+
+        /// <summary>
+        /// Layout and sizing constants for the Fuel Widget
+        /// </summary>
+        private static class LayoutConstants
+        {
+            // === Widget Dimensions ===
+            /// <summary>Base widget width</summary>
+            public const double BASE_WIDTH = 240;
+            /// <summary>Minimum widget height</summary>
+            public const double MIN_HEIGHT = 200;
+            /// <summary>Maximum widget height</summary>
+            public const double MAX_HEIGHT = 600;
+
+            // === UI Element Heights ===
+            /// <summary>Fuel bar graph height</summary>
+            public const double FUEL_BAR_HEIGHT = 18;
+            /// <summary>Sparkline display height</summary>
+            public const double SPARKLINE_HEIGHT = 24;
+
+            // === Timing Constants (milliseconds) ===
+            /// <summary>Fuel warning blink timer interval</summary>
+            public const int FUEL_BLINK_INTERVAL_MS = 250;
+            /// <summary>Live fuel update timer interval (0.5 second)</summary>
+            public const int LIVE_UPDATE_INTERVAL_MS = 500;
+
+            // === Threshold Values ===
+            /// <summary>Critical laps remaining threshold (hide PIT IN when below)</summary>
+            public const float CRITICAL_LAPS_THRESHOLD = 0.3f;
+            /// <summary>Near finish fuel threshold (hide PIT IN when below)</summary>
+            public const float NEAR_FINISH_FUEL_THRESHOLD = 0.6f;
+            /// <summary>Urgent laps remaining threshold (red color)</summary>
+            public const float URGENT_LAPS_THRESHOLD = 2.0f;
+        }
+
+        #endregion
+
+        #region Cached Brushes
+
+        /// <summary>
+        /// Static cached brushes for improved performance and memory usage
+        /// Frozen for better rendering performance (shared across all widget instances)
+        /// </summary>
+        private static class CachedBrushes
+        {
+            public static readonly Brush Teal;
+            public static readonly Brush Orange;
+            public static readonly Brush Red;
+            public static readonly Brush Green;
+            public static readonly Brush Gray;
+            public static readonly Brush Yellow;
+            public static readonly Brush Cyan;
+            public static readonly Brush GreenDark;
+            public static readonly Brush GrayLight;
+            public static readonly Brush RedDark;
+            public static readonly Brush OrangeDark;
+            public static readonly Brush GreenVeryDark;
+            public static readonly Brush GrayDark;
+            public static readonly Brush YellowLight;
+            public static readonly Brush RedLight;
+
+            static CachedBrushes()
+            {
+                // Create and freeze all brushes for better performance
+                Teal = CreateFrozenBrush(0, 128, 128);
+                Orange = CreateFrozenBrush(255, 128, 0);
+                Red = CreateFrozenBrush(255, 51, 51);
+                Green = CreateFrozenBrush(0, 255, 0);
+                Gray = CreateFrozenBrush(102, 102, 102);
+                Yellow = CreateFrozenBrush(255, 255, 0);
+                Cyan = CreateFrozenBrush(0, 217, 255);
+                GreenDark = CreateFrozenBrush(76, 175, 80);
+                GrayLight = CreateFrozenBrush(170, 170, 170);
+                RedDark = CreateFrozenBrush(183, 28, 28);
+                OrangeDark = CreateFrozenBrush(255, 111, 0);
+                GreenVeryDark = CreateFrozenBrush(27, 94, 32);
+                GrayDark = CreateFrozenBrush(66, 66, 66);
+                YellowLight = CreateFrozenBrush(255, 193, 7);
+                RedLight = CreateFrozenBrush(244, 67, 54);
+            }
+
+            private static Brush CreateFrozenBrush(byte r, byte g, byte b)
+            {
+                var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+                brush.Freeze(); // Freeze for better performance
+                return brush;
+            }
+        }
+
+        #endregion
+
         private readonly FuelCalculatorService _fuelCalculator;
         private DispatcherTimer? _blinkTimer;
         private bool _isBlinkVisible = true;
-        private string _currentLayout = "Tower";
 
         // Sparkline data tracking
         private readonly System.Collections.Generic.Queue<float> _liveUsageHistory = new(10);  // 5 seconds at 0.5s interval = 10 data points
         private readonly System.Collections.Generic.Queue<float> _lapUsageHistory = new(5);    // Last 5 laps
-        private float _lastUsageValue = 0f;
         private float _lastCurrentFuel = 0f;  // Track fuel level changes for live sparkline
         private DispatcherTimer? _liveUpdateTimer;  // Timer for live fuel updates (0.5 second interval)
 
@@ -38,53 +129,11 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         private float _lapSparklineMinEver = float.MaxValue;
         private float _lapSparklineMaxEver = float.MinValue;
 
-        // Dirty field tracking (Phase 3.2) - track previous values to avoid unnecessary updates
-        private float _prevCurrentFuel = -1f;
-        private float _prevFuelPct = -1f;
-        private float _prevFuelUsedLastLap = -1f;
-        private float _prevLapToLapDelta = float.NaN;
-        private float _prevAvgFuelPerLap_L5 = -1f;
-        private float _prevAvgFuelPerLap_L10 = -1f;
-        private float _prevAvgFuelPerLap_Session = -1f;
-        private float _prevLapsRemaining = -1f;
-        private float _prevFuelNeededToFinish = -1f;
-        private float _prevFuelToAddAtPit = -1f;
-        private float _prevFuelPressure = -1f;
-        private float _prevFuelPressureDropPct = -1f;
-        private int _prevCurrentLap = -1;
-        private int _prevOptimalPitLap = -1;
-        private int _prevPitWindowStart = -1;
-        private int _prevPitWindowEnd = -1;
-        private int _prevLatestPitLap = -1;
-
-        // Cached brushes for performance (Phase 3.1)
-        private readonly Brush _brushTeal = new SolidColorBrush(Color.FromRgb(0, 128, 128));
-        private readonly Brush _brushOrange = new SolidColorBrush(Color.FromRgb(255, 128, 0));
-        private readonly Brush _brushRed = new SolidColorBrush(Color.FromRgb(255, 51, 51));
-        private readonly Brush _brushGreen = new SolidColorBrush(Color.FromRgb(0, 255, 0));
-        private readonly Brush _brushGray = new SolidColorBrush(Color.FromRgb(102, 102, 102));
-        private readonly Brush _brushYellow = new SolidColorBrush(Color.FromRgb(255, 255, 0));
-        private readonly Brush _brushCyan = new SolidColorBrush(Color.FromRgb(0, 217, 255));
-        private readonly Brush _brushGreenDark = new SolidColorBrush(Color.FromRgb(76, 175, 80));
-        private readonly Brush _brushGrayLight = new SolidColorBrush(Color.FromRgb(170, 170, 170));
-        private readonly Brush _brushRedDark = new SolidColorBrush(Color.FromRgb(183, 28, 28));
-        private readonly Brush _brushOrangeDark = new SolidColorBrush(Color.FromRgb(255, 111, 0));
-        private readonly Brush _brushGreenVeryDark = new SolidColorBrush(Color.FromRgb(27, 94, 32));
-        private readonly Brush _brushGrayDark = new SolidColorBrush(Color.FromRgb(66, 66, 66));
-        private readonly Brush _brushYellowLight = new SolidColorBrush(Color.FromRgb(255, 193, 7));
-        private readonly Brush _brushRedLight = new SolidColorBrush(Color.FromRgb(244, 67, 54));
-
-        // Cached UI element references (Phase 3.3) - reduces FindName() overhead
-        private Run? _currentFuelRun;
-        private Run? _fuelPercentageRun;
-        private TextBlock? _lastLapText;
-        private TextBlock? _lastLapTrendArrow;
-        private TextBlock? _l5AvgText;
-        private TextBlock? _l10AvgText;
-        private TextBlock? _sessionAvgText;
-        private TextBlock? _lapsRemainingText;
-        private TextBlock? _pressureText;
-        private FrameworkElement? _fuelBarFill;
+        // Reset tracking for sparkline scaling (prevents scale degradation over long sessions)
+        private int _lastResetLap = 0;
+        private DateTime _lastResetTime = DateTime.UtcNow;
+        private const int SPARKLINE_RESET_LAP_INTERVAL = 10;  // Reset every 10 laps
+        private const int SPARKLINE_RESET_TIME_MINUTES = 30;  // Reset every 30 minutes
 
         public override WidgetType WidgetType => WidgetType.Fuel;
 
@@ -94,9 +143,6 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             _fuelCalculator = fuelCalculator ?? throw new ArgumentNullException(nameof(fuelCalculator));
 
             InitializeComponent();
-
-            // Cache UI element references (Phase 3.3)
-            CacheUIElements();
 
             // Apply fuel calculation method from settings
             ApplyFuelCalculationMethod();
@@ -135,27 +181,10 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             // Setup live fuel update timer (0.5 second interval for live sparkline - shows 5 seconds of data)
             _liveUpdateTimer = new DispatcherTimer
             {
-                Interval = TimeSpan.FromMilliseconds(500) // 0.5 seconds for smoother real-time tracking
+                Interval = TimeSpan.FromMilliseconds(LayoutConstants.LIVE_UPDATE_INTERVAL_MS)
             };
             _liveUpdateTimer.Tick += OnLiveUpdateTimerTick;
             _liveUpdateTimer.Start();
-        }
-
-        /// <summary>
-        /// Cache frequently accessed UI element references to avoid repeated FindName() calls (Phase 3.3)
-        /// </summary>
-        private void CacheUIElements()
-        {
-            _currentFuelRun = FindName("CurrentFuelRun") as Run;
-            _fuelPercentageRun = FindName("FuelPercentageRun") as Run;
-            _lastLapText = FindName("LastLapText") as TextBlock;
-            _lastLapTrendArrow = FindName("LastLapTrendArrow") as TextBlock;
-            _l5AvgText = FindName("L5AvgText") as TextBlock;
-            _l10AvgText = FindName("L10AvgText") as TextBlock;
-            _sessionAvgText = FindName("SessionAvgText") as TextBlock;
-            _lapsRemainingText = FindName("LapsRemainingText") as TextBlock;
-            _pressureText = FindName("PressureText") as TextBlock;
-            _fuelBarFill = FindName("FuelBarFill") as FrameworkElement;
         }
 
         /// <summary>
@@ -179,25 +208,16 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             }
 
             // Width is fixed, height auto-adjusts to fit all content
-            Width = 240 * scale;  // Increased from 210 to 240 to properly show all labels and values
-            MinHeight = 200 * scale;  // Minimum height for basic display
-            MaxHeight = 600 * scale;  // Maximum height for all fields visible
+            Width = LayoutConstants.BASE_WIDTH * scale;
+            MinHeight = LayoutConstants.MIN_HEIGHT * scale;
+            MaxHeight = LayoutConstants.MAX_HEIGHT * scale;
             SizeToContent = SizeToContent.Height;
         }
 
-        /// <summary>
-        /// Handle settings changes
-        /// </summary>
         private void OnSettingsChanged(object? sender, EventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
-                // Check if layout changed
-                if (_currentLayout != AppSettings.Instance.FuelWidget_Layout)
-                {
-                    SwitchLayout(AppSettings.Instance.FuelWidget_Layout);
-                }
-
                 UpdateFieldVisibility();
                 ApplyScale();
                 ApplyFuelCalculationMethod();
@@ -227,47 +247,6 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         }
 
         /// <summary>
-        /// Switch between Tower, Bar, and Grid layouts
-        /// </summary>
-        private void SwitchLayout(string newLayout)
-        {
-            _currentLayout = newLayout;
-
-            // For now, just update dimensions based on layout
-            // Full dynamic layout loading would require restructuring
-            // So we'll keep the Tower layout as primary and adjust sizing
-            UpdateLayoutDimensions();
-        }
-
-        /// <summary>
-        /// Update widget dimensions based on selected layout
-        /// </summary>
-        private void UpdateLayoutDimensions()
-        {
-            double scale = AppSettings.Instance.FuelWidget_Scale;
-
-            switch (_currentLayout)
-            {
-                case "Tower":
-                    Width = 240 * scale;  // Increased from 210 to 240 to properly show all labels and values
-                    Height = 280 * scale;
-                    break;
-                case "Bar":
-                    Width = 440 * scale;  // Increased from 410 to 440 to match wider design
-                    Height = 120 * scale;
-                    break;
-                case "Grid":
-                    Width = 320 * scale;  // Increased from 290 to 320 to match wider design
-                    Height = 200 * scale;
-                    break;
-                default:
-                    Width = 240 * scale;  // Increased from 210 to 240 to properly show all labels and values
-                    Height = 280 * scale;
-                    break;
-            }
-        }
-
-        /// <summary>
         /// Update field visibility based on AppSettings (height auto-adjusts via SizeToContent)
         /// </summary>
         private void UpdateFieldVisibility()
@@ -284,11 +263,45 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     fuelBarRow.Height = settings.FuelWidget_ShowBar ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
             }
             
-            // Sparkline visibility (always visible for now)
+            // Sparkline visibility - individual control for Live (5s) and Laps (5)
+            
+            // Live Sparkline (5 seconds) - Row 0 & 1
+            var liveSparklineLabel = FindName("LiveSparklineLabel") as FrameworkElement;
+            var liveSparklineChart = FindName("LiveSparklineChart") as FrameworkElement;
+            var liveSparklineRow = FindName("LiveSparklineRow") as RowDefinition;
+            var liveSparklineChartRow = FindName("LiveSparklineChartRow") as RowDefinition;
+            bool showLiveSparkline = settings.FuelWidget_ShowLiveSparkline;
+            
+            if (liveSparklineLabel != null)
+                liveSparklineLabel.Visibility = showLiveSparkline ? Visibility.Visible : Visibility.Collapsed;
+            if (liveSparklineChart != null)
+                liveSparklineChart.Visibility = showLiveSparkline ? Visibility.Visible : Visibility.Collapsed;
+            if (liveSparklineRow != null)
+                liveSparklineRow.Height = showLiveSparkline ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+            if (liveSparklineChartRow != null)
+                liveSparklineChartRow.Height = showLiveSparkline ? new GridLength(24) : new GridLength(0);
+            
+            // Lap Sparkline (5 laps) - Row 3 & 4
+            var lapSparklineLabel = FindName("LapSparklineLabel") as FrameworkElement;
+            var lapSparklineChart = FindName("LapSparklineChart") as FrameworkElement;
+            var lapSparklineRow = FindName("LapSparklineRow") as RowDefinition;
+            var lapSparklineChartRow = FindName("LapSparklineChartRow") as RowDefinition;
+            bool showLapSparkline = settings.FuelWidget_ShowLapSparkline;
+            
+            if (lapSparklineLabel != null)
+                lapSparklineLabel.Visibility = showLapSparkline ? Visibility.Visible : Visibility.Collapsed;
+            if (lapSparklineChart != null)
+                lapSparklineChart.Visibility = showLapSparkline ? Visibility.Visible : Visibility.Collapsed;
+            if (lapSparklineRow != null)
+                lapSparklineRow.Height = showLapSparkline ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+            if (lapSparklineChartRow != null)
+                lapSparklineChartRow.Height = showLapSparkline ? new GridLength(24) : new GridLength(0);
+            
+            // Hide entire sparkline grid if both sparklines are hidden
             var sparklineGrid = FindName("SparklineGrid") as FrameworkElement;
             if (sparklineGrid != null)
             {
-                sparklineGrid.Visibility = Visibility.Visible;
+                sparklineGrid.Visibility = (showLiveSparkline || showLapSparkline) ? Visibility.Visible : Visibility.Collapsed;
             }
 
             // Core consumption fields (always visible)
@@ -309,26 +322,49 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             }
             
             // Optional consumption fields
-            var l10Grid = FindName("L10Grid") as FrameworkElement;
-            var l10Row = FindName("L10Row") as RowDefinition;
-            if (l10Grid != null && l10Row != null)
+            // RANGE display (replaces L10/SESSION)
+            var rangeGrid = FindName("RangeGrid") as FrameworkElement;
+            var rangeRow = FindName("L10Row") as RowDefinition;  // Reusing L10Row for RANGE
+            if (rangeGrid != null && rangeRow != null)
             {
-                l10Grid.Visibility = settings.FuelWidget_ShowL10 ? Visibility.Visible : Visibility.Collapsed;
-                l10Row.Height = settings.FuelWidget_ShowL10 ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+                rangeGrid.Visibility = settings.FuelWidget_ShowRange ? Visibility.Visible : Visibility.Collapsed;
+                rangeRow.Height = settings.FuelWidget_ShowRange ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
             }
 
-            var sessionGrid = FindName("SessionGrid") as FrameworkElement;
-            var sessionRow = FindName("SessionRow") as RowDefinition;
-            if (sessionGrid != null && sessionRow != null)
+            // New UI elements - controlled by individual toggles
+            // Strategy Recommendation
+            var strategyRecommendationGrid = FindName("StrategyRecommendationGrid") as FrameworkElement;
+            var strategyRecommendationRow = FindName("StrategyRecommendationRow") as RowDefinition;
+            if (strategyRecommendationGrid != null)
             {
-                sessionGrid.Visibility = settings.FuelWidget_ShowSession ? Visibility.Visible : Visibility.Collapsed;
-                sessionRow.Height = settings.FuelWidget_ShowSession ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+                // Only show if pit strategy is enabled AND the toggle is on
+                bool showStrategyRec = showStrategy && settings.FuelWidget_ShowStrategyRecommendation;
+                strategyRecommendationGrid.Visibility = showStrategyRec ? Visibility.Visible : Visibility.Collapsed;
+                if (strategyRecommendationRow != null)
+                    strategyRecommendationRow.Height = showStrategyRec ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+            }
+
+            // Fuel Saving Badge
+            var fuelSavingBadge = FindName("FuelSavingBadge") as Border;
+            var fuelSavingBadgeRow = FindName("FuelSavingBadgeRow") as RowDefinition;
+            if (fuelSavingBadge != null && fuelSavingBadgeRow != null)
+            {
+                // CRITICAL: Check setting here too to collapse row height when disabled
+                // Visibility is also controlled in UpdateFuelSavingBadge based on NeedsFuelSaving
+                bool showBadge = settings.FuelWidget_ShowSavingBadge;
+                fuelSavingBadgeRow.Height = showBadge ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+                
+                // Also set visibility here based on setting (UpdateFuelSavingBadge refines this further based on data)
+                if (!showBadge)
+                {
+                    fuelSavingBadge.Visibility = Visibility.Collapsed;
+                }
             }
 
             // Pit Strategy fields - controlled by MASTER TOGGLE ONLY
             // All pit strategy fields (TO GO, PRESS, PIT, PIT IN) shown/hidden together
             // Legacy individual toggles have been removed for simplicity
-            
+
             // TO GO (Can Finish) - Row 12
             var canFinishGrid = FindName("CanFinishGrid") as FrameworkElement;
             var canFinishRow = FindName("CanFinishRow") as RowDefinition;
@@ -346,10 +382,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             {
                 // Show pressure if both pit strategy AND pressure toggle are enabled
                 bool showPressure = showStrategy && settings.FuelWidget_ShowFuelPressure;
-                
-                // DEBUG: Log visibility decision
-                System.Diagnostics.Debug.WriteLine($"[FuelWidget] Pressure visibility: showStrategy={showStrategy}, ShowFuelPressure={settings.FuelWidget_ShowFuelPressure}, result={showPressure}");
-                
+
                 pressureGrid.Visibility = showPressure ? Visibility.Visible : Visibility.Collapsed;
                 if (pressureRow != null)
                     pressureRow.Height = showPressure ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
@@ -394,23 +427,6 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         }
 
         /// <summary>
-        /// Check if a float value has changed significantly (Phase 3.2)
-        /// </summary>
-        private bool HasChanged(float current, float previous, float epsilon = 0.01f)
-        {
-            if (float.IsNaN(previous)) return true; // First update
-            return Math.Abs(current - previous) > epsilon;
-        }
-
-        /// <summary>
-        /// Check if an int value has changed (Phase 3.2)
-        /// </summary>
-        private bool HasChanged(int current, int previous)
-        {
-            return current != previous;
-        }
-
-        /// <summary>
         /// Update UI with fuel data
         /// </summary>
         private void UpdateUI(FuelData data)
@@ -423,40 +439,35 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             // Note: FuelBufferLaps is now calculated dynamically by FuelCalculatorService if enabled
             // data.FuelBufferLaps will be set by CalculateDynamicBufferLaps() based on race conditions
 
-            // Current fuel level (using Run elements in XAML) - Phase 3.2: Only update if changed
-            // Phase 3.3: Use cached UI element references
-            if (HasChanged(data.CurrentFuel, _prevCurrentFuel) || HasChanged(data.FuelPct, _prevFuelPct))
+            // Current fuel level (using Run elements in XAML)
+            var currentFuelRun = FindName("CurrentFuelRun") as Run;
+            if (currentFuelRun != null)
             {
-                if (_currentFuelRun != null)
-                {
-                    _currentFuelRun.Text = FormatFuel(data.CurrentFuel);
-                    _currentFuelRun.Foreground = GetFuelLevelColor(data.FuelPct);
-                }
-
-                // Fuel percentage (only show if setting is enabled)
-                if (_fuelPercentageRun != null)
-                {
-                    if (settings.FuelWidget_ShowPercentage)
-                    {
-                        _fuelPercentageRun.Text = $"({(data.FuelPct * 100):F0}%)";
-                    }
-                    else
-                    {
-                        _fuelPercentageRun.Text = string.Empty; // Hide percentage
-                    }
-                }
-
-                _prevCurrentFuel = data.CurrentFuel;
-                _prevFuelPct = data.FuelPct;
+                currentFuelRun.Text = FormatFuel(data.CurrentFuel);
+                currentFuelRun.Foreground = GetFuelLevelColor(data.FuelPct);
             }
 
-            // Tank capacity with sputtering threshold info (Enhanced Phase 2.1 + Phase 2.2)
+            // Fuel percentage (only show if setting is enabled)
+            var fuelPercentageRun = FindName("FuelPercentageRun") as Run;
+            if (fuelPercentageRun != null)
+            {
+                if (settings.FuelWidget_ShowPercentage)
+                {
+                    fuelPercentageRun.Text = $"({(data.FuelPct * 100):F0}%)";
+                }
+                else
+                {
+                    fuelPercentageRun.Text = string.Empty; // Hide percentage
+                }
+            }
+
+            // Tank capacity with sputtering threshold info
             var tankCapacityText = FindName("TankCapacityText") as TextBlock;
             if (tankCapacityText != null)
             {
                 tankCapacityText.Text = FormatTankSize(data.TankCapacity);
                 
-                // Set tooltip with car-specific info + dynamic buffer details (Phase 2.2)
+                // Set tooltip with car-specific info + dynamic buffer details
                 string carCategory = FuelSputteringDatabase.GetCarCategory(data.CarClassId);
                 string tooltip = $"Sputtering threshold: {data.FuelSputteringThreshold:F2}L\n" +
                                  $"Car category: {carCategory}\n" +
@@ -484,176 +495,181 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             {
                 double maxWidth = barGrid.ActualWidth > 0 ? barGrid.ActualWidth : 140; // Fallback width
                 fuelBarFill.Width = maxWidth * Math.Clamp(data.FuelPct, 0f, 1f);
-                
+
                 if (fuelBarFill is System.Windows.Shapes.Rectangle rect)
                 {
                     rect.Fill = GetFuelLevelColor(data.FuelPct);
                 }
             }
 
-            // Last lap fuel usage (show -- if no data yet) - Phase 3.2: Only update if changed
-            if (HasChanged(data.FuelUsedLastLap, _prevFuelUsedLastLap) || HasChanged(data.LapToLapDelta, _prevLapToLapDelta))
+            // Last lap fuel usage (show -- if no data yet)
+            var lastLapText = FindName("LastLapText") as TextBlock;
+            var lastLapTrendArrow = FindName("LastLapTrendArrow") as TextBlock;
+            if (lastLapText != null)
             {
-                var lastLapText = FindName("LastLapText") as TextBlock;
-                var lastLapTrendArrow = FindName("LastLapTrendArrow") as TextBlock;
-                if (lastLapText != null)
+                if (data.FuelUsedLastLap > 0)
                 {
-                    if (data.FuelUsedLastLap > 0)
-                    {
-                        lastLapText.Text = $"{FormatFuelValue(data.FuelUsedLastLap)}";
-                        lastLapText.Foreground = _brushOrange;
+                    lastLapText.Text = $"{FormatFuelValue(data.FuelUsedLastLap)}";
+                    lastLapText.Foreground = CachedBrushes.Orange;
+                    
+                    // Highlight if this is the active averaging method
+                    lastLapText.FontWeight = (data.SelectedMethod == FuelAveragingMethod.Last) 
+                        ? FontWeights.Bold 
+                        : FontWeights.Normal;
 
-                        // Show delta value (+/- amount) if enabled and we have lap-to-lap data
-                        if (settings.FuelWidget_ShowTrends && lastLapTrendArrow != null && data.LapToLapDelta != 0)
+                    // Show delta value (+/- amount) if enabled and we have lap-to-lap data
+                    if (settings.FuelWidget_ShowTrends && lastLapTrendArrow != null && data.LapToLapDelta != 0)
+                    {
+                        // Format with + or - prefix and 2 decimals
+                        string sign = data.LapToLapDelta > 0 ? "+" : "";
+                        lastLapTrendArrow.Text = $"{sign}{data.LapToLapDelta.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}";
+                        lastLapTrendArrow.Visibility = Visibility.Visible;
+
+                        // Color code: Red (using more fuel), Green (using less fuel), Gray (stable ±0.02)
+                        lastLapTrendArrow.Foreground = data.LapToLapDelta switch
                         {
-                            // Format with + or - prefix and 2 decimals
-                            string sign = data.LapToLapDelta > 0 ? "+" : "";
-                            lastLapTrendArrow.Text = $"{sign}{data.LapToLapDelta.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}";
-                            lastLapTrendArrow.Visibility = Visibility.Visible;
+                            > 0.02f => CachedBrushes.Red,      // Red - using MORE fuel
+                            < -0.02f => CachedBrushes.Green,   // Green - using LESS fuel
+                            _ => CachedBrushes.GrayLight       // Gray - stable
+                        };
+                    }
+                    else if (lastLapTrendArrow != null)
+                    {
+                        lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                    }
+                }
+                else
+                {
+                    lastLapText.Text = "--";
+                    lastLapText.Foreground = CachedBrushes.Gray;
+                    if (lastLapTrendArrow != null)
+                    {
+                        lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                    }
+                }
+            }
 
-                            // Color code: Red (using more fuel), Green (using less fuel), Gray (stable ±0.02)
-                            lastLapTrendArrow.Foreground = data.LapToLapDelta switch
-                            {
-                                > 0.02f => _brushRed,      // Red - using MORE fuel
-                                < -0.02f => _brushGreen,   // Green - using LESS fuel
-                                _ => _brushGrayLight       // Gray - stable
-                            };
-                        }
-                        else if (lastLapTrendArrow != null)
+            // L5 average (show -- if no data yet)
+            var l5AvgText = FindName("L5AvgText") as TextBlock;
+            var l5TrendText = FindName("L5TrendText") as TextBlock;
+            
+            if (l5AvgText != null)
+            {
+                if (data.AvgFuelPerLap_L5 > 0)
+                {
+                    l5AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L5)}";
+                    l5AvgText.Foreground = CachedBrushes.Teal;
+                    
+                    // Highlight if this is the active averaging method
+                    l5AvgText.FontWeight = (data.SelectedMethod == FuelAveragingMethod.Last5) 
+                        ? FontWeights.Bold 
+                        : FontWeights.Normal;
+                    
+                    // Show trend indicator if enabled and we have lap-to-lap delta data
+                    if (l5TrendText != null && settings.FuelWidget_ShowTrendIndicator)
+                    {
+                        float trendDelta = data.LapToLapDelta;
+                        
+                        // Only show trend if we have meaningful data (not first few laps)
+                        if (data.CurrentLap >= 5 && Math.Abs(trendDelta) >= 0.01f)
                         {
-                            lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                            // Format: +0.15 or -0.10
+                            string sign = trendDelta >= 0 ? "+" : "";
+                            l5TrendText.Text = $"{sign}{trendDelta:F2}";
+                            
+                            // Color: Negative (using less) = Teal (good), Positive (using more) = Orange (bad)
+                            l5TrendText.Foreground = trendDelta < 0 
+                                ? CachedBrushes.Teal    // Improving efficiency (using less fuel)
+                                : CachedBrushes.Orange; // Worsening efficiency (using more fuel)
+                            
+                            l5TrendText.Visibility = Visibility.Visible;
                         }
-                    }
-                    else
-                    {
-                        lastLapText.Text = "--";
-                        lastLapText.Foreground = _brushGray;
-                        if (lastLapTrendArrow != null)
+                        else
                         {
-                            lastLapTrendArrow.Visibility = Visibility.Collapsed;
+                            l5TrendText.Visibility = Visibility.Collapsed;
                         }
                     }
                 }
-
-                _prevFuelUsedLastLap = data.FuelUsedLastLap;
-                _prevLapToLapDelta = data.LapToLapDelta;
-            }
-
-            // L5 average (show -- if no data yet) - Phase 3.2: Only update if changed
-            if (HasChanged(data.AvgFuelPerLap_L5, _prevAvgFuelPerLap_L5))
-            {
-                var l5AvgText = FindName("L5AvgText") as TextBlock;
-                if (l5AvgText != null)
+                else
                 {
-                    if (data.AvgFuelPerLap_L5 > 0)
+                    l5AvgText.Text = "--";
+                    l5AvgText.Foreground = CachedBrushes.Gray;
+                    
+                    if (l5TrendText != null)
                     {
-                        l5AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L5)}";
-                        l5AvgText.Foreground = _brushTeal;
-                    }
-                    else
-                    {
-                        l5AvgText.Text = "--";
-                        l5AvgText.Foreground = _brushGray;
+                        l5TrendText.Visibility = Visibility.Collapsed;
                     }
                 }
-                _prevAvgFuelPerLap_L5 = data.AvgFuelPerLap_L5;
             }
 
-            // L10 average (optional, show -- if no data yet) - Phase 3.2: Only update if changed
-            if (HasChanged(data.AvgFuelPerLap_L10, _prevAvgFuelPerLap_L10))
+            // Fuel Range (Min-Max) - replaces L10/SESSION
+            var rangeText = FindName("RangeText") as TextBlock;
+            if (rangeText != null)
             {
-                var l10AvgText = FindName("L10AvgText") as TextBlock;
-                if (l10AvgText != null)
+                if (data.MinFuelPerLap > 0 && data.MaxFuelPerLap > 0)
                 {
-                    if (data.AvgFuelPerLap_L10 > 0)
-                    {
-                        l10AvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_L10)}";
-                        l10AvgText.Foreground = _brushTeal;
-                    }
-                    else
-                    {
-                        l10AvgText.Text = "--";
-                        l10AvgText.Foreground = _brushGray;
-                    }
+                    rangeText.Text = $"{data.MinFuelPerLap:F2}-{data.MaxFuelPerLap:F2}";
+                    rangeText.Foreground = CachedBrushes.Teal; // Primary teal color
                 }
-                _prevAvgFuelPerLap_L10 = data.AvgFuelPerLap_L10;
+                else
+                {
+                    rangeText.Text = "--";
+                    rangeText.Foreground = CachedBrushes.Gray;
+                }
             }
 
-            // Session average (optional, show -- if no data yet) - Phase 3.2: Only update if changed
-            if (HasChanged(data.AvgFuelPerLap_Session, _prevAvgFuelPerLap_Session))
+            // Laps remaining (1 decimal for precision without clutter, show -- if no data yet)
+            var lapsRemainingText = FindName("LapsRemainingText") as TextBlock;
+            if (lapsRemainingText != null)
             {
-                var sessionAvgText = FindName("SessionAvgText") as TextBlock;
-                if (sessionAvgText != null)
+                if (data.LapsRemaining > 0 && data.AvgFuelPerLap_L5 > 0)
                 {
-                    if (data.AvgFuelPerLap_Session > 0)
-                    {
-                        sessionAvgText.Text = $"{FormatFuelValue(data.AvgFuelPerLap_Session)}";
-                        sessionAvgText.Foreground = _brushTeal;
-                    }
-                    else
-                    {
-                        sessionAvgText.Text = "--";
-                        sessionAvgText.Foreground = _brushGray;
-                    }
+                    lapsRemainingText.Text = data.LapsRemaining.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+                    lapsRemainingText.Foreground = GetLapsRemainingColor(data.LapsRemaining);
                 }
-                _prevAvgFuelPerLap_Session = data.AvgFuelPerLap_Session;
+                else
+                {
+                    lapsRemainingText.Text = "--";
+                    lapsRemainingText.Foreground = CachedBrushes.Gray;
+                }
             }
 
-            // Laps remaining (1 decimal for precision without clutter, show -- if no data yet) - Phase 3.2: Only update if changed
-            if (HasChanged(data.LapsRemaining, _prevLapsRemaining))
-            {
-                var lapsRemainingText = FindName("LapsRemainingText") as TextBlock;
-                if (lapsRemainingText != null)
-                {
-                    if (data.LapsRemaining > 0 && data.AvgFuelPerLap_L5 > 0)
-                    {
-                        lapsRemainingText.Text = data.LapsRemaining.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
-                        lapsRemainingText.Foreground = GetLapsRemainingColor(data.LapsRemaining);
-                    }
-                    else
-                    {
-                        lapsRemainingText.Text = "--";
-                        lapsRemainingText.Foreground = _brushGray;
-                    }
-                }
-                _prevLapsRemaining = data.LapsRemaining;
-            }
-
-            // Fuel needed to finish (TO GO) - shows liters needed to complete race/session
-            // FUEL NEED: Shows total fuel needed for race or 5-lap reference (not delta/remaining)
+            // Fuel to add at next pit stop - shows amount to FINISH RACE (matches iRacing)
             var canFinishText = FindName("CanFinishText") as TextBlock;
             if (canFinishText != null)
             {
                 // Show if we have lap data, regardless of session type
                 if (data.AvgFuelPerLap_L5 > 0)
                 {
-                    float fuelNeeded;
+                    float fuelToAdd;
 
                     if (data.RaceLapsRemaining > 0)
                     {
-                        // RACE mode: Show fuel needed to finish (includes race laps + buffer + 0.3L sputtering threshold)
-                        fuelNeeded = data.FuelNeededToFinish;
+                        // RACE mode: Calculate fuel needed to FINISH race from current position
+                        // This matches iRacing's "Add: X.XL" display
+                        float fuelNeededToFinish = data.FuelNeededToFinish;  // Total fuel needed to finish
+                        fuelToAdd = Math.Max(0, fuelNeededToFinish - data.CurrentFuel);  // How much MORE we need
+                        
+                        // Round up to nearest 0.5L for safety (iRacing does this too)
+                        fuelToAdd = (float)Math.Ceiling(fuelToAdd * 2) / 2;
                     }
                     else
                     {
-                        // QUALIFYING/PRACTICE mode: Show total fuel for 5-lap reference (not confusing delta)
-                        fuelNeeded = data.AvgFuelPerLap_L5 * 5;
+                        // QUALIFYING/PRACTICE mode: Show total fuel for 5-lap reference
+                        fuelToAdd = data.AvgFuelPerLap_L5 * 5;
                     }
 
-                    canFinishText.Text = $"{FormatFuelValue(fuelNeeded)}";
+                    canFinishText.Text = $"{FormatFuelValue(fuelToAdd)}";
 
-                    // Color based on whether we have enough fuel
-                    // Compare current fuel to needed fuel
-                    canFinishText.Foreground = data.CurrentFuel >= fuelNeeded ? _brushTeal : _brushRed;
+                    // Color: teal if reasonable amount, orange if very high (more than double current fuel)
+                    canFinishText.Foreground = fuelToAdd > (data.CurrentFuel * 2) ? CachedBrushes.Orange : CachedBrushes.Teal;
                 }
                 else
                 {
                     canFinishText.Text = "--";
-                    canFinishText.Foreground = _brushGray;
+                    canFinishText.Foreground = CachedBrushes.Gray;
                 }
             }
-
-            // iRacing delta - REMOVED per user request (not needed, causes confusion)
 
             // Pit fuel amount (optional) - show in all session types
             // FIXED: Don't show label if near finish, don't use RefuelCount for label (it's historical pit stops)
@@ -692,7 +708,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     {
                         // Very close to finish - hide PIT field (will finish on current fuel or already too late)
                         pitFuelText.Text = "--";
-                        pitFuelText.Foreground = _brushGray;
+                        pitFuelText.Foreground = CachedBrushes.Gray;
                     }
                     else if (fuelNeeded > 0)
                     {
@@ -700,23 +716,23 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                         pitFuelText.Text = $"{FormatFuelValue(fuelNeeded)}";
 
                         // Simplified color coding: Red (<2 laps), Orange (≥2 laps)
-                        pitFuelText.Foreground = data.LapsRemaining < 2.0f ? _brushRed : _brushOrange;
+                        pitFuelText.Foreground = data.LapsRemaining < LayoutConstants.URGENT_LAPS_THRESHOLD ? CachedBrushes.Red : CachedBrushes.Orange;
                     }
                     else
                     {
                         // Can finish without stop - show "OK" in green
                         pitFuelText.Text = "OK";
-                        pitFuelText.Foreground = _brushGreen;
+                        pitFuelText.Foreground = CachedBrushes.Green;
                     }
                 }
                 else
                 {
                     pitFuelText.Text = "--";  // No data yet
-                    pitFuelText.Foreground = _brushGray;
+                    pitFuelText.Foreground = CachedBrushes.Gray;
                 }
             }
 
-            // Pit window countdown (Phase 5.C Enhancement) - shows intelligent pit window with earliest/optimal/latest laps
+            // Pit window countdown - shows intelligent pit window with earliest/optimal/latest laps
             var pitWindowText = FindName("PitWindowText") as TextBlock;
             if (pitWindowText != null)
             {
@@ -726,77 +742,60 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                                         data.PitWindowEnd > 0 &&
                                         data.PitWindowStart <= data.PitWindowEnd; // CRITICAL: Reject inverted windows
 
-                // Phase 5.C: Enhanced pit window display with multi-lap ranges
+                // Enhanced pit window display with multi-lap ranges
                 if (hasValidPitWindow)
                 {
-                    // Show pit window range if we have Phase 5.B data
+                    // Show pit window range
                     int currentLap = data.CurrentLap;
                     int lapsUntilWindow = Math.Max(0, data.PitWindowStart - currentLap);
                     int lapsUntilOptimal = Math.Max(0, data.OptimalPitLap - currentLap);
 
+                    // Always show the window range with optimal lap highlighted
+                    // Format: "L8-12 (opt L10)" or "L8-12 (NOW at L9)"
+                    
                     // Color coding based on urgency
                     if (currentLap >= data.PitWindowStart && currentLap <= data.PitWindowEnd)
                     {
-                        // IN OPTIMAL WINDOW - Green
-                        pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} (NOW)";
-                        pitWindowText.Foreground = _brushGreenDark;
+                        // IN OPTIMAL WINDOW - Green - Show where we are in window
+                        pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} (NOW L{currentLap})";
+                        pitWindowText.Foreground = CachedBrushes.GreenDark;
                     }
                     else if (currentLap < data.PitWindowStart)
                     {
-                        // BEFORE WINDOW - Teal (shows laps until window opens)
-                        pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} ({lapsUntilWindow}L)";
-                        pitWindowText.Foreground = _brushTeal;
+                        // BEFORE WINDOW - Teal - Show optimal lap in window
+                        pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} (opt L{data.OptimalPitLap})";
+                        pitWindowText.Foreground = CachedBrushes.Teal;
                     }
                     else if (currentLap > data.PitWindowEnd && currentLap < data.LatestPitLap)
                     {
                         // AFTER OPTIMAL BUT BEFORE LATEST - Orange (getting urgent)
                         int lapsUntilLatest = data.LatestPitLap - currentLap;
-                        pitWindowText.Text = $"Late ({lapsUntilLatest}L left)";
-                        pitWindowText.Foreground = _brushOrange;
+                        pitWindowText.Text = $"Late L{data.LatestPitLap} ({lapsUntilLatest}L left)";
+                        pitWindowText.Foreground = CachedBrushes.Orange;
                     }
                     else if (currentLap >= data.LatestPitLap)
                     {
                         // PAST LATEST - Red (critical)
-                        pitWindowText.Text = $"CRITICAL (L{data.LatestPitLap})";
-                        pitWindowText.Foreground = _brushRed;
+                        pitWindowText.Text = $"CRITICAL L{data.LatestPitLap}";
+                        pitWindowText.Foreground = CachedBrushes.Red;
                     }
                     else
                     {
-                        // Fallback: Show optimal lap
-                        pitWindowText.Text = $"L{data.OptimalPitLap} ({lapsUntilOptimal}L)";
-                        pitWindowText.Foreground = _brushCyan;
+                        // Fallback: Show window with optimal lap
+                        pitWindowText.Text = $"L{data.PitWindowStart}-{data.PitWindowEnd} (opt L{data.OptimalPitLap})";
+                        pitWindowText.Foreground = CachedBrushes.Cyan;
                     }
                 }
-                // Fallback: Show laps remaining if Phase 5.B data not available or invalid
-                else if (data.LapsRemaining > 0 && data.AvgFuelPerLap_L5 > 0)
-                {
-                    // Hide PIT IN if very close to finish (<0.6L remaining or <0.3 laps)
-                    bool nearFinish = data.CurrentFuel < 0.6f || data.LapsRemaining < 0.3f;
-
-                    if (nearFinish)
-                    {
-                        // Too close to finish - hide field
-                        pitWindowText.Text = "--";
-                        pitWindowText.Foreground = _brushGray;
-                    }
-                    else
-                    {
-                        // Show laps remaining until fuel runs out (1 decimal for precision without clutter)
-                        pitWindowText.Text = data.LapsRemaining.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
-
-                        // Simplified color coding: Red (<2 laps), Orange (≥2 laps)
-                        pitWindowText.Foreground = data.LapsRemaining < 2.0f ? _brushRed : _brushOrange;
-                    }
-                }
+                // Fallback: Show "---" if pit window data not available or invalid
                 else
                 {
-                    // No valid data yet
-                    pitWindowText.Text = "--";
-                    pitWindowText.Foreground = _brushGray;
+                    // No valid pit window data (practice/qualifying, early in race, or no fuel data)
+                    pitWindowText.Text = "---";
+                    pitWindowText.Foreground = CachedBrushes.Gray;
                 }
             }
             
-            // Phase 5D: Pit exit position prediction (Option C - inline with PIT WINDOW)
+            // Pit exit position prediction (inline with PIT WINDOW)
             var pitExitPositionText = FindName("PitExitPositionText") as TextBlock;
             if (pitExitPositionText != null)
             {
@@ -807,11 +806,11 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 
                 if (showPitExit)
                 {
-                    // Format with confidence icon: "↳ Exit P12 🟢: 4s to #14, 10s from #9"
+                    // Format abbreviated: "↳ P12 | +4s #14 | -10s #9" or "↳ P12 🟢 | +4s #14 | -10s #9"
                     string confidenceIcon = !string.IsNullOrEmpty(data.PitExitConfidenceIcon) 
                         ? $" {data.PitExitConfidenceIcon}" 
                         : "";
-                    pitExitPositionText.Text = $"↳ Exit P{data.PitExitPosition}{confidenceIcon}: {data.PitExitGapDescription}";
+                    pitExitPositionText.Text = $"↳ P{data.PitExitPosition}{confidenceIcon} | {data.PitExitGapDescription}";
                     pitExitPositionText.Visibility = Visibility.Visible;
                 }
                 else
@@ -839,28 +838,23 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 }
             }
 
-            // Fuel pressure (optional) - Show bar value with color coding only (percentage removed per user request) - Phase 3.2: Only update if changed
-            if (HasChanged(data.FuelPressure, _prevFuelPressure) || HasChanged(data.FuelPressureDropPct, _prevFuelPressureDropPct))
+            // Fuel pressure (optional) - Show bar value with color coding only
+            var pressureText = FindName("PressureText") as TextBlock;
+            if (pressureText != null)
             {
-                var pressureText = FindName("PressureText") as TextBlock;
-                if (pressureText != null)
-                {
-                    // Show pressure value only (no percentage - it's broken and unnecessary for visual display)
-                    pressureText.Text = $"{data.FuelPressure:F2} bar";
+                // Show pressure value only (no percentage - it's broken and unnecessary for visual display)
+                pressureText.Text = $"{data.FuelPressure:F2} bar";
 
-                    // Color coding based on pressure drop (Enhanced Phase 2.1)
-                    // Critical: >20% drop (red, imminent sputtering)
-                    // Warning: 10-20% drop (orange, low fuel risk)
-                    // Normal: <10% drop (green, safe)
-                    pressureText.Foreground = data.FuelPressureDropPct switch
-                    {
-                        > 20f => _brushRed,      // Red - Critical
-                        > 10f => _brushOrange,   // Orange - Warning
-                        _ => _brushGreen         // Green - Normal
-                    };
-                }
-                _prevFuelPressure = data.FuelPressure;
-                _prevFuelPressureDropPct = data.FuelPressureDropPct;
+                // Color coding based on pressure drop
+                // Critical: >20% drop (red, imminent sputtering)
+                // Warning: 10-20% drop (orange, low fuel risk)
+                // Normal: <10% drop (green, safe)
+                pressureText.Foreground = data.FuelPressureDropPct switch
+                {
+                    > 20f => CachedBrushes.Red,      // Red - Critical
+                    > 10f => CachedBrushes.Orange,   // Orange - Warning
+                    _ => CachedBrushes.Green         // Green - Normal
+                };
             }
 
             // Update sparklines
@@ -869,12 +863,22 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             // Handle blinking for critical fuel
             ManageBlinking(data.LapsRemaining);
 
-            // Phase 3: Update fuel saving display
+            // Update new UI elements
+            UpdateFuelSavingBadge(data);
+            UpdateStrategyRecommendation(data);
+
+            // Update fuel saving display
             UpdateFuelSavingDisplay(data);
+
+            // Update live lap delta display
+            UpdateLapDeltaDisplay(data);
+
+            // Update historical confidence display
+            UpdateHistoricalConfidenceDisplay(data);
         }
 
         /// <summary>
-        /// Update Phase 3 fuel saving display elements
+        /// Update fuel saving display elements
         /// </summary>
         private void UpdateFuelSavingDisplay(FuelData data)
         {
@@ -885,7 +889,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             // User wants it to stay visible when "Show pit strategy section" is toggled on
             bool showFuelSaving = settings.FuelWidget_ShowPitStrategy;
 
-            // Find all Phase 3 UI elements
+            // Find all fuel saving UI elements
             var fuelSavingHeader = FindName("FuelSavingHeader") as TextBlock;
             var fuelSavingTargetGrid = FindName("FuelSavingTargetGrid") as Grid;
             var fuelSavingLiftGrid = FindName("FuelSavingLiftGrid") as Grid;
@@ -902,7 +906,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
 
             if (!showFuelSaving)
             {
-                // Hide all Phase 3 elements
+                // Hide all fuel saving UI elements
                 if (fuelSavingHeader != null) fuelSavingHeader.Visibility = Visibility.Collapsed;
                 if (fuelSavingTargetGrid != null) fuelSavingTargetGrid.Visibility = Visibility.Collapsed;
                 if (fuelSavingLiftGrid != null) fuelSavingLiftGrid.Visibility = Visibility.Collapsed;
@@ -974,16 +978,16 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     if (!data.CanSaveFuelToFinish)
                     {
                         // Target is impossible (>15% reduction needed) - always show warning
-                        rect.Fill = _brushOrangeDark;
+                        rect.Fill = CachedBrushes.OrangeDark;
                     }
                     else
                     {
                         // Target is achievable - color by progress: Green (≥70%), Yellow (30-70%), Red (<30%)
                         rect.Fill = data.SavingProgress switch
                         {
-                            >= 70f => _brushGreenDark,
-                            >= 30f => _brushYellowLight,
-                            _ => _brushRedLight
+                            >= 70f => CachedBrushes.GreenDark,
+                            >= 30f => CachedBrushes.YellowLight,
+                            _ => CachedBrushes.RedLight
                         };
                     }
                 }
@@ -994,7 +998,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             if (currentSavingRateText != null)
             {
                 currentSavingRateText.Text = $"{data.CurrentSavingRate:F2}L/lap";
-                currentSavingRateText.Foreground = data.SavingProgress >= 50f ? _brushGreenDark : _brushOrange;
+                currentSavingRateText.Foreground = data.SavingProgress >= 50f ? CachedBrushes.GreenDark : CachedBrushes.Orange;
             }
 
             // Update saving progress percentage
@@ -1039,10 +1043,10 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 {
                     strategicAlertBorder.Background = data.AlertSeverity switch
                     {
-                        3 => _brushRedDark,          // Critical - Dark Red
-                        2 => _brushOrangeDark,       // Warning - Orange
-                        1 => _brushGreenVeryDark,    // Info - Dark Green
-                        _ => _brushGrayDark          // None - Gray
+                        3 => CachedBrushes.RedDark,          // Critical - Dark Red
+                        2 => CachedBrushes.OrangeDark,       // Warning - Orange
+                        1 => CachedBrushes.GreenVeryDark,    // Info - Dark Green
+                        _ => CachedBrushes.GrayDark          // None - Gray
                     };
                 }
             }
@@ -1052,7 +1056,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 if (fuelSavingAlertRow != null) fuelSavingAlertRow.Height = new GridLength(0);
             }
 
-            // Show optimal pit lap if enabled and available (Phase 5.C Enhanced Display)
+            // Show optimal pit lap if enabled and available
             if (settings.FuelWidget_OptimalPitCalculator && data.OptimalPitLap > 0)
             {
                 if (optimalPitLapGrid != null) optimalPitLapGrid.Visibility = Visibility.Visible;
@@ -1071,7 +1075,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     
                     if (isPitLapReachable)
                     {
-                        // Phase 5.C: Enhanced display with context
+                        // Enhanced display with context
                         string pitText = $"Lap {data.OptimalPitLap}";
                         
                         // Add fuel criticality indicator if critical (<2 laps)
@@ -1113,15 +1117,15 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                     // Color based on urgency
                     if (data.FuelCriticalityScore > 95f)
                     {
-                        optimalPitLapText.Foreground = _brushRed; // Red - Critical
+                        optimalPitLapText.Foreground = CachedBrushes.Red; // Red - Critical
                     }
                     else if (data.FuelCriticalityScore > 80f)
                     {
-                        optimalPitLapText.Foreground = _brushOrange; // Orange - Urgent
+                        optimalPitLapText.Foreground = CachedBrushes.Orange; // Orange - Urgent
                     }
                     else
                     {
-                        optimalPitLapText.Foreground = _brushCyan; // Cyan - Strategic
+                        optimalPitLapText.Foreground = CachedBrushes.Cyan; // Cyan - Strategic
                     }
                 }
 
@@ -1145,6 +1149,241 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         }
 
         /// <summary>
+        /// Update live lap delta display
+        /// Shows real-time delta vs target pace for fuel saving
+        /// </summary>
+        private void UpdateLapDeltaDisplay(FuelData data)
+        {
+            var settings = AppSettings.Instance;
+            
+            // Only show when pit strategy (including fuel saving) is enabled and delta is valid
+            bool showLapDelta = settings.FuelWidget_ShowPitStrategy && 
+                               data.LiveDeltaValid && 
+                               data.NeedsFuelSaving;
+            
+            var lapDeltaGrid = FindName("LapDeltaGrid") as Grid;
+            var lapDeltaText = FindName("LapDeltaText") as TextBlock;
+            
+            if (!showLapDelta)
+            {
+                if (lapDeltaGrid != null) lapDeltaGrid.Visibility = Visibility.Collapsed;
+                return;
+            }
+            
+            if (lapDeltaGrid != null) lapDeltaGrid.Visibility = Visibility.Visible;
+            
+            if (lapDeltaText != null)
+            {
+                // Format delta: +0.5s (faster), -0.3s (slower)
+                string sign = data.LiveDeltaToTarget >= 0 ? "+" : "";
+                lapDeltaText.Text = $"{sign}{data.LiveDeltaToTarget:F1}s";
+                
+                // Color code: Green (faster/on pace), Orange (slightly slow), Red (too slow)
+                if (data.LiveDeltaToTarget >= -0.1f)
+                {
+                    // On pace or faster
+                    lapDeltaText.Foreground = CachedBrushes.GreenDark;
+                }
+                else if (data.LiveDeltaToTarget >= -0.5f)
+                {
+                    // Slightly slower but manageable
+                    lapDeltaText.Foreground = CachedBrushes.YellowLight;
+                }
+                else
+                {
+                    // Too slow - won't meet fuel saving target
+                    lapDeltaText.Foreground = CachedBrushes.RedLight;
+                }
+                
+                // Update tooltip with prediction
+                if (data.PredictedLapTime > 0)
+                {
+                    int predMin = (int)(data.PredictedLapTime / 60);
+                    float predSec = data.PredictedLapTime % 60;
+                    string predDeltaSign = data.PredictedDelta >= 0 ? "+" : "";
+                    lapDeltaText.ToolTip = $"Live: {sign}{data.LiveDeltaToTarget:F1}s\n" +
+                                          $"Predicted lap: {predMin}:{predSec:00.1} ({predDeltaSign}{data.PredictedDelta:F1}s)";
+                }
+            }
+        }
+
+        /// <summary>
+        /// Update historical confidence display
+        /// Shows when predictions are based on historical data
+        /// </summary>
+        private void UpdateHistoricalConfidenceDisplay(FuelData data)
+        {
+            var historicalText = FindName("HistoricalConfidenceText") as TextBlock;
+            
+            if (historicalText == null)
+                return;
+            
+            // Only show when using historical predictions with meaningful confidence
+            bool showHistorical = data.UsingHistoricalPredictions && 
+                                 data.HistoricalConfidence > 0 && 
+                                 data.HistoricalSessionCount > 0;
+            
+            if (!showHistorical)
+            {
+                historicalText.Visibility = Visibility.Collapsed;
+                return;
+            }
+            
+            historicalText.Visibility = Visibility.Visible;
+            
+            // Format: "📊 Historical: 85% (12 sessions)"
+            historicalText.Text = $"📊 Historical: {data.HistoricalConfidence:F0}% ({data.HistoricalSessionCount} sessions)";
+            
+            // Color code by confidence level
+            if (data.HistoricalConfidence >= 80f)
+            {
+                // High confidence - green
+                historicalText.Foreground = CachedBrushes.GreenDark;
+            }
+            else if (data.HistoricalConfidence >= 50f)
+            {
+                // Medium confidence - teal
+                historicalText.Foreground = CachedBrushes.Teal;
+            }
+            else
+            {
+                // Low confidence - gray
+                historicalText.Foreground = CachedBrushes.Gray;
+            }
+        }
+
+        /// <summary>
+        /// Update fuel saving mode badge
+        /// </summary>
+        private void UpdateFuelSavingBadge(FuelData data)
+        {
+            var settings = AppSettings.Instance;
+            var fuelSavingBadge = FindName("FuelSavingBadge") as Border;
+            var fuelSavingDeltaText = FindName("FuelSavingDeltaText") as TextBlock;
+
+            if (fuelSavingBadge == null || fuelSavingDeltaText == null)
+                return;
+
+            // Check setting FIRST - if disabled, hide immediately
+            if (!settings.FuelWidget_ShowSavingBadge)
+            {
+                fuelSavingBadge.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // Only show if fuel saving is actually needed
+            if (!data.NeedsFuelSaving || data.FuelSavingTarget <= 0)
+            {
+                fuelSavingBadge.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // Setting is enabled AND fuel saving is needed - show it
+            fuelSavingBadge.Visibility = Visibility.Visible;
+            fuelSavingDeltaText.Text = $"-{data.FuelSavingTarget:F2}L/lap needed";
+
+            // Color based on achievability
+            fuelSavingBadge.Background = data.CanSaveFuelToFinish
+                ? CachedBrushes.GreenDark
+                : CachedBrushes.RedDark;
+        }
+
+        /// <summary>
+        /// Update strategy recommendation display
+        /// </summary>
+        private void UpdateStrategyRecommendation(FuelData data)
+        {
+            var settings = AppSettings.Instance;
+            var strategyRecommendationText = FindName("StrategyRecommendationText") as TextBlock;
+
+            if (strategyRecommendationText == null)
+                return;
+
+            // Only show if setting is enabled and in race mode
+            if (!settings.FuelWidget_ShowStrategyRecommendation || data.RaceLapsRemaining <= 0)
+            {
+                // Visibility already handled by UpdateFieldVisibility
+                return;
+            }
+
+            // Determine active strategy with dynamic display
+            string strategyText = "";
+            Brush strategyColor = CachedBrushes.Teal; // Primary teal as default
+
+            int currentLap = data.CurrentLap;
+            int lapsRemaining = data.RaceLapsRemaining;
+            
+            if (data.CanFinishWithoutStop)
+            {
+                // NO-STOP - Show confidence with laps to spare
+                float lapsToSpare = data.LapsRemaining - lapsRemaining;
+                if (lapsToSpare > 2)
+                {
+                    strategyText = $"✓ NO-STOP (+{lapsToSpare:F1}L)";
+                    strategyColor = CachedBrushes.Green;
+                }
+                else if (lapsToSpare > 0.5f)
+                {
+                    strategyText = "✓ NO-STOP (tight)";
+                    strategyColor = CachedBrushes.Teal;
+                }
+                else
+                {
+                    strategyText = "⚠ NO-STOP (margin!)";
+                    strategyColor = CachedBrushes.Orange;
+                }
+            }
+            else if (data.OptimalPitLap > 0)
+            {
+                // 1-STOP strategy - show lap countdown and context
+                int lapsUntilPit = data.OptimalPitLap - currentLap;
+                
+                if (currentLap >= data.PitWindowStart && currentLap <= data.PitWindowEnd)
+                {
+                    // In pit window - urgent
+                    strategyText = $"⭐ PIT NOW (L{data.PitWindowStart}-{data.PitWindowEnd})";
+                    strategyColor = CachedBrushes.Green;
+                }
+                else if (lapsUntilPit > 0 && lapsUntilPit <= 3)
+                {
+                    // Approaching pit window
+                    strategyText = $"⭐ 1-STOP in {lapsUntilPit}L (L{data.OptimalPitLap})";
+                    strategyColor = CachedBrushes.Teal;
+                }
+                else if (lapsUntilPit > 0)
+                {
+                    // Future pit stop
+                    strategyText = $"⭐ 1-STOP @ L{data.OptimalPitLap}";
+                    strategyColor = CachedBrushes.Teal;
+                }
+                else if (currentLap > data.OptimalPitLap)
+                {
+                    // Missed optimal - show urgency
+                    int lapsOverdue = currentLap - data.OptimalPitLap;
+                    strategyText = $"⚠ PIT OVERDUE +{lapsOverdue}L";
+                    strategyColor = CachedBrushes.Orange;
+                }
+            }
+            else
+            {
+                // No strategy available - early race
+                if (currentLap < 3)
+                {
+                    strategyText = "⏳ Calculating...";
+                    strategyColor = CachedBrushes.Gray;
+                }
+                else
+                {
+                    strategyText = "⚠ STRATEGY TBD";
+                    strategyColor = CachedBrushes.Orange;
+                }
+            }
+
+            strategyRecommendationText.Text = strategyText;
+            strategyRecommendationText.Foreground = strategyColor;
+        }
+
+        /// <summary>
         /// Live update timer tick - updates live fuel consumption sparkline every 0.5s
         /// Always updates to show activity, even when stationary
         /// </summary>
@@ -1154,6 +1393,27 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             var fuelData = _fuelCalculator.CurrentData;
             if (fuelData == null)
                 return;
+
+            // Check if sparkline min/max should be reset (every 10 laps or 30 minutes)
+            bool shouldReset = false;
+            if (fuelData.CurrentLap > 0 && fuelData.CurrentLap - _lastResetLap >= SPARKLINE_RESET_LAP_INTERVAL)
+            {
+                shouldReset = true;
+                _lastResetLap = fuelData.CurrentLap;
+            }
+            else if ((DateTime.UtcNow - _lastResetTime).TotalMinutes >= SPARKLINE_RESET_TIME_MINUTES)
+            {
+                shouldReset = true;
+                _lastResetTime = DateTime.UtcNow;
+            }
+
+            if (shouldReset)
+            {
+                _liveSparklineMinEver = float.MaxValue;
+                _liveSparklineMaxEver = float.MinValue;
+                _lapSparklineMinEver = float.MaxValue;
+                _lapSparklineMaxEver = float.MinValue;
+            }
 
             // Calculate fuel consumed since last update (absolute difference)
             float fuelDelta = 0f;
@@ -1180,7 +1440,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             if (liveSparkline != null && liveCanvas != null && _liveUsageHistory.Count > 1)
             {
                 UpdateSparklineGuideLines("Live", liveCanvas);
-                RenderSparklineAmplified(liveSparkline, liveCanvas, _liveUsageHistory);
+                RenderSparkline(liveSparkline, liveCanvas, _liveUsageHistory, amplificationFactor: 50f);
                 UpdateSparklineMinMax("LiveMinText", "LiveMaxText", _liveUsageHistory, ref _liveSparklineMinEver, ref _liveSparklineMaxEver);
             }
         }
@@ -1216,8 +1476,8 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             if (lapSparkline != null && lapCanvas != null && _lapUsageHistory.Count >= 1)
             {
                 UpdateSparklineGuideLines("Lap", lapCanvas);
-                // Use special rendering for gradual lap buildup
-                RenderLapSparkline(lapSparkline, lapCanvas, _lapUsageHistory);
+                // Use gradual width buildup for lap sparkline (1/5th per lap until full at 5 laps)
+                RenderSparkline(lapSparkline, lapCanvas, _lapUsageHistory, amplificationFactor: 1.0f, useGradualWidth: true);
                 if (_lapUsageHistory.Count > 1)
                 {
                     UpdateSparklineMinMax("LapMinText", "LapMaxText", _lapUsageHistory, ref _lapSparklineMinEver, ref _lapSparklineMaxEver);
@@ -1291,106 +1551,38 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         }
 
         /// <summary>
-        /// Render sparkline from data points
+        /// Unified sparkline rendering with support for amplification and gradual width buildup
         /// </summary>
-        private void RenderSparkline(System.Windows.Shapes.Polyline polyline, System.Windows.Controls.Canvas canvas, System.Collections.Generic.Queue<float> dataPoints)
+        /// <param name="polyline">Polyline element to render into</param>
+        /// <param name="canvas">Canvas containing the polyline</param>
+        /// <param name="dataPoints">Data points to render</param>
+        /// <param name="amplificationFactor">Optional amplification factor (e.g., 50.0 for live fuel sparkline). Use 1.0 for no amplification.</param>
+        /// <param name="useGradualWidth">If true, width grows 1/5th per data point until full at 5 points (lap sparkline behavior)</param>
+        private void RenderSparkline(System.Windows.Shapes.Polyline polyline, System.Windows.Controls.Canvas canvas, 
+            System.Collections.Generic.Queue<float> dataPoints, float amplificationFactor = 1.0f, bool useGradualWidth = false)
         {
-            if (canvas.ActualWidth == 0 || canvas.ActualHeight == 0)
+            if (polyline == null || canvas == null || dataPoints == null || canvas.ActualWidth == 0 || canvas.ActualHeight == 0)
                 return;
 
-            var points = new System.Windows.Media.PointCollection();
             var data = dataPoints.ToArray();
-            
-            if (data.Length < 2)
-                return;
-
-            // Find min/max for scaling
-            float min = float.MaxValue;
-            float max = float.MinValue;
-            foreach (var value in data)
-            {
-                if (value < min) min = value;
-                if (value > max) max = value;
-            }
-
-            // Add small padding to prevent flat lines
-            float range = max - min;
-            if (range < 0.01f) range = 0.01f;
-            
-            // Generate points (left to right)
-            double width = canvas.ActualWidth;
-            double height = canvas.ActualHeight;
-            double xStep = width / (data.Length - 1);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                double x = i * xStep;
-                // Invert Y so higher values are at top
-                double y = height - ((data[i] - min) / range * (height - 4)) - 2; // 2px padding
-                points.Add(new System.Windows.Point(x, y));
-            }
-
-            polyline.Points = points;
-        }
-
-        /// <summary>
-        /// Renders sparkline with amplified values for better visibility of small fuel consumption
-        /// </summary>
-        private void RenderSparklineAmplified(System.Windows.Shapes.Polyline polyline, Canvas canvas, Queue<float> dataQueue, float amplificationFactor = 50f)
-        {
-            if (polyline == null || canvas == null || dataQueue == null || dataQueue.Count < 2)
-                return;
-
-            var data = dataQueue.ToArray();
-
-            // Amplify data for visual rendering (but labels show actual values via separate UpdateSparklineMinMax call)
-            float[] amplifiedData = data.Select(x => x * amplificationFactor).ToArray();
-            
-            // Calculate range for amplified values (min fixed at 0)
-            float min = 0;
-            float max = amplifiedData.Max();
-            float range = max - min;
-
-            if (range < 0.001f) range = 0.001f; // Prevent div by zero
-
             var points = new System.Windows.Media.PointCollection();
 
-            // Generate points (left to right)
-            double width = canvas.ActualWidth;
-            double height = canvas.ActualHeight;
-            double xStep = width / (amplifiedData.Length - 1);
-
-            for (int i = 0; i < amplifiedData.Length; i++)
-            {
-                double x = i * xStep;
-                // Invert Y so higher values are at top
-                double y = height - ((amplifiedData[i] - min) / range * (height - 4)) - 2; // 2px padding
-                points.Add(new System.Windows.Point(x, y));
-            }
-
-            polyline.Points = points;
-        }
-
-        /// <summary>
-        /// Renders lap sparkline with gradual width buildup (grows 1/5th per lap until full at 5 laps)
-        /// </summary>
-        private void RenderLapSparkline(System.Windows.Shapes.Polyline polyline, Canvas canvas, Queue<float> dataQueue)
-        {
-            if (canvas.ActualWidth == 0 || canvas.ActualHeight == 0)
+            if (data.Length < 1)
                 return;
 
-            var data = dataQueue.ToArray();
-            var points = new System.Windows.Media.PointCollection();
-
             double width = canvas.ActualWidth;
             double height = canvas.ActualHeight;
 
-            // Calculate the usable width based on lap count (1/5th per lap, max at 5 laps)
-            int lapCount = data.Length;
-            double widthFraction = Math.Min(lapCount / 5.0, 1.0); // 0.2, 0.4, 0.6, 0.8, 1.0
-            double usableWidth = width * widthFraction;
+            // Calculate usable width (gradual width for lap sparkline, full width otherwise)
+            double usableWidth = width;
+            if (useGradualWidth)
+            {
+                int lapCount = data.Length;
+                double widthFraction = Math.Min(lapCount / 5.0, 1.0); // 0.2, 0.4, 0.6, 0.8, 1.0
+                usableWidth = width * widthFraction;
+            }
 
-            // Special case: Only 1 lap - show horizontal middle line at 1/5th width
+            // Special case: Only 1 data point - show horizontal middle line
             if (data.Length == 1)
             {
                 double midY = height / 2.0;
@@ -1400,20 +1592,33 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
                 return;
             }
 
-            // 2+ laps: Render sparkline within the growing width
-            float min = data.Min();
-            float max = data.Max();
+            // Apply amplification if specified (for live fuel sparkline)
+            float[] processedData = amplificationFactor != 1.0f 
+                ? data.Select(x => x * amplificationFactor).ToArray() 
+                : data;
+
+            // Find min/max for scaling
+            float min = amplificationFactor != 1.0f ? 0 : float.MaxValue; // Amplified sparklines use 0 as floor
+            float max = float.MinValue;
+
+            foreach (var value in processedData)
+            {
+                if (amplificationFactor == 1.0f && value < min) min = value;
+                if (value > max) max = value;
+            }
+
+            // Add small padding to prevent flat lines
             float range = max - min;
-            if (range < 0.01f) range = 0.01f; // Prevent flat lines
+            if (range < 0.01f) range = 0.01f;
 
-            // Calculate x-step within the usable width
-            double xStep = usableWidth / (data.Length - 1);
+            // Generate points (left to right)
+            double xStep = usableWidth / (processedData.Length - 1);
 
-            for (int i = 0; i < data.Length; i++)
+            for (int i = 0; i < processedData.Length; i++)
             {
                 double x = i * xStep;
                 // Invert Y so higher values are at top
-                double y = height - ((data[i] - min) / range * (height - 4)) - 2; // 2px padding
+                double y = height - ((processedData[i] - min) / range * (height - 4)) - 2; // 2px padding
                 points.Add(new System.Windows.Point(x, y));
             }
 
@@ -1421,62 +1626,35 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         }
 
         /// <summary>
-        /// Format fuel value with 2 decimals (no unit)
+        /// Format fuel value with 2 decimals (no unit) - delegates to TelemetryCalculations
         /// </summary>
         private string FormatFuelValue(float value)
         {
-            return value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+            return TelemetryCalculations.FormatFuelValue(value);
         }
 
         /// <summary>
-        /// Format fuel value with unit (L or gal) - 2 decimals
+        /// Format fuel value with unit (L or gal) - delegates to TelemetryCalculations
         /// </summary>
         private string FormatFuel(float value)
         {
-            if (AppSettings.Instance.UseMetric)
-            {
-                return $"{value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}L";
-            }
-            else
-            {
-                // Convert liters to gallons (1 L = 0.264172 gal)
-                double gallons = value * 0.264172;
-                return $"{gallons.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}gal";
-            }
-        }
-        
-        /// <summary>
-        /// Format fuel delta with sign and unit
-        /// </summary>
-        private string FormatFuelDelta(float value)
-        {
-            string sign = value >= 0 ? "+" : "";
-            if (AppSettings.Instance.UseMetric)
-            {
-                return $"{sign}{value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}L";
-            }
-            else
-            {
-                double gallons = value * 0.264172;
-                return $"{sign}{gallons.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}gal";
-            }
+            return TelemetryCalculations.FormatFuel(value, AppSettings.Instance.UseMetric);
         }
 
         /// <summary>
-        /// Format tank size with unit (L or gal) - 2 decimals
+        /// Format fuel delta with sign and unit - delegates to TelemetryCalculations
+        /// </summary>
+        private string FormatFuelDelta(float value)
+        {
+            return TelemetryCalculations.FormatFuelDelta(value, AppSettings.Instance.UseMetric);
+        }
+
+        /// <summary>
+        /// Format tank size with unit (L or gal) - delegates to TelemetryCalculations
         /// </summary>
         private string FormatTankSize(float value)
         {
-            if (AppSettings.Instance.UseMetric)
-            {
-                return $"{value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}L";
-            }
-            else
-            {
-                // Convert liters to gallons (1 L = 0.264172 gal)
-                double gallons = value * 0.264172;
-                return $"{gallons.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}gal";
-            }
+            return TelemetryCalculations.FormatFuel(value, AppSettings.Instance.UseMetric);
         }
 
         /// <summary>
@@ -1486,10 +1664,10 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             return fuelPct switch
             {
-                >= 0.5f => _brushTeal,      // Teal (good)
-                >= 0.25f => _brushYellow,   // Yellow
-                >= 0.1f => _brushOrange,    // Orange
-                _ => _brushRed              // Red
+                >= 0.5f => CachedBrushes.Teal,      // Teal (good)
+                >= 0.25f => CachedBrushes.Yellow,   // Yellow
+                >= 0.1f => CachedBrushes.Orange,    // Orange
+                _ => CachedBrushes.Red              // Red
             };
         }
 
@@ -1500,8 +1678,8 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             return laps switch
             {
-                >= 2.0f => _brushOrange,    // Orange - SOON
-                _ => _brushRed              // Red - URGENT
+                >= LayoutConstants.URGENT_LAPS_THRESHOLD => CachedBrushes.Orange,    // Orange - SOON
+                _ => CachedBrushes.Red                                                 // Red - URGENT
             };
         }
 
@@ -1512,9 +1690,9 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
         {
             return delta switch
             {
-                > 0.5f => _brushTeal,       // Teal (we have more)
-                > -0.5f => _brushYellow,    // Yellow (close)
-                _ => _brushOrange           // Orange (we have less)
+                > 0.5f => CachedBrushes.Teal,       // Teal (we have more)
+                > -0.5f => CachedBrushes.Yellow,    // Yellow (close)
+                _ => CachedBrushes.Orange           // Orange (we have less)
             };
         }
 
@@ -1580,27 +1758,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget
             // Clear sparkline data
             _liveUsageHistory.Clear();
             _lapUsageHistory.Clear();
-            _lastUsageValue = 0f;
             _lastCurrentFuel = 0f;
-
-            // Reset dirty field tracking (Phase 3.2)
-            _prevCurrentFuel = -1f;
-            _prevFuelPct = -1f;
-            _prevFuelUsedLastLap = -1f;
-            _prevLapToLapDelta = float.NaN;
-            _prevAvgFuelPerLap_L5 = -1f;
-            _prevAvgFuelPerLap_L10 = -1f;
-            _prevAvgFuelPerLap_Session = -1f;
-            _prevLapsRemaining = -1f;
-            _prevFuelNeededToFinish = -1f;
-            _prevFuelToAddAtPit = -1f;
-            _prevFuelPressure = -1f;
-            _prevFuelPressureDropPct = -1f;
-            _prevCurrentLap = -1;
-            _prevOptimalPitLap = -1;
-            _prevPitWindowStart = -1;
-            _prevPitWindowEnd = -1;
-            _prevLatestPitLap = -1;
         }
 
         /// <summary>

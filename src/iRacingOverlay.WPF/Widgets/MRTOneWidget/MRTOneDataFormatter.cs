@@ -182,9 +182,22 @@ public static class MRTOneDataFormatter
             TelemetryField.LastLapTime when value is float time => FormatLapTime(time),
             TelemetryField.BestLapTime when value is float time => FormatLapTime(time),
             TelemetryField.CurrentLapTime when value is float time => FormatLapTime(time),
+            
+            // Delta times (with +/- sign)
+            TelemetryField.DeltaToBestLap when value is float delta => 
+                delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
+            TelemetryField.DeltaToSessionBest when value is float delta => 
+                delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
+            
+            // Track position percentage
+            TelemetryField.LapDistPct when value is float pct => $"{(pct * 100):F1}%",
 
-            // Lap numbers
+            // Lap numbers and counts
             TelemetryField.LapNumber when value is int lap => $"{lap}",
+            TelemetryField.IncidentCount when value is int count => $"{count}x",
+            
+            // Session time remaining (format as mm:ss or hh:mm:ss)
+            TelemetryField.SessionTimeRemaining when value is double seconds => FormatSessionTime(seconds),
 
             // Default fallback
             _ => value?.ToString() ?? "-"
@@ -201,6 +214,24 @@ public static class MRTOneDataFormatter
         int minutes = (int)(seconds / 60);
         float remainingSeconds = seconds % 60;
         return $"{minutes}:{remainingSeconds:00.000}";
+    }
+    
+    /// <summary>
+    /// Format session time remaining from seconds to readable format
+    /// Shows mm:ss for times under 1 hour, hh:mm:ss for longer sessions
+    /// </summary>
+    private static string FormatSessionTime(double seconds)
+    {
+        if (seconds <= 0) return "0:00";
+        
+        int hours = (int)(seconds / 3600);
+        int minutes = (int)((seconds % 3600) / 60);
+        int secs = (int)(seconds % 60);
+        
+        if (hours > 0)
+            return $"{hours}:{minutes:00}:{secs:00}";
+        else
+            return $"{minutes}:{secs:00}";
     }
 
     /// <summary>
@@ -273,10 +304,16 @@ public static class MRTOneDataFormatter
             TelemetryField.Position => "POS",
             TelemetryField.ClassPosition => "CLS",
             TelemetryField.LapNumber => "LAP",
+            TelemetryField.LapDistPct => "TRACK %",
+            TelemetryField.IncidentCount => "INC",
 
             TelemetryField.LastLapTime => "LAST",
             TelemetryField.BestLapTime => "BEST",
             TelemetryField.CurrentLapTime => "CUR",
+            TelemetryField.DeltaToBestLap => "Δ BEST",
+            TelemetryField.DeltaToSessionBest => "Δ SES",
+            
+            TelemetryField.SessionTimeRemaining => "TIME",
 
             TelemetryField.ABSActive => "",  // No label (value is "ABS")
             TelemetryField.TractionControl => "TC",

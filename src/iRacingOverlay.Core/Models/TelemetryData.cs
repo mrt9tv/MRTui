@@ -89,6 +89,19 @@ public class TelemetryData
     public bool PitSpeedLimiterActive { get; set; }
 
     /// <summary>
+    /// Time required for mandatory pit repairs in seconds
+    /// Value > 0 indicates damage that MUST be repaired before continuing
+    /// </summary>
+    public float PitRepairLeft { get; set; }
+
+    /// <summary>
+    /// Time required for optional pit repairs in seconds
+    /// Value > 0 indicates damage that CAN be repaired (but not mandatory)
+    /// Used to assess damage severity for strategic decisions
+    /// </summary>
+    public float PitOptRepairLeft { get; set; }
+
+    /// <summary>
     /// Clutch input (0.0 to 1.0)
     /// </summary>
     public float Clutch { get; set; }
@@ -192,8 +205,42 @@ public class TelemetryData
     
     /// <summary>
     /// Total laps in race/session (0 for time-based sessions)
+    /// DEPRECATED: Use SessionLapsTotal instead (more reliable from SDK)
     /// </summary>
     public int SessionLaps { get; set; }
+
+    /// <summary>
+    /// DIRECT FROM SDK: Total laps in the race (replaces buggy SessionLaps)
+    /// More reliable than SessionLaps which sometimes returns 0
+    /// </summary>
+    public int SessionLapsTotal { get; set; }
+
+    /// <summary>
+    /// DIRECT FROM SDK: Laps remaining in the race
+    /// No calculation needed - SDK provides this value directly!
+    /// </summary>
+    public int SessionLapsRemain { get; set; }
+
+    /// <summary>
+    /// DIRECT FROM SDK: Total session time in seconds
+    /// Used with SessionTimeRemain for timed session calculations
+    /// </summary>
+    public float SessionTimeTotal { get; set; }
+
+    /// <summary>
+    /// ACTUAL leading lap in the race (highest lap number any car is currently on)
+    /// This is THE CRITICAL VALUE for race end calculations.
+    /// Different from race leader's lap (P1 by position) when leader is lapped.
+    /// Example: In a 20-lap race, if P1 is on lap 18 but P2 is on lap 19 (unlapping), this is 19.
+    /// </summary>
+    public int ActualLeadingLapNumber { get; set; }
+
+    /// <summary>
+    /// Race leader's current lap number (P1 by position, not necessarily highest lap)
+    /// May be lower than ActualLeadingLapNumber if race leader is lapped.
+    /// Used for position-based strategy (what lap is the winner on?).
+    /// </summary>
+    public int RaceLeaderLapNumber { get; set; }
 
     /// <summary>
     /// Water temperature in Celsius
@@ -459,6 +506,28 @@ public class TelemetryData
     /// </summary>
     public float FogLevel { get; set; }
     
+    /// <summary>
+    /// Track surface wetness level enum
+    /// 0 = Dry, 1 = MostlyDry, 2 = VeryLightlyWet, 3 = LightlyWet, 
+    /// 4 = ModeratelyWet, 5 = VeryWet, 6 = ExtremelyWet
+    /// </summary>
+    public int TrackWetness { get; set; }
+    
+    /// <summary>
+    /// Wind speed in m/s
+    /// </summary>
+    public float WindVel { get; set; }
+    
+    /// <summary>
+    /// Wind direction in radians
+    /// </summary>
+    public float WindDir { get; set; }
+    
+    /// <summary>
+    /// Whether rain tires are allowed (track declared wet)
+    /// </summary>
+    public bool WeatherDeclaredWet { get; set; }
+    
     // Motion & Orientation
     /// <summary>
     /// World-space X velocity in m/s
@@ -623,6 +692,12 @@ public class TelemetryData
     /// Used for pit exit position display (e.g., "4s ahead of #14")
     /// </summary>
     public Dictionary<int, string>? CarIdxToCarNumber { get; set; }
+
+    /// <summary>
+    /// Map of CarIdx to Driver Name string (from YAML DriverInfo:Drivers)
+    /// Used for competitor intelligence (e.g., "Lewis Hamilton pitting on Lap 12")
+    /// </summary>
+    public Dictionary<int, string>? CarIdxToDriverName { get; set; }
 
     /// <summary>
     /// Player heading angle in radians (yaw around Z-axis)

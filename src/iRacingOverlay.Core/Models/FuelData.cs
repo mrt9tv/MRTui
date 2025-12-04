@@ -296,7 +296,15 @@ public class FuelData
     
     /// <summary>Last update timestamp</summary>
     public DateTime LastUpdate { get; set; }
-    
+
+    /// <summary>
+    /// Indicates if this update is a lightweight "live" update (mid-lap projection)
+    /// vs a full strategic calculation (lap completion).
+    /// Live updates: Projected values based on current lap progress
+    /// Strategic updates: Full recalculation with complete lap history
+    /// </summary>
+    public bool IsLiveUpdate { get; set; }
+
     // ===== PHASE 3: FUEL SAVING MODE =====
     
     /// <summary>Target fuel reduction per lap to finish without additional pit stop (L/lap)</summary>
@@ -354,6 +362,57 @@ public class FuelData
     
     /// <summary>Alert severity level (0=None, 1=Info, 2=Warning, 3=Critical)</summary>
     public int AlertSeverity { get; set; }
+    
+    /// <summary>Historical fuel usage context (comparison to past sessions)</summary>
+    public string? HistoricalContext { get; set; }
+    
+    // ===== PHASE 7: REAL-TIME LAP DELTA TRACKING =====
+    
+    /// <summary>Live delta to target pace (positive = faster, negative = slower)</summary>
+    public float LiveDeltaToTarget { get; set; }
+    
+    /// <summary>Predicted final lap time based on current pace</summary>
+    public float PredictedLapTime { get; set; }
+    
+    /// <summary>Predicted delta vs target (positive = will be faster, negative = will be slower)</summary>
+    public float PredictedDelta { get; set; }
+    
+    /// <summary>Current lap progress (0.0 to 1.0)</summary>
+    public float LapProgress { get; set; }
+    
+    /// <summary>Is live delta valid and displayable</summary>
+    public bool LiveDeltaValid { get; set; }
+    
+    // ===== PHASE 8: TIRE STRATEGY INTEGRATION =====
+    
+    /// <summary>Tire life remaining (0.0 to 1.0, 1.0 = new tires)</summary>
+    public float TireLifeRemaining { get; set; }
+    
+    /// <summary>Laps remaining on current tires before change needed</summary>
+    public int TireLapsRemaining { get; set; }
+    
+    /// <summary>Recommended lap to pit for tires</summary>
+    public int TirePitLap { get; set; }
+    
+    /// <summary>Maximum tire wear rate (percent per lap)</summary>
+    public float MaxTireWearRate { get; set; }
+    
+    /// <summary>Combined fuel+tire pit lap (optimal for both)</summary>
+    public int CombinedPitLap { get; set; }
+    
+    /// <summary>Whether combined fuel+tire stop is recommended</summary>
+    public bool CombinedStopRecommended { get; set; }
+    
+    // ===== PHASE 9: HISTORICAL LEARNING =====
+    
+    /// <summary>Are we using historical predictions for this session?</summary>
+    public bool UsingHistoricalPredictions { get; set; }
+    
+    /// <summary>Confidence in historical prediction (0-100)</summary>
+    public float HistoricalConfidence { get; set; }
+    
+    /// <summary>Number of past sessions used for prediction</summary>
+    public int HistoricalSessionCount { get; set; }
     
     // ===== PHASE 5: ENHANCED PIT STRATEGY OPTIMIZATION =====
     

@@ -53,7 +53,48 @@ public static class TelemetryCalculations
     
     
     // ===== FUEL CALCULATIONS =====
-    
+
+    /// <summary>
+    /// Format fuel value with unit (L or gal) - 2 decimals
+    /// </summary>
+    public static string FormatFuel(float liters, bool useMetric)
+    {
+        if (useMetric)
+        {
+            return $"{liters.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}L";
+        }
+        else
+        {
+            float gallons = UnitConversions.LitersToGallons(liters);
+            return $"{gallons.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}gal";
+        }
+    }
+
+    /// <summary>
+    /// Format fuel value without unit - 2 decimals
+    /// </summary>
+    public static string FormatFuelValue(float value)
+    {
+        return value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Format fuel delta with sign and unit (+/- notation)
+    /// </summary>
+    public static string FormatFuelDelta(float liters, bool useMetric)
+    {
+        string sign = liters >= 0 ? "+" : "";
+        if (useMetric)
+        {
+            return $"{sign}{liters.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}L";
+        }
+        else
+        {
+            float gallons = UnitConversions.LitersToGallons(liters);
+            return $"{sign}{gallons.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}gal";
+        }
+    }
+
     /// <summary>
     /// Calculate average fuel consumption per lap
     /// </summary>

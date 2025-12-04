@@ -36,7 +36,14 @@ public class FuelAveragingService
             return result;
         }
         
-        result.HasSufficientData = validLaps.Count >= 2;
+        // FIX #4: Reduced requirement from 2 to 1 valid lap for faster feedback
+        // REASONING:
+        //   - With 1 lap completed, we can provide initial fuel consumption estimate
+        //   - Out-laps are automatically excluded from averages (filtered in calculation methods)
+        //   - This gives immediate feedback instead of waiting for multiple laps
+        //   - Averages will improve as more laps are recorded
+        // NOTE: Out-laps are excluded from CALCULATIONS, not from the count requirement
+        result.HasSufficientData = validLaps.Count >= 1;
         
         // 1. Last lap average (most recent completed lap)
         result.Last = validLaps.LastOrDefault()?.FuelUsed ?? 0f;
@@ -90,26 +97,28 @@ public class FuelAveragingService
     
     /// <summary>
     /// Calculate Last 5 laps average with exponential weighting
-    /// Most recent lap has highest influence (27%), smoothly decreasing to 17% for 5th lap
+    /// Most recent lap has higher influence, smoothly decreasing for older laps
+    /// OPTIMIZED: Reduced weighting spread to minimize single-lap outlier impact
     /// </summary>
     private float CalculateL5Weighted(List<FuelLapHistory> validLaps)
     {
         var last5 = validLaps.TakeLast(5).ToList();
         if (last5.Count == 0)
             return 0f;
-        
+
         // Use exponential weighting: most recent lap has highest influence
-        // Weights: [1.0, 1.15, 1.3, 1.45, 1.6] (oldest to newest)
-        // Reduced from 0.2f to 0.15f to limit outlier influence
+        // Weights: [1.0, 1.10, 1.20, 1.30, 1.40] (oldest to newest)
+        // OPTIMIZED: Reduced from 0.15f to 0.10f to reduce sensitivity to single outlier laps
+        // This balances responsiveness with stability
         float totalWeight = 0f;
         float weightedSum = 0f;
         for (int i = 0; i < last5.Count; i++)
         {
-            float weight = 1.0f + (i * 0.15f);
+            float weight = 1.0f + (i * 0.10f);
             weightedSum += last5[i].FuelUsed * weight;
             totalWeight += weight;
         }
-        
+
         return weightedSum / totalWeight;
     }
     

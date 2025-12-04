@@ -407,28 +407,7 @@
 
                             <Separator Background="#404040" Margin="0,10"/>
 
-                            <!-- Standalone Pit Strategy Window -->
-                            <Grid Margin="0,10,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="🏁 Show Pit Strategy Window" 
-                                             FontSize="15"
-                                             FontWeight="SemiBold"
-                                             Foreground="{StaticResource TealPrimary}"
-                                             Margin="0,0,0,5"/>
-                                    <TextBlock Text="Multi-stint timeline, what-if scenarios, lap time projections"
-                                             Style="{StaticResource SettingDescriptionStyle}"/>
-                                </StackPanel>
-
-                                <CheckBox Grid.Column="1"
-                                        IsChecked="{Binding ShowPitStrategyWindow}"
-                                        Style="{StaticResource MRT.ToggleButton}"
-                                        VerticalAlignment="Center"/>
-                            </Grid>
+                            <!-- NOTE: Race Strategy Widget moved to Overlay Manager (Phase 10) -->
                         </StackPanel>
                     </Border>
                 </StackPanel>

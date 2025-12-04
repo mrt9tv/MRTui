@@ -20,37 +20,29 @@ public static class MRTOneFuelDisplay
     /// <param name="showStrategy">Whether to show pit strategy section</param>
     /// <returns>FuelDisplayResult with text, color, and visibility</returns>
     public static FuelDisplayResult GenerateFuelDisplay(FuelData? fuelData, bool showStrategy)
-    {
-        // DEBUG: Log entry conditions
-        System.Diagnostics.Debug.WriteLine($"[MRTOne] GenerateFuelDisplay called: fuelData={(fuelData != null ? "exists" : "NULL")}, showStrategy={showStrategy}");
-        
-        // Early exit if no data
-        if (fuelData == null)
         {
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] FuelData is NULL - hiding display");
-            return new FuelDisplayResult("", Colors.Transparent, false);
-        }
-        
-        // DEBUG: Log fuel data state
-        System.Diagnostics.Debug.WriteLine($"[MRTOne] FuelData state: CurrentFuel={fuelData.CurrentFuel:F2}, TankCapacity={fuelData.TankCapacity:F1}, HasSufficientData={fuelData.HasSufficientData}");
-        
-        // Show minimal info if we have fuel but not enough data for averages
-        // OR if tank capacity is known but fuel reading isn't available yet
-        if (!fuelData.HasSufficientData && (fuelData.CurrentFuel > 0 || fuelData.TankCapacity > 0))
-        {
-            string minimalText = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n(Need more laps for calculations)";
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] Showing minimal display (insufficient data)");
-            return new FuelDisplayResult(minimalText, Color.FromArgb(150, 255, 255, 255), true);
-        }
+            // Early exit if no data
+            if (fuelData == null)
+            {
+                return new FuelDisplayResult("", Colors.Transparent, false);
+            }
 
-        // Only show full display if we have sufficient data
-        if (!fuelData.HasSufficientData)
-        {
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] Hiding display (no sufficient data and no current fuel)");
-            return new FuelDisplayResult("", Colors.Transparent, false);
-        }
-        
-        System.Diagnostics.Debug.WriteLine($"[MRTOne] Showing full fuel display");
+            // Show minimal info if we have fuel but not enough data for averages
+            // OR if tank capacity is known but fuel reading isn't available yet
+            if (!fuelData.HasSufficientData && (fuelData.CurrentFuel > 0 || fuelData.TankCapacity > 0))
+            {
+                // DIAGNOSTIC: Show lap counts to help debug "stuck" values
+                string diagnostic = $" (Lap {fuelData.CurrentLap}, Valid: {fuelData.LapsCompleted})";
+                string minimalText = $"FUEL: {fuelData.CurrentFuel:F2}L / {fuelData.TankCapacity:F1}L\n" +
+                                   $"Need more valid laps for calculations{diagnostic}";
+                return new FuelDisplayResult(minimalText, Color.FromArgb(150, 255, 255, 255), true);
+            }
+
+            // Only show full display if we have sufficient data
+            if (!fuelData.HasSufficientData)
+            {
+                return new FuelDisplayResult("", Colors.Transparent, false);
+            }
 
         // Build comprehensive fuel display
         var fuelText = new StringBuilder();
@@ -166,22 +158,30 @@ public static class MRTOneFuelDisplay
         float currentFuel = fuelData.CurrentFuel;
 
         // NO-STOP Strategy (if possible)
-        if (fuelData.CanFinishWithoutStop)
+        bool canFinish = fuelData.CanFinishWithoutStop;
+        if (canFinish)
         {
             strategy.AppendLine($"✓ NO-STOP: Current fuel sufficient ({fuelData.FuelDeltaToFinish:+0.0;-0.0}L surplus)");
         }
 
         // 1-STOP Strategy
+        // FIX #5: Always show 1-stop strategy, even when can finish without stop
+        // This provides strategic options (tires, undercut, safety margin)
         float lapsOnCurrentFuel = currentFuel / avgFuel;
         float lapsOnFullTank = tankCap / avgFuel;
+        int currentLap = fuelData.CurrentLap;
 
         if (lapsOnCurrentFuel + lapsOnFullTank >= totalLaps)
         {
             // Can finish with 1 stop
-            int optimalPitLap = (int)Math.Floor(lapsOnCurrentFuel);
-            int lapsAfterPit = totalLaps - optimalPitLap;
+            // FIX: Show actual lap number (currentLap + laps on fuel), not just lap count
+            int optimalPitLap = currentLap + (int)Math.Floor(lapsOnCurrentFuel);
+            int lapsAfterPit = totalLaps - (optimalPitLap - currentLap);  // Remaining laps after pit
             float fuelToAdd = lapsAfterPit * avgFuel;
-            strategy.AppendLine($"1-STOP: Pit @ L{optimalPitLap} → Add {fuelToAdd:F1}L");
+
+            // If can finish without stop, mark 1-stop as optional
+            string optionalTag = canFinish ? "(Optional for tires/strategy)" : "";
+            strategy.AppendLine($"1-STOP: Pit @ L{optimalPitLap} → Add {fuelToAdd:F1}L {optionalTag}");
         }
         else
         {
@@ -194,10 +194,11 @@ public static class MRTOneFuelDisplay
         {
             // Calculate optimal 2-stop windows
             float lapsPerStint = totalLaps / 3.0f; // Divide race into 3 stints
-            int firstPit = (int)Math.Min(lapsOnCurrentFuel, lapsPerStint);
+            // FIX: Show actual lap numbers, not lap counts
+            int firstPit = currentLap + (int)Math.Min(lapsOnCurrentFuel, lapsPerStint);
             int secondPit = firstPit + (int)lapsOnFullTank;
             float firstStopFuel = Math.Min(tankCap, lapsPerStint * avgFuel);
-            float secondStopFuel = Math.Min(tankCap, (totalLaps - secondPit) * avgFuel);
+            float secondStopFuel = Math.Min(tankCap, (totalLaps - (secondPit - currentLap)) * avgFuel);
             strategy.AppendLine($"2-STOP: L{firstPit} ({firstStopFuel:F1}L), L{secondPit} ({secondStopFuel:F1}L)");
         }
         else
@@ -213,9 +214,19 @@ public static class MRTOneFuelDisplay
         }
         else
         {
-            // Fallback: Calculate conservative pit lap if window not available
-            int conservativePitLap = (int)Math.Floor(lapsOnCurrentFuel * 0.9f);
-            strategy.AppendLine($"⚠ SAFE WINDOW: Pit by L{conservativePitLap} (90% fuel buffer)");
+            // FIX: Improved fallback - show actual lap number and respect race situation
+            if (canFinish)
+            {
+                // Can finish without stop - show optional pit window (mid-stint for tires/strategy)
+                int optionalPitLap = currentLap + (int)Math.Floor(lapsOnCurrentFuel * 0.5f);
+                strategy.AppendLine($"⚠ OPTIONAL PIT: L{optionalPitLap} (can finish without stop)");
+            }
+            else
+            {
+                // Must pit - show conservative lap with 10% safety buffer
+                int latestPitLap = currentLap + (int)Math.Floor(lapsOnCurrentFuel * 0.9f);
+                strategy.AppendLine($"⚠ MUST PIT BY: L{latestPitLap} (90% fuel buffer)");
+            }
         }
 
         return strategy.ToString();

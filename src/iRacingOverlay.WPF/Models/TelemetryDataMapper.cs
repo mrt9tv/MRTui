@@ -75,13 +75,15 @@ public static class TelemetryDataMapper
             TelemetryField.CurrentLapTime => data.CurrentLapTime,
             TelemetryField.DeltaToSessionBest => data.DeltaToSessionBest,
             TelemetryField.DeltaToBestLap => data.DeltaToBestLap,
+            TelemetryField.LapDistPct => data.LapDistPct,
             
             // Session
             TelemetryField.SessionTime => data.SessionTime,
             TelemetryField.SessionTimeRemaining => data.SessionTimeRemain,
-            TelemetryField.SessionLaps => 0, // TODO: Add to TelemetryData
-            TelemetryField.SessionLapsRemaining => 0, // TODO: Add to TelemetryData
+            TelemetryField.SessionLaps => data.SessionLaps, // Total laps in race/session (0 for time-based)
+            TelemetryField.SessionLapsRemaining => Math.Max(0, data.SessionLaps - data.Lap), // Remaining laps (0 if time-based or finished)
             TelemetryField.SessionNum => data.SessionNum,
+            TelemetryField.IncidentCount => data.PlayerCarMyIncidentCount,
             
             // Tires - Temperature (Using available temps)
             TelemetryField.TireTempLF => data.LFtempCL, 

@@ -59,7 +59,10 @@ public class TelemetryVariableDumper
                 {
                     var varHeaders = getVarHeadersMethod.Invoke(dataProvider, null);
                     _logger.LogInformation("Successfully called GetVarHeaders()");
-                    DumpVarHeaders(varHeaders, outputPath);
+                    if (varHeaders != null)
+                    {
+                        DumpVarHeaders(varHeaders, outputPath);
+                    }
                     return;
                 }
                 catch (Exception ex)
@@ -76,13 +79,19 @@ public class TelemetryVariableDumper
             {
                 var varHeaders = varHeadersField.GetValue(dataProvider);
                 _logger.LogInformation("Found _varHeaders field");
-                DumpVarHeaders(varHeaders, outputPath);
+                if (varHeaders != null)
+                {
+                    DumpVarHeaders(varHeaders, outputPath);
+                }
             }
             else if (varBufferField != null)
             {
                 var varBuffer = varBufferField.GetValue(dataProvider);
                 _logger.LogInformation("Found _varBuffer field");
-                DumpVarBuffer(varBuffer, outputPath);
+                if (varBuffer != null)
+                {
+                    DumpVarBuffer(varBuffer, outputPath);
+                }
             }
             else
             {

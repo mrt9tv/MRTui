@@ -73,14 +73,54 @@ public class AppSettings : INotifyPropertyChanged
     public bool FuelWidget_ShowBar { get; set; } = true;
 
     /// <summary>
-    /// Show Last 10 laps average
+    /// [OBSOLETE - Replaced by FuelWidget_ShowRange]
+    /// Show Last 10 laps average - removed to simplify display
     /// </summary>
+    [Obsolete("L10 display has been removed. Use FuelWidget_ShowRange instead.", false)]
     public bool FuelWidget_ShowL10 { get; set; } = false;
 
     /// <summary>
-    /// Show session average fuel consumption
+    /// [OBSOLETE - Replaced by FuelWidget_ShowRange]
+    /// Show session average fuel consumption - removed to simplify display
     /// </summary>
+    [Obsolete("SESSION display has been removed. Use FuelWidget_ShowRange instead.", false)]
     public bool FuelWidget_ShowSession { get; set; } = false;
+
+    /// <summary>
+    /// Show fuel range (min-max consumption) instead of L10/SESSION averages
+    /// Displays: "RANGE: 2.50-3.10L" showing consumption variance
+    /// </summary>
+    public bool FuelWidget_ShowRange { get; set; } = true;
+
+    /// <summary>
+    /// Show fuel saving mode badge when active
+    /// Displays: "🔋 SAVING: -0.15L/lap needed"
+    /// </summary>
+    public bool FuelWidget_ShowSavingBadge { get; set; } = true;
+
+    /// <summary>
+    /// Show pit strategy recommendation (1-STOP/2-STOP/NO-STOP) with optimal lap
+    /// Displays: "⭐ STRATEGY: 1-STOP @ L12"
+    /// </summary>
+    public bool FuelWidget_ShowStrategyRecommendation { get; set; } = false;
+
+    /// <summary>
+    /// Show live fuel consumption sparkline (5 seconds at 0.5s interval)
+    /// Displays: Real-time fuel flow sparkline labeled "LIVE (5s)"
+    /// </summary>
+    public bool FuelWidget_ShowLiveSparkline { get; set; } = true;
+
+    /// <summary>
+    /// Show last 5 laps fuel consumption sparkline
+    /// Displays: Historical lap fuel usage labeled "LAPS (5)"
+    /// </summary>
+    public bool FuelWidget_ShowLapSparkline { get; set; } = true;
+
+    /// <summary>
+    /// Show fuel consumption trend indicator on L5 average
+    /// Displays: "+0.15" (using more, orange) or "-0.10" (improving, teal) next to L5 value
+    /// </summary>
+    public bool FuelWidget_ShowTrendIndicator { get; set; } = true;
 
     /// <summary>
     /// [OBSOLETE - Legacy setting, no longer used]
@@ -132,7 +172,7 @@ public class AppSettings : INotifyPropertyChanged
     /// <summary>
     /// Show fuel pressure field (PRESS) within pit strategy section
     /// </summary>
-    public bool FuelWidget_ShowFuelPressure { get; set; } = true;
+    public bool FuelWidget_ShowFuelPressure { get; set; } = false;
 
     // Fuel Widget Strategy
     /// <summary>
@@ -174,7 +214,7 @@ public class AppSettings : INotifyPropertyChanged
     /// <summary>
     /// Show trend arrows for lap-to-lap deltas
     /// </summary>
-    public bool FuelWidget_ShowTrends { get; set; } = false;
+    public bool FuelWidget_ShowTrends { get; set; } = true;
 
     // Fuel Widget Position
     /// <summary>

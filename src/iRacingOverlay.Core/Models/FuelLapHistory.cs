@@ -32,7 +32,10 @@ public class FuelLapHistory
     
     /// <summary>Formation/warmup lap (exclude from averages)</summary>
     public bool IsFormationLap { get; set; }
-    
+
+    /// <summary>Out-lap after pit stop (first lap after leaving pits)</summary>
+    public bool IsOutLap { get; set; }
+
     /// <summary>Incomplete lap (don't use for calculations)</summary>
     public bool IsIncompleteLap { get; set; }
     
@@ -64,7 +67,8 @@ public class FuelLapHistory
     public bool IsPaceLap => SessionState == 3;
     
     /// <summary>Whether this lap should be included in average calculations</summary>
-    public bool IsValidForAveraging => !WasPitLap && !IsFormationLap && !IsIncompleteLap && !IsPaceLap && FuelUsed > 0;
+    /// <remarks>Out-laps are excluded because they typically use less fuel (cool tires, careful driving)</remarks>
+    public bool IsValidForAveraging => !WasPitLap && !IsFormationLap && !IsIncompleteLap && !IsPaceLap && !IsOutLap && FuelUsed > 0;
     
     /// <summary>Whether this lap is a green flag lap for green-only averaging</summary>
     public bool IsGreenFlagLap => FlagStatus == LapFlagStatus.Green && IsValidForAveraging;

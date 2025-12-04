@@ -18,6 +18,11 @@ public class FuelCalculatorService
     private bool _wasOnPitRoadLastUpdate = false;
     private bool _justLeftPits = false;
     private int _lapsCompletedWhenProcessed = -1; // Prevent duplicate lap processing
+    private int _lastLoggedSessionLaps = -1; // Track last logged SessionLaps value to avoid spam logging
+
+    // FIX: Save fuel level BEFORE entering pit road to prevent refueling from contaminating lap calculations
+    private float _fuelBeforeEnteringPits = 0f;
+    private bool _pittedThisLap = false; // Track if we entered pit road during current lap
     
     // Stint tracking for StintAverage calculation
     private int _stintStartLapNumber = 0;  // Lap number when current stint started (after pit exit)
@@ -34,15 +39,22 @@ public class FuelCalculatorService
     // Fuel saving calculator (Phase 4: Service Splitting)
     private readonly FuelSavingCalculator _fuelSavingCalculator;
     
+    // Phase 7: Lap delta tracker
+    private readonly LapDeltaTracker _lapDeltaTracker;
+    
+    // Phase 9: Historical learning service
+    private readonly History.TelemetryHistoryService? _historyService;
+    private bool _historicalDataApplied = false;
+    
     // Delta tracking service (Phase 5: Service Splitting)
     private readonly DeltaTrackingService _deltaTrackingService;
     
     // Dynamic buffer calculator (Phase 6: Service Splitting)
     private readonly DynamicBufferCalculator _bufferCalculator;
     
-    // EMA (Exponential Moving Average) tracking
-    private float _emaValue = 0f;  // Current EMA value
-    private bool _emaInitialized = false;  // Whether EMA has been initialized with first lap
+    // EMA (Exponential Moving Average) tracking - REMOVED: No longer used, replaced by DeltaTrackingService
+    // private float _emaValue = 0f;  // Current EMA value
+    // private bool _emaInitialized = false;  // Whether EMA has been initialized with first lap
     // REMOVED: Fixed EMA_ALPHA constant - now calculated adaptively based on fuel consistency
     
     // Incident tracking for outlier detection
@@ -89,7 +101,14 @@ public class FuelCalculatorService
     // ENHANCEMENT: Dynamic pit entry detection (learns from first pit stop instead of hardcoded value)
     private float? _learnedPitEntryPct = null;  // Learned pit entry location (null = not yet learned)
     private bool _isPitEntryLearned = false;    // Whether pit entry has been learned this session
-    
+
+    // Live update throttling (Progressive Calculation - Option 3)
+    private int _liveUpdateCounter = 0;         // Counter for throttling live updates
+    private const int LIVE_UPDATE_THROTTLE = 10; // Fire event every 10th frame (60 Hz → 6 Hz)
+
+    // Pace lap detection fix: Track SessionState at lap START to catch laps that start in parade but end in racing
+    private int _sessionStateAtLapStart = 0;  // SessionState when current lap started (checked at lap completion)
+
     /// <summary>
     /// Initialize fuel calculator service with session persistence
     /// </summary>
@@ -100,8 +119,13 @@ public class FuelCalculatorService
         _outlierDetector = new FuelOutlierDetector();
         _pitStrategyService = new PitStrategyService();
         _fuelSavingCalculator = new FuelSavingCalculator(_persistenceService);
+        _lapDeltaTracker = new LapDeltaTracker();
         _deltaTrackingService = new DeltaTrackingService();
         _bufferCalculator = new DynamicBufferCalculator();
+        
+        // Phase 9: Initialize history service (load async in background)
+        _historyService = new History.TelemetryHistoryService();
+        _ = _historyService.LoadHistoryAsync(); // Fire and forget
     }
     
     /// <summary>
@@ -135,6 +159,9 @@ public class FuelCalculatorService
             _lastFuelLevel = telemetry.FuelLevel;
             CurrentData.StartingFuel = telemetry.FuelLevel;
             _isFirstUpdate = false;
+            
+            // Phase 9: Apply historical predictions at session start
+            ApplyHistoricalPredictions(telemetry);
         }
         
         // Update current state
@@ -148,10 +175,23 @@ public class FuelCalculatorService
         CurrentData.SessionState = telemetry.SessionState;  // Track session state for pace lap detection
         
         // Update session tracking info for PitStrategyWindow
-        CurrentData.CurrentLap = telemetry.LapsCompleted + 1; // LapsCompleted is 0-based, CurrentLap is 1-based
-        CurrentData.SessionLaps = telemetry.SessionLaps;
-        CurrentData.LapsCompleted = telemetry.LapsCompleted;
+        // FIXED: Trust SDK lap numbering directly (removed confusing 5% delay logic)
+        // SDK provides accurate lap numbers that increment at start/finish line (0% LapDistPct)
+        CurrentData.CurrentLap = telemetry.Lap; // Direct from SDK (1-based, increments at S/F line)
+        CurrentData.SessionLaps = telemetry.SessionLapsTotal; // FIX: Use SessionLapsTotal (SessionLaps is deprecated and always 0)
+        CurrentData.LapsCompleted = telemetry.LapsCompleted; // 0-based count of FINISHED laps
         CurrentData.CarClassId = telemetry.PlayerCarClass;
+
+        // CRITICAL DEBUG: Log SessionLaps on EVERY update for first 10 laps
+        if (telemetry.Lap <= 10)
+        {
+            if (telemetry.SessionLaps != _lastLoggedSessionLaps)
+            {
+                Console.WriteLine($"⚠️ CRITICAL: SessionLaps CHANGED to {telemetry.SessionLaps} at lap {telemetry.Lap}");
+                LogDebug($"⚠️ CRITICAL: SessionLaps={telemetry.SessionLaps} (was {_lastLoggedSessionLaps}) at lap {telemetry.Lap}");
+                _lastLoggedSessionLaps = telemetry.SessionLaps;
+            }
+        }
         
         // Set car-specific sputtering threshold (Enhanced Phase 2.1)
         CurrentData.FuelSputteringThreshold = FuelSputteringDatabase.GetSputteringThreshold(
@@ -164,31 +204,150 @@ public class FuelCalculatorService
         
         // FIX #3: Update lap completion context (race position awareness)
         UpdateLapCompletionContext(telemetry);
-        
-        // Determine session type and calculate race laps remaining
-        CurrentData.IsTimedSession = telemetry.SessionLaps == 0 || telemetry.SessionLaps == -1;
-        
+
+        // DEBUG: Always log for first 10 laps to diagnose issue
+        bool shouldDebugLog = telemetry.Lap <= 10;
+
+        // ===== SESSION TYPE DETECTION: Use SDK SessionLapsTotal directly =====
+        // USER INSIGHT: SDK provides SessionLapsTotal and SessionLapsRemain directly!
+        // NO MORE CALCULATING - just use what SDK gives us
+        //
+        // PRIORITY ORDER:
+        //   1. SessionLapsTotal > 0 → LAP-BASED (use SDK value directly)
+        //   2. SessionType="Race" → LAP-BASED
+        //   3. SessionTimeRemain > 0 → TIME-BASED
+
+        // FIX: Use SDK values directly instead of calculating
+        bool hasFixedLaps = telemetry.SessionLapsTotal > 0;
+        bool hasTimeLimit = telemetry.SessionTimeRemain > 0;
+        bool isRaceSession = telemetry.SessionType?.Equals("Race", StringComparison.OrdinalIgnoreCase) ?? false;
+
+        // SIMPLE: If SDK says we have a lap count, it's lap-based
+        bool isLapBasedRace = hasFixedLaps || isRaceSession;
+        CurrentData.IsTimedSession = !isLapBasedRace;
+
+        // DIRECT SDK OVERRIDE: If SessionLapsRemain is available, use it immediately
+        if (!CurrentData.IsTimedSession && telemetry.SessionLapsRemain > 0)
+        {
+            CurrentData.RaceLapsRemaining = telemetry.SessionLapsRemain;
+            if (shouldDebugLog)
+                LogDebug($"✅ USING SDK SessionLapsRemain={telemetry.SessionLapsRemain} directly (no calculation needed)");
+        }
+
+        if (shouldDebugLog)
+        {
+            Console.WriteLine($"📊 [LAP {telemetry.Lap}] SessionType={telemetry.SessionType}, SessionLaps={telemetry.SessionLaps}, IsTimedSession={CurrentData.IsTimedSession}");
+            if (isRaceSession && telemetry.SessionLaps == 0)
+                Console.WriteLine($"   ✅ RACE SESSION: SessionType=Race detected → Using LAP-BASED calculation (even though SessionLaps=0)");
+        }
+
         if (CurrentData.IsTimedSession)
         {
             // Time-based session: Calculate laps from time remaining
-            // Use average lap time from lap history if available
-            if (CurrentData.AverageLapTime > 0 && CurrentData.SessionTimeRemaining > 0)
+            // Use average lap time from lap history if available, fallback to SDK LastLapTime
+            float lapTimeToUse = CurrentData.AverageLapTime;
+
+            // FIX #2: EARLY FALLBACK for circular dependency in timed sessions
+            // PROBLEM: CalculateAverages() needs valid laps → but needs RaceLapsRemaining > 0 → which needs AverageLapTime
+            // SOLUTION: Use SDK's LastLapTime immediately on first update to break the circular dependency
+            if (lapTimeToUse <= 0 && telemetry.LapLastLapTime > 0)
             {
-                CurrentData.EstimatedLapsFromTime = (float)(CurrentData.SessionTimeRemaining / CurrentData.AverageLapTime);
-                // Keep fractional laps for smoother tracking - round UP for safety margin in calculations
-                CurrentData.RaceLapsRemaining = (int)Math.Ceiling(CurrentData.EstimatedLapsFromTime);
+                lapTimeToUse = telemetry.LapLastLapTime;
+                // CRITICAL: Update CurrentData.AverageLapTime so it's available for strategy calculations
+                // This breaks the circular dependency by providing immediate lap time estimate
+                CurrentData.AverageLapTime = lapTimeToUse;
+                if (shouldDebugLog)
+                {
+                    LogDebug($"[TIME_SESSION] Using SDK LastLapTime fallback: {lapTimeToUse:F1}s (breaking circular dependency)");
+                }
+            }
+            
+            if (lapTimeToUse > 0 && CurrentData.SessionTimeRemaining > 0)
+            {
+                CurrentData.EstimatedLapsFromTime = (float)(CurrentData.SessionTimeRemaining / lapTimeToUse);
+                // FIX: Use Math.Round instead of Ceiling to avoid overestimating by up to 1 lap
+                // Safety margin is handled by FuelBufferLaps in strategy calculations
+                CurrentData.RaceLapsRemaining = (int)Math.Round(CurrentData.EstimatedLapsFromTime, MidpointRounding.AwayFromZero);
+                
+                if (shouldDebugLog)
+                {
+                    Console.WriteLine($"⏰ TIME_SESSION: RaceLapsRemaining={CurrentData.RaceLapsRemaining} (from {CurrentData.SessionTimeRemaining:F0}s ÷ {lapTimeToUse:F1}s/lap)");
+                    LogDebug($"⏰ TIME_SESSION: RaceLapsRemaining={CurrentData.RaceLapsRemaining} (from {CurrentData.SessionTimeRemaining:F0}s ÷ {lapTimeToUse:F1}s/lap)");
+                }
             }
             else
             {
                 CurrentData.EstimatedLapsFromTime = 0;
                 CurrentData.RaceLapsRemaining = 0;
+                
+                if (shouldDebugLog)
+                {
+                    LogDebug($"[TIME_SESSION] Lap {telemetry.Lap} | NO DATA - AvgLapTime: {CurrentData.AverageLapTime:F1}s | SDK LastLapTime: {telemetry.LapLastLapTime:F1}s | TimeRemain: {CurrentData.SessionTimeRemaining:F1}s | RaceLapsRemaining: 0");
+                }
             }
         }
         else
         {
-            // Lap-based session: Use lap count (integer by nature)
-            CurrentData.RaceLapsRemaining = Math.Max(0, telemetry.SessionLaps - telemetry.LapsCompleted);
-            CurrentData.EstimatedLapsFromTime = CurrentData.RaceLapsRemaining; // Store as float for consistency
+            // ===== LAP-BASED SESSION: Fixed Laps Trump Time =====
+            // RULE: When SessionLaps > 0, use ONLY lap-based calculation
+            //       IGNORE SessionTimeRemain even if it shows 24 hours
+            // REASON: iRacing sessions often have both timers AND lap counts active
+            //         Lap count is the authoritative race end condition when set
+            //
+            // CALCULATION: Use ActualLeadingLapNumber (highest lap anyone is on)
+            //   - Race ends when ActualLeadingLapNumber reaches SessionLaps
+            //   - Player needs fuel for laps until THAT happens, not until they finish SessionLaps
+            //
+            // Example: 20-lap race, player on lap 5, leader on lap 7 (player is 2 laps down)
+            //   OLD: 20 - 4 = 16 laps (WRONG - player won't complete 16 more laps)
+            //   NEW: 20 - 7 = 13 laps (CORRECT - race ends in 13 laps when leader finishes lap 20)
+
+            int actualLeadingLap = telemetry.ActualLeadingLapNumber; // Highest lap any car is on
+            int raceFinishLap = telemetry.SessionLaps;               // Total laps in race (e.g., 35)
+
+            // CRITICAL FIX: Handle SessionLaps=0 in races (SDK sends lap count = 0 sometimes)
+            // This happens when iRacing doesn't populate SessionLaps even in lap-based races
+            // Fallback: Use a large number to indicate "unlimited" until we know the actual lap count
+            if (raceFinishLap == 0 && isRaceSession)
+            {
+                // Race with unknown lap count - set to very large number (indicates "unknown")
+                // The fuel calculation will handle the actual pit strategy based on fuel, not laps
+                raceFinishLap = 9999; // Placeholder for "unknown lap limit"
+                if (shouldDebugLog)
+                    LogDebug($"⚠️ RACE_LAPS_UNKNOWN: SessionLaps=0, using placeholder {raceFinishLap} laps");
+            }
+
+            // EDGE CASE PROTECTION: Race overtime or extensions (leader completed more laps than scheduled)
+            // This can happen in:
+            //   1. Race extensions due to incidents
+            //   2. Manual session extensions by admins
+            //   3. Overtime rules in special events
+            if (raceFinishLap > 0 && actualLeadingLap >= raceFinishLap)
+            {
+                // Race has ended or is in overtime - freeze calculations at 0 laps remaining
+                CurrentData.RaceLapsRemaining = 0;
+                LogDebug($"[RACE_OVERTIME] Leader lap {actualLeadingLap} >= Session laps {raceFinishLap} - Race complete/overtime");
+            }
+            else if (raceFinishLap > 0)
+            {
+                // Normal race: Calculate laps until leader finishes
+                CurrentData.RaceLapsRemaining = Math.Max(0, raceFinishLap - actualLeadingLap);
+            }
+            else
+            {
+                // No race lap limit could be determined - set to 0 as safe fallback
+                CurrentData.RaceLapsRemaining = 0;
+            }
+
+            // Store as float for UI display consistency
+            CurrentData.EstimatedLapsFromTime = CurrentData.RaceLapsRemaining;
+
+            // Debug logging - extended to 10 laps to catch more issues
+            if (shouldDebugLog)
+            {
+                Console.WriteLine($"📋 LAP_SESSION: RaceLapsRemaining={CurrentData.RaceLapsRemaining} (from {raceFinishLap} - {actualLeadingLap})");
+                LogDebug($"📋 LAP_SESSION: RaceLapsRemaining={CurrentData.RaceLapsRemaining} (from {raceFinishLap} - {actualLeadingLap})");
+            }
         }
         
         // Detect flag status
@@ -211,15 +370,25 @@ public class FuelCalculatorService
             return;
         }
         
-        // Detect pit road status changes and out-laps
+        // FIX: Detect pit road status changes and save fuel BEFORE entering pits
         bool isOnPitRoad = telemetry.OnPitRoad;
+
+        // Entering pit road - save fuel level to prevent refueling contamination
+        if (!_wasOnPitRoadLastUpdate && isOnPitRoad)
+        {
+            _fuelBeforeEnteringPits = telemetry.FuelLevel;
+            _pittedThisLap = true;
+            LogDebug($"ENTERING PIT ROAD: Saved fuel level {_fuelBeforeEnteringPits:F2}L for lap calculation");
+        }
+
+        // Exiting pit road - this lap is an out-lap
         if (_wasOnPitRoadLastUpdate && !isOnPitRoad)
         {
-            // Just left pit road - this lap is an out-lap
             _justLeftPits = true;
             _stintStartLapNumber = telemetry.LapsCompleted;  // Reset stint tracking
             LogDebug($"OUT-LAP DETECTED: Just left pit road, stint starts at lap {_stintStartLapNumber}");
         }
+
         _wasOnPitRoadLastUpdate = isOnPitRoad;
         
         // Calculate current lap fuel usage (real-time estimate)
@@ -262,134 +431,346 @@ public class FuelCalculatorService
             }
         }
 
-        // ===== PIT LAP ACCURACY FIX (Phase 1: FUEL_PIT_LAP_AND_FLAGS_FIX.md) =====
-        // PROBLEM: telemetry.LapsCompleted increments at start/finish line (0% track distance)
-        //          but pit entry is typically at 80-95% track distance (e.g., Road America at 85%)
-        // SOLUTION: Use LapDistPct to detect when player crosses pit entry threshold
-        //           Record "virtual lap completion" at pit entry for accurate fuel calculations
-        
-        // Detect crossing pit entry threshold (virtual lap completion)
-        // Use learned pit entry location (or fallback to 0.85 if not yet learned)
-        float pitEntryThreshold = _learnedPitEntryPct ?? 0.85f;
+        // ===== FIX: LAP COMPLETION AT FINISH LINE ONLY =====
+        // CHANGE: Complete laps at finish/start line (lap wrap-around) instead of pit entry
+        // REASON: More intuitive, matches iRacing lap counter exactly
+        // PIT CONTAMINATION: Prevented by saving fuel BEFORE entering pit road (see above)
 
-        if (_lastLapDistPct < pitEntryThreshold && telemetry.LapDistPct >= pitEntryThreshold)
-        {
-            // Player crossed pit entry - record "virtual lap completion"
-            _virtualLapsCompleted++;
-
-            if (_virtualLapsCompleted != _lapsCompletedWhenProcessed && _lastCompletedLap >= 0)
-            {
-                OnLapCompleted(telemetry, isRefueling || _justLeftPits);
-                _lapsCompletedWhenProcessed = _virtualLapsCompleted;
-                LogDebug($"VIRTUAL LAP COMPLETED at pit entry ({pitEntryThreshold*100:F0}%): Lap {_virtualLapsCompleted} (LapDistPct={telemetry.LapDistPct:F3})");
-            }
-        }
-        
-        // Handle wrap-around (95% → 5% without crossing pit entry)
-        // This happens when player crosses start/finish line without entering pits
+        // Handle lap completion at finish line (95% → 5% wrap-around)
         if (_lastLapDistPct > 0.9f && telemetry.LapDistPct < 0.1f)
         {
-            // Wrapped around without pit entry - sync virtual laps to iRacing's lap counter
+            // Crossed finish/start line - complete the lap
             if (telemetry.LapsCompleted > _lastCompletedLap)
             {
-                _virtualLapsCompleted = telemetry.LapsCompleted;
-                LogDebug($"LAP WRAP-AROUND: Synced virtual laps to {_virtualLapsCompleted} (crossed start/finish without pit entry)");
+                LogDebug($"LAP COMPLETED at finish line: Lap {telemetry.LapsCompleted} (LapDistPct wrap {_lastLapDistPct:F3}→{telemetry.LapDistPct:F3})");
+
+                // FIX: Skip lap 0 (formation) - check BEFORE calling OnLapCompleted
+                if (telemetry.LapsCompleted == 0)
+                {
+                    LogDebug($"⏭️ SKIPPING LAP 0: Formation lap, resetting fuel tracker");
+                    LogDebug($"   Fuel before skip: _fuelAtLapStart={_fuelAtLapStart:F2}L, current={telemetry.FuelLevel:F2}L, used={_fuelAtLapStart - telemetry.FuelLevel:F3}L");
+                    _fuelAtLapStart = telemetry.FuelLevel; // Reset for lap 1
+                    _pittedThisLap = false; // Reset flag
+                    _lapsCompletedWhenProcessed = 0; // Mark lap 0 as processed
+                    _sessionStateAtLapStart = telemetry.SessionState; // Save for next lap
+                    LogDebug($"   _fuelAtLapStart reset to {_fuelAtLapStart:F2}L for lap 1");
+                }
+                else if (telemetry.LapsCompleted != _lapsCompletedWhenProcessed)
+                {
+                    // Call lap completion with refueling flag and pit flag
+                    OnLapCompleted(telemetry, isRefueling, _pittedThisLap, _fuelBeforeEnteringPits);
+                    _lapsCompletedWhenProcessed = telemetry.LapsCompleted;
+                    _pittedThisLap = false; // Reset for next lap
+                    _fuelBeforeEnteringPits = 0f; // Reset saved fuel
+                }
+
+                // FIX: Save SessionState for the NEW lap that's starting (checked when this lap completes)
+                // This captures parade/racing state at lap START instead of lap END
+                _sessionStateAtLapStart = telemetry.SessionState;
             }
         }
         
         _lastLapDistPct = telemetry.LapDistPct;  // Track lap distance for next update
-        
-        // Reset out-lap flag after lap completion
-        if (telemetry.LapDistPct > 0.5f && _justLeftPits)
-        {
-            _justLeftPits = false; // Clear flag mid-lap to prepare for next detection
-        }
-        
+
+        // FIX: Don't clear out-lap flag mid-lap - it should persist until lap completion
+        // The flag will be used by OnLapCompleted to mark the lap as out-lap
+        // (Original mid-lap clearing was causing out-laps to not be detected)
+
         // Update tracking variables
         _lastCompletedLap = telemetry.LapsCompleted;
         _lastFuelLevel = telemetry.FuelLevel;
-        
-        // Calculate averages and strategy
-        CalculateAverages();
-        ApplyTemperatureCorrection(telemetry);  // ENHANCEMENT: Temperature correction for fuel consumption
-        ApplyRealTimeFuelFlow(telemetry);      // ENHANCEMENT: Real-time fuel flow integration
-        
-        // Calculate dynamic buffer using service (Phase 6)
-        var bufferData = _bufferCalculator.Calculate(
-            CurrentData.FuelConsistencyVariance,  // Use existing property
-            CurrentData.RacePosition,  // Fixed: Use RacePosition instead of Position
-            CurrentData.TotalCars,
-            false,  // isRaining - simplified for now, can enhance later
-            0,  // yellowFlagCount - can add to FuelData if needed
-            telemetry.LapsCompleted + 1,
-            telemetry.SessionLaps,
-            CurrentData.IsTimedSession
-        );
-        CurrentData.FuelBufferLaps = bufferData.TotalBuffer;
-        // BufferReason can be added to FuelData if needed
-        
-        CalculateStrategy();
-        
-        // Track delta using service (Phase 5) - simplified for now
-        var deltaData = _deltaTrackingService.Track(
-            CurrentData.LapsRemaining,
-            CurrentData.IRacingLapsRemaining,
-            telemetry.LapsCompleted + 1
-        );
-        // Delta properties can be added to FuelData if needed
-        
-        // Calculate fuel saving using service (Phase 4) - simplified for now
-        var averages = new FuelAverages
+
+        // ===== PROGRESSIVE CALCULATION (Option 3): STRATEGIC vs LIVE UPDATES =====
+        //
+        // Decision point: Full strategic calculation or lightweight live update?
+        //
+        // FULL STRATEGIC CALCULATION (heavy):
+        //   - Runs when lap is completed (OnLapCompleted called above)
+        //   - Recalculates averages, strategy, pit windows, multi-stop plans
+        //   - Uses complete lap history for accuracy
+        //   - Fires event immediately (IsLiveUpdate = false)
+        //
+        // LIGHTWEIGHT LIVE UPDATE (fast):
+        //   - Runs mid-lap (LapDistPct > 5%)
+        //   - Projects current lap fuel usage to estimate remaining laps
+        //   - Uses existing averages (doesn't recalculate strategy)
+        //   - Fires throttled event (6 Hz instead of 60 Hz)
+        //   - Marked with IsLiveUpdate = true
+
+        // Detect if we should do full calculation or live update
+        bool shouldDoFullCalculation = _virtualLapsCompleted != _lapsCompletedWhenProcessed || isRefueling;
+
+        if (shouldDoFullCalculation)
         {
-            Current = CurrentData.AvgFuelPerLap,
-            Last = CurrentData.AvgFuelPerLap_Last,
-            L5 = CurrentData.AvgFuelPerLap_L5,
-            L10 = CurrentData.AvgFuelPerLap_L10,
-            EMA = CurrentData.AvgFuelPerLap_EMA,
-            Session = CurrentData.AvgFuelPerLap_Session
-        };
-        var strategy = new PitStrategy
+            // FULL STRATEGIC CALCULATION PATH
+            LogDebug("[PROGRESSIVE_CALC] Full strategic calculation (lap completed or refueled)");
+
+            // Calculate averages and strategy
+            CalculateAverages();
+            ApplyTemperatureCorrection(telemetry);  // ENHANCEMENT: Temperature correction for fuel consumption
+            ApplyRealTimeFuelFlow(telemetry);      // ENHANCEMENT: Real-time fuel flow integration
+
+            // Calculate dynamic buffer using service (Phase 6)
+            var bufferData = _bufferCalculator.Calculate(
+                CurrentData.FuelConsistencyVariance,  // Use existing property
+                CurrentData.RacePosition,  // Fixed: Use RacePosition instead of Position
+                CurrentData.TotalCars,
+                false,  // isRaining - simplified for now, can enhance later
+                0,  // yellowFlagCount - can add to FuelData if needed
+                telemetry.LapsCompleted + 1,
+                telemetry.SessionLaps,
+                CurrentData.IsTimedSession
+            );
+            CurrentData.FuelBufferLaps = bufferData.TotalBuffer;
+            // BufferReason can be added to FuelData if needed
+
+            CalculateStrategy();
+
+            // Calculate pit strategy (optimal pit lap and multi-stop strategy)
+            CalculateOptimalPitLap(telemetry);
+            CalculateMultiStopStrategy(telemetry);
+
+            // Track delta using service (Phase 5) - simplified for now
+            var deltaData = _deltaTrackingService.Track(
+                CurrentData.LapsRemaining,
+                CurrentData.IRacingLapsRemaining,
+                telemetry.LapsCompleted + 1
+            );
+            // Delta properties can be added to FuelData if needed
+
+            // Calculate fuel saving using service (Phase 4) - simplified for now
+            var averages = new FuelAverages
+            {
+                Current = CurrentData.AvgFuelPerLap,
+                Last = CurrentData.AvgFuelPerLap_Last,
+                L5 = CurrentData.AvgFuelPerLap_L5,
+                L10 = CurrentData.AvgFuelPerLap_L10,
+                EMA = CurrentData.AvgFuelPerLap_EMA,
+                Session = CurrentData.AvgFuelPerLap_Session
+            };
+            var strategy = new PitStrategy
+            {
+                OptimalPitLap = CurrentData.OptimalPitLap,
+                FuelToAddAtPit = CurrentData.FuelToAddAtPit,
+                CanFinishWithoutStop = CurrentData.CanFinishWithoutStop
+            };
+            var savingData = _fuelSavingCalculator.Calculate(telemetry, CurrentData, averages, strategy);
+
+            // Phase 6: Copy all fuel saving properties to CurrentData
+            CurrentData.NeedsFuelSaving = savingData.NeedsFuelSaving;
+            CurrentData.FuelSavingTarget = savingData.FuelSavingTarget;
+            CurrentData.CurrentSavingRate = savingData.CurrentSavingRate;
+            CurrentData.SavingProgress = savingData.SavingProgress;
+            CurrentData.CanSaveFuelToFinish = savingData.CanSaveFuelToFinish;
+            CurrentData.FuelSavingWorking = savingData.FuelSavingWorking;
+            CurrentData.IsPittingFaster = savingData.IsPittingFaster;
+            CurrentData.StrategicAlert = savingData.StrategicAlert;
+            CurrentData.AlertSeverity = savingData.AlertSeverity;
+            CurrentData.HistoricalContext = savingData.HistoricalContext;
+
+            // Phase 7: Calculate live lap delta
+            float targetLapTime = CurrentData.TargetLapTime > 0 ? CurrentData.TargetLapTime : CurrentData.AverageLapTime;
+            float averageLapTime = _lapDeltaTracker.GetAverageLapTime();
+            if (averageLapTime <= 0)
+                averageLapTime = CurrentData.AverageLapTime;
+
+            bool isOnTrack = telemetry.Speed > 1.0f; // Simple check: moving = on track
+
+            var lapDelta = _lapDeltaTracker.CalculateLiveDelta(
+                (float)telemetry.SessionTime,
+                targetLapTime,
+                averageLapTime,
+                isOnTrack);
+
+            CurrentData.LiveDeltaValid = lapDelta.IsValid;
+            CurrentData.LiveDeltaToTarget = lapDelta.DeltaToTarget;
+            CurrentData.PredictedLapTime = lapDelta.PredictedLapTime;
+            CurrentData.PredictedDelta = lapDelta.PredictedDelta;
+            CurrentData.LapProgress = lapDelta.LapProgress;
+
+            // Track pit stops for session persistence
+            UpdatePitStopTracking(telemetry);
+
+            // Mark this as a full strategic update (not live)
+            CurrentData.IsLiveUpdate = false;
+
+            // Fire update event immediately (full calculation)
+            FuelDataUpdated?.Invoke(this, CurrentData);
+        }
+        else if (telemetry.LapDistPct > 0.05f && !telemetry.OnPitRoad)
         {
-            OptimalPitLap = CurrentData.OptimalPitLap,
-            FuelToAddAtPit = CurrentData.FuelToAddAtPit,
-            CanFinishWithoutStop = CurrentData.CanFinishWithoutStop
-        };
-        var savingData = _fuelSavingCalculator.Calculate(telemetry, CurrentData, averages, strategy);
-        CurrentData.NeedsFuelSaving = savingData.NeedsFuelSaving;
-        CurrentData.FuelSavingTarget = savingData.FuelSavingTarget;
-        CurrentData.StrategicAlert = savingData.StrategicAlert;
-        
-        // Track pit stops for session persistence
-        UpdatePitStopTracking(telemetry);
-        
-        // Fire update event
-        FuelDataUpdated?.Invoke(this, CurrentData);
+            // LIGHTWEIGHT LIVE UPDATE PATH (mid-lap projections)
+            // Only update if at least 5% into lap and not on pit road
+            UpdateLiveValues(telemetry);
+
+            // Throttle event firing (every 10th frame = 6 Hz instead of 60 Hz)
+            if (++_liveUpdateCounter >= LIVE_UPDATE_THROTTLE)
+            {
+                _liveUpdateCounter = 0;
+
+                // Mark this as a live update
+                CurrentData.IsLiveUpdate = true;
+
+                // Fire throttled update event
+                FuelDataUpdated?.Invoke(this, CurrentData);
+            }
+        }
     }
-    
+
+    /// <summary>
+    /// Update live values mid-lap (Progressive Calculation - Option 3)
+    /// FIX #3: Enhanced with LIVE PIT WINDOW CALCULATIONS for real-time strategy updates
+    /// </summary>
+    private void UpdateLiveValues(TelemetryData telemetry)
+    {
+        // Project current lap fuel usage to full lap
+        float lapProgress = telemetry.LapDistPct;
+        if (lapProgress <= 0.05f)
+            return; // Too early in lap for reliable projection
+
+        // Calculate projected lap fuel usage based on current progress
+        float fuelUsedSoFar = CurrentData.FuelUsedThisLap;
+        float projectedLapUsage = fuelUsedSoFar / lapProgress;
+
+        // Update current lap fuel rate (live projection)
+        CurrentData.CurrentLapFuelRate = projectedLapUsage;
+
+        // Calculate live laps remaining using projected usage
+        // Uses current fuel and projected usage (more responsive than historical average)
+        if (projectedLapUsage > 0)
+        {
+            CurrentData.LapsRemaining = telemetry.FuelLevel / projectedLapUsage;
+        }
+
+        // Update live fuel needed to finish (uses existing strategy average, not projected)
+        // This balances live feel with strategic accuracy
+        if (CurrentData.AvgFuelPerLap > 0)
+        {
+            CurrentData.FuelNeededToFinish = CurrentData.RaceLapsRemaining * CurrentData.AvgFuelPerLap;
+            CurrentData.FuelDeltaToFinish = telemetry.FuelLevel - CurrentData.FuelNeededToFinish;
+            CurrentData.CanFinishWithoutStop = CurrentData.FuelDeltaToFinish >= 0;
+        }
+
+        // ===== FIX #3: LIVE PIT WINDOW CALCULATIONS =====
+        // Update pit window in real-time as player progresses through current lap
+        // This makes strategy truly "live" instead of frozen until lap completion
+        if (CurrentData.RaceLapsRemaining > 0 && CurrentData.AvgFuelPerLap_L5 > 0)
+        {
+            float avgFuel = CurrentData.AvgFuelPerLap_L5;
+            float lapsOnCurrentFuel = CurrentData.LapsRemaining;
+
+            // Current lap position (fractional lap number)
+            // Example: Lap 10 at 50% = 10.5, Lap 15 at 75% = 15.75
+            float currentLapFractional = telemetry.LapsCompleted + lapProgress;
+
+            // LIVE FUEL CRITICALITY (updates every frame)
+            if (lapsOnCurrentFuel < 1.0f)
+                CurrentData.FuelCriticalityScore = 100f; // CRITICAL
+            else if (lapsOnCurrentFuel < 2.0f)
+                CurrentData.FuelCriticalityScore = 80f + (2.0f - lapsOnCurrentFuel) * 20f; // URGENT (80-100)
+            else if (lapsOnCurrentFuel < 5.0f)
+                CurrentData.FuelCriticalityScore = 50f + (5.0f - lapsOnCurrentFuel) * 10f; // MODERATE (50-80)
+            else if (lapsOnCurrentFuel < 10.0f)
+                CurrentData.FuelCriticalityScore = 20f + (10.0f - lapsOnCurrentFuel) * 6f; // COMFORTABLE (20-50)
+            else
+                CurrentData.FuelCriticalityScore = Math.Max(0f, 20f - (lapsOnCurrentFuel - 10.0f) * 2f); // PLENTY (0-20)
+
+            // LIVE PIT WINDOW (earliest, optimal, latest)
+            // Earliest: When enough fuel has been used to add race-ending fuel
+            float fuelNeededToFinish = (CurrentData.RaceLapsRemaining + CurrentData.FuelBufferLaps) * avgFuel + CurrentData.FuelSputteringThreshold;
+            float fuelAvailableToAdd = CurrentData.TankCapacity - CurrentData.CurrentFuel;
+            float fuelNeedsToBurn = Math.Max(0, fuelNeededToFinish - fuelAvailableToAdd);
+            float lapsToEarliestPit = fuelNeedsToBurn / avgFuel;
+            CurrentData.EarliestPitLap = (int)Math.Ceiling(currentLapFractional + lapsToEarliestPit);
+
+            // Latest: Just before running out (with buffer)
+            float lapsToLatestPit = lapsOnCurrentFuel - CurrentData.FuelBufferLaps;
+            CurrentData.LatestPitLap = (int)Math.Floor(currentLapFractional + Math.Max(0, lapsToLatestPit));
+
+            // Optimal: Mid-window (3-5 lap green zone)
+            CurrentData.OptimalPitLap = (CurrentData.EarliestPitLap + CurrentData.LatestPitLap) / 2;
+
+            // Pit window range
+            CurrentData.PitWindowStart = CurrentData.EarliestPitLap;
+            CurrentData.PitWindowEnd = CurrentData.LatestPitLap;
+
+            // Update optimal pit reason based on criticality
+            if (CurrentData.FuelCriticalityScore >= 95)
+                CurrentData.OptimalPitReason = "⚠️ CRITICAL FUEL - PIT NOW";
+            else if (CurrentData.FuelCriticalityScore >= 80)
+                CurrentData.OptimalPitReason = "⚠️ Urgent - Pit soon";
+            else if (CurrentData.FuelCriticalityScore >= 50)
+                CurrentData.OptimalPitReason = "🔵 In pit window";
+            else
+                CurrentData.OptimalPitReason = "✓ Fuel comfortable";
+        }
+
+        // Log live update for debugging (first few laps only)
+        if (telemetry.Lap <= 3 && _liveUpdateCounter == 0)
+        {
+            LogDebug($"[LIVE_UPDATE] Lap {telemetry.Lap} @ {lapProgress:P0} | " +
+                    $"Projected: {projectedLapUsage:F2}L/lap | " +
+                    $"Live Laps Remaining: {CurrentData.LapsRemaining:F1} | " +
+                    $"Pit Window: L{CurrentData.PitWindowStart}-L{CurrentData.PitWindowEnd} (Optimal: L{CurrentData.OptimalPitLap}) | " +
+                    $"Criticality: {CurrentData.FuelCriticalityScore:F0}");
+        }
+    }
+
     /// <summary>
     /// Handle lap completion and track fuel usage
+    /// NOTE: Lap 0 is now filtered BEFORE calling this function (see lap completion detection)
     /// </summary>
-    private void OnLapCompleted(TelemetryData telemetry, bool wasPitLap)
+    /// <param name="telemetry">Current telemetry data</param>
+    /// <param name="wasRefueled">True if refueling was detected this lap</param>
+    /// <param name="pittedThisLap">True if entered pit road during this lap</param>
+    /// <param name="fuelBeforePit">Fuel level saved before entering pits (0 if didn't pit)</param>
+    private void OnLapCompleted(TelemetryData telemetry, bool wasRefueled, bool pittedThisLap, float fuelBeforePit)
     {
-        float fuelUsed = _fuelAtLapStart - telemetry.FuelLevel;
-        
-        // Detect tow usage: negative fuel (refueled without pit road) or very first lap with suspiciously low fuel
-        bool usedTow = false;
-        if (fuelUsed < -0.1f) // Negative fuel = tow with refuel
-        {
-            usedTow = true;
-            LogDebug($"TOW DETECTED: Negative fuel usage ({fuelUsed:F3}L) - car was towed/reset");
-        }
-        else if (_lapHistory.Count == 0 && fuelUsed < 0.3f && telemetry.LapsCompleted == 1)
-        {
-            // Very first lap with minimal fuel use = likely tow/reset from garage
-            usedTow = true;
-            LogDebug($"TOW/RESET DETECTED: First lap with minimal fuel ({fuelUsed:F3}L) - started from garage/tow");
-        }
-        
-        // DEBUG: Log lap completion details
-        LogDebug($"Lap {telemetry.LapsCompleted} completed: FuelAtStart={_fuelAtLapStart:F3}L, FuelAtEnd={telemetry.FuelLevel:F3}L, FuelUsed={fuelUsed:F3}L, PitLap={wasPitLap}, Tow={usedTow}");
-        
+        // FIX: Use saved fuel level from before pit entry to calculate fuel used
+        // This prevents refueling from contaminating the lap fuel calculation
+        float fuelAtLapEnd = pittedThisLap && fuelBeforePit > 0 ? fuelBeforePit : telemetry.FuelLevel;
+        float fuelUsed = _fuelAtLapStart - fuelAtLapEnd;
+
+        LogDebug($"LAP {telemetry.LapsCompleted} fuel calculation: Start={_fuelAtLapStart:F2}L, End={fuelAtLapEnd:F2}L, Used={fuelUsed:F3}L, Pitted={pittedThisLap}");
+
+        // ===== USER INSIGHT: TOW DETECTION USING SDK DATA ONLY =====
+        // REMOVED: Heuristic "low fuel = tow" detection (caused false positives on lap 1)
+        // NEW: Use ONLY SDK refueling flag - if fuel increased, SDK tells us directly
+        //
+        // EXAMPLE OF THE PROBLEM:
+        //   OLD: Lap 1 uses 0.044L (formation lap) → marked as "tow" → excluded from averages ❌
+        //   NEW: Lap 1 uses 0.044L → only marked invalid if it's truly a refuel event ✅
+        //
+        // BENEFITS:
+        //   - Uses actual SDK data (fuel delta > 0.3L = refuel) instead of guessing
+        //   - No false positives on legitimate low-fuel laps (formation, slow starts)
+        //   - Cleaner logic, fewer invalid lap exclusions
+        //
+        // NOTE: wasRefueled parameter already contains the SDK refueling indicator
+        //       No need for separate tow detection - refuel IS the tow indicator
+
+        // Detect out-lap: first lap after leaving pits (previous lap was pit lap OR just left pits flag)
+        bool isOutLap = _justLeftPits || (_lapHistory.Count > 0 && _lapHistory.Last().WasPitLap);
+
+        // FIX: Formation lap (lap 0) is skipped BEFORE calling this function
+        // No need to check for formation lap here
+        bool isFormationLap = false;
+
+        // FIX: Check if this is a pace lap using SessionState from lap START (not lap END)
+        // PROBLEM: If lap 1 starts during parade (SessionState=3) but green flag drops mid-lap,
+        //          SessionState will be 4 (Racing) when lap completes, incorrectly marking it as non-pace
+        // SOLUTION: Use _sessionStateAtLapStart which was saved when the lap began
+        bool isPaceLap = _sessionStateAtLapStart == 3;
+
+        // FIX: WasPitLap should ONLY be true if we actually REFUELED (not low fuel or tow)
+        // Only actual refueling should mark a lap as a pit lap
+        // Tow is handled separately and should not exclude lap from averages
+        bool wasPitLap = wasRefueled;
+
+        // DEBUG: Log lap completion details with ALL validity flags
+        LogDebug($"Lap {telemetry.LapsCompleted} completed: FuelAtStart={_fuelAtLapStart:F3}L, FuelAtEnd={fuelAtLapEnd:F3}L, FuelUsed={fuelUsed:F3}L");
+        LogDebug($"  Flags: PitLap={wasPitLap}, OutLap={isOutLap}, Formation={isFormationLap}, PaceLap={isPaceLap} (SessionState@Start={_sessionStateAtLapStart}, @End={telemetry.SessionState}), EnteredPitRoad={pittedThisLap}");
+
         // Create lap history record
         var lapRecord = new FuelLapHistory
         {
@@ -397,17 +778,21 @@ public class FuelCalculatorService
             FuelUsed = Math.Max(0, fuelUsed), // Don't record negative fuel
             LapTime = telemetry.LapLastLapTime,
             FuelAtStart = _fuelAtLapStart,
-            FuelAtEnd = telemetry.FuelLevel,
+            FuelAtEnd = fuelAtLapEnd, // Use saved fuel if pitted, current fuel otherwise
             FlagStatus = _currentFlagStatus,
-            WasPitLap = wasPitLap || usedTow, // Treat tow same as pit lap
-            RefuelAmount = wasPitLap ? CurrentData.LastRefuelAmount : (usedTow && fuelUsed < 0 ? Math.Abs(fuelUsed) : 0),
-            IsFormationLap = telemetry.LapsCompleted == 1 && !usedTow, // First lap might be formation (unless towed)
+            WasPitLap = wasPitLap, // True if refueled (or towed with refuel)
+            RefuelAmount = wasRefueled ? CurrentData.LastRefuelAmount : 0, // Only record refuel if SDK detected fuel increase
+            IsFormationLap = isFormationLap,
+            IsOutLap = isOutLap, // Flag out-laps for exclusion from averages (cool tires, careful driving)
             IsIncompleteLap = false, // If OnLapCompleted fires, the lap WAS completed (LapDistPct resets to 0)
             Timestamp = DateTime.UtcNow,
             IncidentCountAtStart = _lastIncidentCount,  // Incident count at lap start
             IncidentCountAtEnd = telemetry.PlayerCarMyIncidentCount,  // Incident count at lap end
-            SessionState = telemetry.SessionState  // Track session state for pace lap detection
+            SessionState = _sessionStateAtLapStart  // FIX: Use SessionState from lap START for accurate pace lap detection
         };
+        
+        // DEBUG: Log validation result
+        LogDebug($"  IsValidForAveraging={lapRecord.IsValidForAveraging} (needs: !PitLap && !Formation && !Incomplete && !PaceLap && !OutLap && FuelUsed>0)");
         
         // Update incident tracking for next lap
         _lastIncidentCount = telemetry.PlayerCarMyIncidentCount;
@@ -434,6 +819,18 @@ public class FuelCalculatorService
         
         // Reset for next lap
         _fuelAtLapStart = telemetry.FuelLevel;
+
+        // FIX: Clear out-lap flag after lap is recorded
+        // This flag was set when exiting pit road and has now been used to mark the lap
+        if (_justLeftPits)
+        {
+            _justLeftPits = false;
+            LogDebug($"OUT-LAP FLAG CLEARED: Lap {telemetry.LapsCompleted} recorded as out-lap");
+        }
+
+        // Phase 7: Track lap delta
+        _lapDeltaTracker.CompleteLap((float)telemetry.SessionTime, lapRecord.LapTime);
+        _lapDeltaTracker.StartLap((float)telemetry.SessionTime);
     }
     
     /// <summary>
@@ -955,23 +1352,23 @@ public class FuelCalculatorService
             return;
         }
         
-        // FIX #3: Use realistic baseline for fuel saving calculations
-        // If L5 > Session, driver is currently using MORE fuel than session average
-        // Realistic baseline = Session average (proven achievable) OR lower L10 average
-        // Target should be to reduce FROM current L5 TO session/L10 level
-        float baselineAverage = CurrentData.AvgFuelPerLap_Session;
+        // FIX #2 (Baseline Consistency): Respect user's selected averaging method
+        // Previously hardcoded Session average, but this created contradictory messages
+        // when Strategy used a different method (e.g., L5 or Adaptive)
+        // NOW: Use the same averaging method as strategy calculations for consistency
+        float baselineAverage = CurrentData.AvgFuelPerLap; // Respects SelectedMethod
         
-        // Fallback: if session avg not available, use L10 or L5
+        // Fallback: if selected method returns 0, cascade through available methods
         if (baselineAverage <= 0)
         {
-            baselineAverage = CurrentData.AvgFuelPerLap_L10 > 0 ? CurrentData.AvgFuelPerLap_L10 : CurrentData.AvgFuelPerLap_L5;
+            baselineAverage = CurrentData.AvgFuelPerLap_L5 > 0 ? CurrentData.AvgFuelPerLap_L5 :
+                             CurrentData.AvgFuelPerLap_L10 > 0 ? CurrentData.AvgFuelPerLap_L10 :
+                             CurrentData.AvgFuelPerLap_Session;
         }
         
-        // If current L5 is significantly higher than baseline, use baseline for calculation
-        // Otherwise use L5 (driver is already at or below session average)
-        float avgFuel = CurrentData.AvgFuelPerLap_L5 > baselineAverage * 1.05f 
-            ? baselineAverage  // Use lower baseline if L5 is 5%+ higher
-            : CurrentData.AvgFuelPerLap_L5;  // Use current L5 if already efficient
+        // Use baseline directly - no longer override with L5
+        // Both Strategy and FuelSaving now use same method (SelectedMethod)
+        float avgFuel = baselineAverage;
         
         float currentFuel = CurrentData.CurrentFuel;
         int lapsRemaining = CurrentData.RaceLapsRemaining;
@@ -1030,10 +1427,26 @@ public class FuelCalculatorService
                     }
 
                     // Bootstrap initial fuel estimates from historical data (before 5 laps completed)
+                    // ENHANCEMENT: Only use historical data if conditions are similar
                     if (_lapHistory.Count < 5)
                     {
-                        CurrentData.AvgFuelPerLap_Session = _sessionStats.SessionAverageFuelPerLap;
-                        LogDebug($"BOOTSTRAP: Using historical average {_sessionStats.SessionAverageFuelPerLap:F3}L (only {_lapHistory.Count} laps completed)");
+                        bool conditionsMatch = _sessionStats.IsSimilarConditions(telemetry.TrackTemp, telemetry.AirTemp);
+
+                        if (conditionsMatch)
+                        {
+                            CurrentData.AvgFuelPerLap_Session = _sessionStats.SessionAverageFuelPerLap;
+                            LogDebug($"BOOTSTRAP: Using historical average {_sessionStats.SessionAverageFuelPerLap:F3}L (only {_lapHistory.Count} laps, conditions match)");
+                        }
+                        else
+                        {
+                            // Conditions differ - apply temperature correction to historical data
+                            float tempDelta = telemetry.AirTemp - _sessionStats.AvgAirTemp;
+                            float correctionFactor = 1.0f + (tempDelta * 0.0025f); // +10°C = +2.5% fuel
+                            float correctedHistorical = _sessionStats.SessionAverageFuelPerLap * correctionFactor;
+
+                            CurrentData.AvgFuelPerLap_Session = correctedHistorical;
+                            LogDebug($"BOOTSTRAP: Using temperature-corrected historical average {correctedHistorical:F3}L (conditions differ: {tempDelta:+0.0;-0.0}°C, {_lapHistory.Count} laps)");
+                        }
                     }
                 }
             }
@@ -1044,7 +1457,7 @@ public class FuelCalculatorService
         }
         
         // Estimate pit stop time using historical data OR conservative default formula
-        bool usingHistoricalData = false;
+        // bool usingHistoricalData = false; // REMOVED: Variable assigned but never used
         bool environmentalMatch = false;
         
         if (_sessionStats != null && _sessionStats.HasSufficientData)
@@ -1056,7 +1469,7 @@ public class FuelCalculatorService
             {
                 // Use historical data - high confidence
                 CurrentData.EstimatedPitStopTime = _sessionStats.AverageTotalPitTime;
-                usingHistoricalData = true;
+                // usingHistoricalData = true; // REMOVED: Variable not used
                 LogDebug($"PIT STOP ESTIMATE (HISTORICAL - HIGH CONFIDENCE): {CurrentData.EstimatedPitStopTime:F1}s from {_sessionStats.PitStopsRecorded} stops");
                 LogDebug($"  Current conditions: Track={telemetry.TrackTemp:F1}°C, Air={telemetry.AirTemp:F1}°C (matches historical range)");
             }
@@ -1077,18 +1490,22 @@ public class FuelCalculatorService
         }
         else
         {
-            // No historical data - use conservative default formula
+            // No historical data - use pit lane database formula
             // Conservative: Assume slower pit speed (15 m/s instead of 16.7) and longer service time (8s instead of 7s)
             float trackLength = telemetry.TrackLength;
             float pitSpeed = telemetry.TrackPitSpeedLimit > 0 ? telemetry.TrackPitSpeedLimit : 15.0f; // Use parsed limit or conservative 54 kph
-            float estimatedPitLaneLength = trackLength * 0.175f; // ~17.5% of track length
+
+            // ENHANCEMENT: Use track-specific pit lane length from database
+            float pitLanePercentage = PitLaneDatabase.GetPitLanePercentage(telemetry.TrackName);
+            float estimatedPitLaneLength = trackLength * pitLanePercentage;
+
             float pitTransitTime = estimatedPitLaneLength / pitSpeed; // seconds in pit lane
             float serviceTime = 8.0f; // Conservative service time (fuel only, no tire change)
             CurrentData.EstimatedPitStopTime = pitTransitTime + serviceTime;
             
-            LogDebug($"PIT STOP ESTIMATE (CONSERVATIVE DEFAULT - LOW CONFIDENCE): {CurrentData.EstimatedPitStopTime:F1}s");
-            LogDebug($"  Track={trackLength:F0}m, PitLane={estimatedPitLaneLength:F0}m, PitSpeed={pitSpeed:F1}m/s, Transit={pitTransitTime:F1}s, Service={serviceTime:F1}s");
-            LogDebug($"  Using conservative defaults (no historical data available)");
+            LogDebug($"PIT STOP ESTIMATE (TRACK DATABASE - MODERATE CONFIDENCE): {CurrentData.EstimatedPitStopTime:F1}s");
+            LogDebug($"  Track={trackLength:F0}m, PitLane={estimatedPitLaneLength:F0}m ({pitLanePercentage*100:F1}%), Category: {PitLaneDatabase.GetTrackCategory(telemetry.TrackName)}");
+            LogDebug($"  PitSpeed={pitSpeed:F1}m/s, Transit={pitTransitTime:F1}s, Service={serviceTime:F1}s");
         }
         
         // Total pit stop time loss (includes entry/exit)
@@ -1280,8 +1697,16 @@ public class FuelCalculatorService
     /// </summary>
     private void CalculateOptimalPitLap(TelemetryData telemetry)
     {
-        if (CurrentData.RaceLapsRemaining <= 0 || CurrentData.CanFinishWithoutStop)
+        // CRITICAL FIX: Only block pit window if RaceLapsRemaining <= 0 (not in a race)
+        // DO NOT block if CanFinishWithoutStop = true, because:
+        // 1. User might have large tank but start with partial fuel (needs pit window)
+        // 2. Strategic pitting for tires/damage/undercut is valuable even with enough fuel
+        // 3. Pit window provides race strategy insight beyond just fuel emergencies
+        if (CurrentData.RaceLapsRemaining <= 0)
         {
+            // Debug logging to diagnose why pit window isn't showing
+            LogDebug($"⚠️ PIT WINDOW BLOCKED: RaceLapsRemaining = {CurrentData.RaceLapsRemaining} (SessionLaps={telemetry.SessionLaps}, LapsCompleted={telemetry.LapsCompleted}, IsTimedSession={CurrentData.IsTimedSession}, AvgLapTime={CurrentData.AverageLapTime:F2}s, TimeRemaining={CurrentData.SessionTimeRemaining:F0}s)");
+            
             CurrentData.OptimalPitLap = 0;
             CurrentData.OptimalPitReason = null;
             CurrentData.EarliestPitLap = 0;
@@ -1292,11 +1717,22 @@ public class FuelCalculatorService
             return;
         }
         
+        // Log if we can finish without stop (for debugging, but don't block calculation)
+        if (CurrentData.CanFinishWithoutStop)
+        {
+            LogDebug($"ℹ️ PIT WINDOW: CanFinishWithoutStop = true, but calculating pit window anyway (FuelDeltaToFinish={CurrentData.FuelDeltaToFinish:F2}L, CurrentFuel={CurrentData.CurrentFuel:F2}L, FuelNeededToFinish={CurrentData.FuelNeededToFinish:F2}L, LapsRemaining={CurrentData.LapsRemaining:F2})");
+        }
+        
         float avgFuel = CurrentData.AvgFuelPerLap_L5;
         if (avgFuel <= 0)
         {
             CurrentData.OptimalPitLap = 0;
             CurrentData.OptimalPitReason = null;
+            CurrentData.EarliestPitLap = 0;
+            CurrentData.LatestPitLap = 0;
+            CurrentData.PitWindowStart = 0;
+            CurrentData.PitWindowEnd = 0;
+            CurrentData.PitWindowReason = null;
             return;
         }
         
@@ -1367,33 +1803,89 @@ public class FuelCalculatorService
         
         CurrentData.TrackPositionCost = positionCost;
         
-        // ===== SECTION 3: YELLOW FLAG PROBABILITY PREDICTION =====
+        // ===== SECTION 3: ENHANCED YELLOW FLAG PROBABILITY PREDICTION =====
+        // Multi-factor model considering frequency, field size, race progress, and incident rate
         bool yellowExpected = false;
         int lapsUntilYellow = 0;
         float yellowProbability = 0f;
-        
-        if (CurrentData.YellowFlagLapCount > 0 && _lapHistory.Count > 10)
+
+        if (_lapHistory.Count > 10)
         {
-            // Calculate average laps between yellows
-            int totalLaps = _lapHistory.Count;
-            float yellowFrequency = (float)totalLaps / CurrentData.YellowFlagLapCount;
-            
-            // Find laps since last yellow
-            var lastYellowLap = _lapHistory.LastOrDefault(l => l.IsYellowFlagLap);
-            int lapsSinceLastYellow = lastYellowLap != null ? (currentLap - lastYellowLap.LapNumber) : totalLaps;
-            
-            // Predict yellow if we've passed 80% of typical frequency
-            yellowProbability = Math.Min(1.0f, lapsSinceLastYellow / yellowFrequency);
-            yellowExpected = yellowProbability > 0.8f;
-            
-            if (yellowExpected)
+            // FACTOR 1: Historical Frequency (base probability)
+            float frequencyProbability = 0f;
+            float yellowFrequency = 0f;
+            int lapsSinceLastYellow = 0;
+
+            if (CurrentData.YellowFlagLapCount > 0)
+            {
+                int totalLaps = _lapHistory.Count;
+                yellowFrequency = (float)totalLaps / CurrentData.YellowFlagLapCount;
+
+                var lastYellowLap = _lapHistory.LastOrDefault(l => l.IsYellowFlagLap);
+                lapsSinceLastYellow = lastYellowLap != null ? (currentLap - lastYellowLap.LapNumber) : totalLaps;
+
+                // Frequency-based probability (0-1)
+                frequencyProbability = Math.Min(1.0f, lapsSinceLastYellow / yellowFrequency);
+            }
+
+            // FACTOR 2: Field Size (more cars = higher incident probability)
+            // Large fields (>30 cars): +20% probability boost
+            // Medium fields (15-30): baseline
+            // Small fields (<15): -20% probability reduction
+            float fieldSizeModifier = 1.0f;
+            if (totalCars > 30)
+                fieldSizeModifier = 1.2f;  // +20% for large fields
+            else if (totalCars > 15)
+                fieldSizeModifier = 1.0f;  // Baseline for medium fields
+            else if (totalCars > 0)
+                fieldSizeModifier = 0.8f;  // -20% for small fields
+
+            // FACTOR 3: Race Progress (more yellows early in race)
+            // First 25% of laps: +30% probability (start chaos)
+            // 25-50%: +10% (still settling)
+            // 50-75%: baseline
+            // Last 25%: +20% (desperation moves)
+            float progressModifier = 1.0f;
+            if (raceLapsRemaining > 0 && telemetry.SessionLaps > 0)
+            {
+                float raceProgress = (float)(telemetry.LapsCompleted) / telemetry.SessionLaps;
+                if (raceProgress < 0.25f)
+                    progressModifier = 1.3f;  // Early race chaos
+                else if (raceProgress < 0.5f)
+                    progressModifier = 1.1f;  // Still settling
+                else if (raceProgress > 0.75f)
+                    progressModifier = 1.2f;  // Late-race desperation
+                else
+                    progressModifier = 1.0f;  // Mid-race baseline
+            }
+
+            // FACTOR 4: Recent Incident Rate (last 5 laps)
+            // High incident rate = higher yellow probability
+            var last5Laps = _lapHistory.TakeLast(5).ToList();
+            int recentIncidents = last5Laps.Sum(l => l.IncidentsDuringLap);
+            float incidentModifier = 1.0f;
+            if (recentIncidents >= 3)
+                incidentModifier = 1.5f;  // +50% if 3+ incidents in last 5 laps
+            else if (recentIncidents >= 1)
+                incidentModifier = 1.2f;  // +20% if any incidents
+
+            // COMBINED PROBABILITY: Base * Modifiers
+            yellowProbability = frequencyProbability * fieldSizeModifier * progressModifier * incidentModifier;
+            yellowProbability = Math.Clamp(yellowProbability, 0f, 1.0f); // Cap at 100%
+
+            // Predict yellow if combined probability exceeds threshold
+            yellowExpected = yellowProbability > 0.7f;  // Lower threshold (70%) due to multi-factor confidence
+
+            if (yellowExpected && yellowFrequency > 0)
             {
                 lapsUntilYellow = (int)Math.Ceiling(yellowFrequency - lapsSinceLastYellow);
             }
-            
-            LogDebug($"YELLOW FLAG PREDICTION: Frequency={yellowFrequency:F1} laps, Since last={lapsSinceLastYellow}, Probability={yellowProbability*100:F0}%, Expected={yellowExpected}");
+
+            LogDebug($"YELLOW FLAG PREDICTION: Freq={yellowFrequency:F1} laps, Since last={lapsSinceLastYellow}, " +
+                     $"Field={totalCars} cars ({fieldSizeModifier:F2}x), Progress={progressModifier:F2}x, " +
+                     $"Incidents={recentIncidents} ({incidentModifier:F2}x) → {yellowProbability*100:F0}% ({(yellowExpected ? "EXPECTED" : "unlikely")})");
         }
-        
+
         CurrentData.YellowFlagExpected = yellowExpected;
         CurrentData.LapsUntilYellow = lapsUntilYellow;
         CurrentData.YellowFlagProbability = yellowProbability;
@@ -1401,20 +1893,36 @@ public class FuelCalculatorService
         // ===== SECTION 4: PIT WINDOW CALCULATION =====
         // Calculate earliest/optimal/latest pit laps based on fuel needs and race length
         
-        // Earliest: When we've used enough fuel to add race-ending fuel (with buffer)
-        float fuelNeededToFinish = (raceLapsRemaining + CurrentData.FuelBufferLaps) * avgFuel;
-        float fuelToUse = CurrentData.TankCapacity - fuelNeededToFinish;
-        int lapsToUseExcessFuel = fuelToUse > 0 ? (int)Math.Floor(fuelToUse / avgFuel) : 0;
-        CurrentData.EarliestPitLap = currentLap + Math.Max(1, lapsToUseExcessFuel);
-        
         // Latest: Just before running out (with 1 lap safety buffer)
+        // This is the CONSTRAINT - must pit before fuel runs out
         CurrentData.LatestPitLap = currentLap + Math.Max(1, (int)Math.Floor(lapsOnCurrentFuel) - 1);
+        
+        // Earliest: When we've used enough fuel to add race-ending fuel (with buffer)
+        // CRITICAL FIX: Add sputtering threshold to match CalculateStrategy() calculation (line 803)
+        // Must account for unusable fuel below sputtering threshold
+        float sputteringThreshold = CurrentData.FuelSputteringThreshold;
+        float fuelNeededToFinish = (raceLapsRemaining + CurrentData.FuelBufferLaps) * avgFuel + sputteringThreshold;
+        // FIX: Account for sputtering threshold - can't use fuel below threshold even with full tank
+        float fuelToUse = (CurrentData.TankCapacity - sputteringThreshold) - fuelNeededToFinish;
+        int lapsToUseExcessFuel = fuelToUse > 0 ? (int)Math.Floor(fuelToUse / avgFuel) : 0;
+        int calculatedEarliestPitLap = currentLap + Math.Max(1, lapsToUseExcessFuel);
+        
+        // CRITICAL FIX: EarliestPitLap CANNOT exceed LatestPitLap (fuel constraint)
+        // If tank is large but current fuel is low, earliest must respect fuel reality
+        CurrentData.EarliestPitLap = Math.Min(calculatedEarliestPitLap, CurrentData.LatestPitLap);
         
         // Optimal pit window: 3-5 lap green zone in middle of earliest/latest
         int midPoint = (CurrentData.EarliestPitLap + CurrentData.LatestPitLap) / 2;
         CurrentData.PitWindowStart = Math.Max(CurrentData.EarliestPitLap, midPoint - 2);
         CurrentData.PitWindowEnd = Math.Min(CurrentData.LatestPitLap, midPoint + 2);
-        
+
+        // FIX: Validate pit window isn't inverted (PitWindowStart > PitWindowEnd)
+        if (CurrentData.PitWindowStart > CurrentData.PitWindowEnd)
+        {
+            LogDebug($"⚠️ PIT WINDOW INVERTED: Start L{CurrentData.PitWindowStart} > End L{CurrentData.PitWindowEnd} - swapping");
+            (CurrentData.PitWindowStart, CurrentData.PitWindowEnd) = (CurrentData.PitWindowEnd, CurrentData.PitWindowStart);
+        }
+
         LogDebug($"PIT WINDOW: Earliest=L{CurrentData.EarliestPitLap}, Optimal=L{CurrentData.PitWindowStart}-L{CurrentData.PitWindowEnd}, Latest=L{CurrentData.LatestPitLap}");
         
         // ===== SECTION 5: STRATEGIC DECISION TREE =====
@@ -1497,9 +2005,10 @@ public class FuelCalculatorService
         // Compare: Pitting now vs pitting at optimal lap
         int lapsUntilOptimalPit = Math.Max(0, optimalPitLap - currentLap);
         
-        // Fuel weight penalty: More fuel = slower lap times (estimated ~0.03s per lap per liter)
-        float currentFuelWeight = CurrentData.CurrentFuel * 0.03f; // seconds per lap
-        float optimalFuelWeight = (CurrentData.CurrentFuel - (lapsUntilOptimalPit * avgFuel)) * 0.03f;
+        // Fuel weight penalty: More fuel = slower lap times (car-class-specific penalty)
+        float fuelWeightPenalty = FuelWeightDatabase.GetFuelWeightPenalty(CurrentData.CarClassId);
+        float currentFuelWeight = CurrentData.CurrentFuel * fuelWeightPenalty; // seconds per lap
+        float optimalFuelWeight = (CurrentData.CurrentFuel - (lapsUntilOptimalPit * avgFuel)) * fuelWeightPenalty;
         float fuelWeightAdvantage = (currentFuelWeight - optimalFuelWeight) * lapsUntilOptimalPit;
         
         // Position cost: Pitting now under green vs pitting under yellow/late
@@ -1604,14 +2113,14 @@ public class FuelCalculatorService
         CurrentData.PitExitPosition = projectedPosition;
         CurrentData.PitExitPositionValid = true;
         
-        // Build gap description: "4s ahead of #14, 10s behind #9"
+        // Build gap description (abbreviated): "+4s #14 | -10s #9"
         var gapParts = new List<string>();
         
         if (carAheadIdx >= 0)
         {
             float gapToCarAhead = playerProjectedTime - telemetry.CarIdxF2Time[carAheadIdx];
             string carNum = telemetry.CarIdxToCarNumber.TryGetValue(carAheadIdx, out var num) ? num : $"{carAheadIdx}";
-            gapParts.Add($"{gapToCarAhead:F0}s to #{carNum}");
+            gapParts.Add($"+{gapToCarAhead:F0}s #{carNum}");
         }
         
         if (carBehindIdx >= 0)
@@ -1620,14 +2129,14 @@ public class FuelCalculatorService
             string carNum = telemetry.CarIdxToCarNumber.TryGetValue(carBehindIdx, out var num) ? num : $"{carBehindIdx}";
             
             if (gapParts.Count > 0)
-                gapParts.Add($"{gapFromCarBehind:F0}s from #{carNum}");
+                gapParts.Add($"-{gapFromCarBehind:F0}s #{carNum}");
             else
-                gapParts.Add($"{gapFromCarBehind:F0}s ahead of #{carNum}");
+                gapParts.Add($"+{gapFromCarBehind:F0}s #{carNum}");
         }
         
         if (gapParts.Count > 0)
         {
-            CurrentData.PitExitGapDescription = string.Join(", ", gapParts);
+            CurrentData.PitExitGapDescription = string.Join(" | ", gapParts);
         }
         
         // ===== PIT STATUS DETECTION (Option B) =====
@@ -1844,8 +2353,8 @@ public class FuelCalculatorService
 
         // Car-specific fuel weight penalty (kg per liter affects lap time)
         // Formula car: ~0.06s/lap per liter, GT3: ~0.03s/lap per liter, NASCAR: ~0.015s/lap per liter
-        // Using conservative 0.03s/lap per liter as default
-        float fuelWeightPenalty = 0.03f; // seconds per lap per liter
+        // Use car-class-specific penalty from database
+        float fuelWeightPenalty = FuelWeightDatabase.GetFuelWeightPenalty(CurrentData.CarClassId);
 
         // === OPTION 1: FULL TANK ===
         float fullTankFuel = Math.Min(CurrentData.TankCapacity, CurrentData.TankCapacity - CurrentData.CurrentFuel);
@@ -2421,6 +2930,84 @@ public class FuelCalculatorService
         
         // Phase 1: Reset FuelAveragingService EMA state
         _fuelAveragingService.Reset();
+        
+        // Phase 7: Reset lap delta tracker
+        _lapDeltaTracker.Reset();
+        
+        // Phase 9: Reset historical data flag
+        _historicalDataApplied = false;
+    }
+    
+    /// <summary>
+    /// Phase 9: Apply historical predictions at session start
+    /// Provides instant fuel/tire predictions instead of 3-lap warmup
+    /// </summary>
+    private void ApplyHistoricalPredictions(TelemetryData telemetry)
+    {
+        if (_historyService == null || _historicalDataApplied)
+            return;
+        
+        var prediction = _historyService.GetPrediction(
+            telemetry.TrackName,
+            telemetry.PlayerCarClass);
+        
+        if (prediction == null || !prediction.IsHighConfidence)
+            return;
+        
+        // Apply historical fuel prediction
+        CurrentData.AvgFuelPerLap_Session = prediction.AvgFuelPerLap;
+        CurrentData.AvgFuelPerLap_L5 = prediction.AvgFuelPerLap;
+        CurrentData.AvgFuelPerLap_L10 = prediction.AvgFuelPerLap;
+        // NOTE: Do NOT set AvgFuelPerLap_Last - it should remain 0 until first lap completes
+        CurrentData.AvgFuelPerLap_Last = 0f; // Explicitly zero out
+        CurrentData.AverageLapTime = prediction.AvgLapTime;
+        CurrentData.HistoricalFuelAverage = prediction.AvgFuelPerLap;
+        
+        // Apply tire predictions
+        CurrentData.MaxTireWearRate = prediction.AvgTireWearRate;
+        CurrentData.TireLapsRemaining = prediction.TireLapsAverage;
+        
+        // Mark as applied and show confidence
+        _historicalDataApplied = true;
+        CurrentData.HasSufficientData = true;
+        CurrentData.UsingHistoricalPredictions = true;
+        CurrentData.HistoricalConfidence = prediction.ConfidenceScore;
+        CurrentData.HistoricalSessionCount = prediction.SessionCount;
+        
+        Console.WriteLine($"[FuelCalculator] Applied historical prediction: {prediction.AvgFuelPerLap:F2}L/lap " +
+                         $"(confidence: {prediction.ConfidenceScore:F0}%, sessions: {prediction.SessionCount})");
+    }
+    
+    /// <summary>
+    /// Phase 9: Save session data to history
+    /// Should be called at end of session for learning
+    /// </summary>
+    public async Task SaveSessionHistoryAsync(TelemetryData telemetry)
+    {
+        if (_historyService == null || _lapHistory.Count < 5)
+            return; // Need at least 5 laps for reliable data
+        
+        // Calculate session averages
+        var validLaps = _lapHistory.Where(l => l.IsValidForAveraging).ToList();
+        if (validLaps.Count == 0)
+            return;
+        
+        float avgFuel = validLaps.Average(l => l.FuelUsed);
+        float avgLapTime = validLaps.Average(l => l.LapTime);
+        
+        // Get tire data if available (simplified for now)
+        float avgTireWear = CurrentData.MaxTireWearRate;
+        int tireLaps = CurrentData.TireLapsRemaining;
+        
+        await _historyService.UpdateHistoryAsync(
+            telemetry.TrackName,
+            telemetry.PlayerCarClass,
+            avgFuel,
+            avgLapTime,
+            avgTireWear,
+            tireLaps);
+        
+        Console.WriteLine($"[FuelCalculator] Saved session history: {avgFuel:F2}L/lap, {avgLapTime:F1}s/lap");
     }
     
     /// <summary>
@@ -2470,7 +3057,10 @@ public class FuelCalculatorService
                 $"Air temp {tempDelta:+0.0;-0.0}°C vs historical avg ({correctionPct:+0.0;-0.0}% fuel)";
             LogDebug($"TEMP CORRECTION: {currentAirTemp:F1}°C vs {historicalAirTemp:F1}°C → {correctionFactor:F3}x factor ({correctionPct:+0.0;-0.0}%)");
 
-            // Apply correction to all averages (multiply by correction factor)
+            // FIX #3 (CORRECTED): Apply temperature correction to stored averages ONCE per calculation cycle
+            // This is called AFTER CalculateAverages() populates the values, so we modify them once
+            // On next cycle, CalculateAverages() will recalculate from raw lap data, then this applies correction again
+            // This prevents compounding because we always start from fresh raw averages each cycle
             if (CurrentData.AvgFuelPerLap_Last > 0)
                 CurrentData.AvgFuelPerLap_Last *= correctionFactor;
             if (CurrentData.AvgFuelPerLap_L5 > 0)
@@ -2528,6 +3118,7 @@ public class FuelCalculatorService
 
     /// <summary>
     /// Write debug message to log file
+    /// ENABLED: Debug logging for diagnostics
     /// </summary>
     private void LogDebug(string message)
     {
@@ -2538,6 +3129,14 @@ public class FuelCalculatorService
                 "MRT-UI",
                 "fuel_debug.log"
             );
+            
+            // Ensure directory exists
+            var directory = System.IO.Path.GetDirectoryName(logPath);
+            if (!string.IsNullOrEmpty(directory) && !System.IO.Directory.Exists(directory))
+            {
+                System.IO.Directory.CreateDirectory(directory);
+            }
+            
             var logMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n";
             System.IO.File.AppendAllText(logPath, logMessage);
         }

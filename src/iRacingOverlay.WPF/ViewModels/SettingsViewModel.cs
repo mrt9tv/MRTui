@@ -405,16 +405,16 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Show Last 10 laps average
+    /// Show fuel range (min-max consumption)
     /// </summary>
-    public bool FuelWidget_ShowL10
+    public bool FuelWidget_ShowRange
     {
-        get => _settings.FuelWidget_ShowL10;
+        get => _settings.FuelWidget_ShowRange;
         set
         {
-            if (_settings.FuelWidget_ShowL10 != value)
+            if (_settings.FuelWidget_ShowRange != value)
             {
-                _settings.FuelWidget_ShowL10 = value;
+                _settings.FuelWidget_ShowRange = value;
                 OnPropertyChanged();
                 SaveAndNotify();
             }
@@ -422,16 +422,33 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Show session average
+    /// Show fuel saving mode badge
     /// </summary>
-    public bool FuelWidget_ShowSession
+    public bool FuelWidget_ShowSavingBadge
     {
-        get => _settings.FuelWidget_ShowSession;
+        get => _settings.FuelWidget_ShowSavingBadge;
         set
         {
-            if (_settings.FuelWidget_ShowSession != value)
+            if (_settings.FuelWidget_ShowSavingBadge != value)
             {
-                _settings.FuelWidget_ShowSession = value;
+                _settings.FuelWidget_ShowSavingBadge = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show pit strategy recommendation
+    /// </summary>
+    public bool FuelWidget_ShowStrategyRecommendation
+    {
+        get => _settings.FuelWidget_ShowStrategyRecommendation;
+        set
+        {
+            if (_settings.FuelWidget_ShowStrategyRecommendation != value)
+            {
+                _settings.FuelWidget_ShowStrategyRecommendation = value;
                 OnPropertyChanged();
                 SaveAndNotify();
             }
@@ -617,31 +634,6 @@ public class SettingsViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Show standalone pit strategy window
-    /// </summary>
-    public bool ShowPitStrategyWindow
-    {
-        get => _settings.ShowPitStrategyWindow;
-        set
-        {
-            if (_settings.ShowPitStrategyWindow != value)
-            {
-                _settings.ShowPitStrategyWindow = value;
-                OnPropertyChanged();
-                SaveAndNotify();
-                
-                // Toggle window visibility
-                if (_mainWindow is MainWindow mainWindow)
-                {
-                    if (value)
-                        mainWindow.ShowPitStrategyWindow();
-                    else
-                        mainWindow.HidePitStrategyWindow();
-                }
-            }
-        }
-    }
-
     #endregion
 
     #endregion

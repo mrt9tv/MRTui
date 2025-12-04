@@ -5,8 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using iRacingOverlay.Core.Services;
+using iRacingOverlay.Core.Services.Tire;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
+using iRacingOverlay.WPF.Widgets.RaceStrategy;
 using Microsoft.Extensions.Logging;
 
 namespace iRacingOverlay.WPF.Services;
@@ -18,9 +20,13 @@ public class WidgetManager
 {
     private readonly ITelemetryService _telemetryService;
     private readonly FuelCalculatorService _fuelCalculatorService;
+    private readonly TireStrategyService _tireStrategyService;
     private readonly ILogger<WidgetManager> _logger;
     private readonly Dictionary<Guid, WidgetBase> _activeWidgets = new();
     private readonly Dictionary<WidgetType, Func<ITelemetryService, WidgetConfig, WidgetBase>> _widgetFactories = new();
+    
+    // Special handling for standalone windows (non-overlay widgets)
+    private RaceStrategyWidget? _raceStrategyWidget;
 
     public IReadOnlyDictionary<Guid, WidgetBase> ActiveWidgets => _activeWidgets;
 
@@ -28,10 +34,11 @@ public class WidgetManager
     public event EventHandler<Guid>? WidgetRemoved;
     public event EventHandler? WidgetVisibilityChanged;
 
-    public WidgetManager(ITelemetryService telemetryService, FuelCalculatorService fuelCalculatorService, ILogger<WidgetManager> logger)
+    public WidgetManager(ITelemetryService telemetryService, FuelCalculatorService fuelCalculatorService, TireStrategyService tireStrategyService, ILogger<WidgetManager> logger)
     {
         _telemetryService = telemetryService ?? throw new ArgumentNullException(nameof(telemetryService));
         _fuelCalculatorService = fuelCalculatorService ?? throw new ArgumentNullException(nameof(fuelCalculatorService));
+        _tireStrategyService = tireStrategyService ?? throw new ArgumentNullException(nameof(tireStrategyService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         RegisterWidgetFactories();
@@ -49,7 +56,7 @@ public class WidgetManager
             new Widgets.DataWidget.DataWidget(service, config);
 
         _widgetFactories[WidgetType.Fuel] = (service, config) =>
-            new Widgets.FuelWidget.FuelWidget(service, _fuelCalculatorService, config);
+            new Widgets.FuelWidgets.FuelWidget(service, _fuelCalculatorService, config);
 
         // TODO: Uncomment as we create more widgets
         // _widgetFactories[WidgetType.TelemetryTable] = (service, config) =>
@@ -66,6 +73,15 @@ public class WidgetManager
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)
     {
         _logger.LogInformation("Creating widget of type: {Type}", type);
+
+        // Special handling for RaceStrategy (standalone window, not WidgetBase)
+        if (type == WidgetType.RaceStrategy)
+        {
+            ShowRaceStrategyWidget();
+            
+            // Return null but don't crash - caller should check for RaceStrategy type
+            return null!;
+        }
 
         if (!_widgetFactories.TryGetValue(type, out var factory))
         {
@@ -93,6 +109,59 @@ public class WidgetManager
         SaveCurrentLayout(); // Persist layout after widget creation
 
         return widget;
+    }
+    
+    /// <summary>
+    /// Show Race Strategy Widget (Phase 10)
+    /// </summary>
+    private void ShowRaceStrategyWidget()
+    {
+        try
+        {
+            // Ensure we're on the UI thread
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (_raceStrategyWidget == null)
+                {
+                    _logger.LogInformation("Creating new RaceStrategyWidget...");
+                    _raceStrategyWidget = new RaceStrategyWidget(_fuelCalculatorService, _tireStrategyService, _telemetryService);
+                    _raceStrategyWidget.Closed += (s, e) =>
+                    {
+                        _logger.LogInformation("RaceStrategyWidget closed");
+                        _raceStrategyWidget = null;
+                        WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
+                    };
+                }
+                
+                _logger.LogInformation("Showing RaceStrategyWidget...");
+                _raceStrategyWidget.Show();
+                _raceStrategyWidget.Activate();
+                
+                _logger.LogInformation("Race Strategy Widget shown successfully");
+            });
+            
+            WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to show Race Strategy Widget");
+            throw;
+        }
+    }
+    
+    /// <summary>
+    /// Hide Race Strategy Widget (Phase 10)
+    /// </summary>
+    public void HideRaceStrategyWidget()
+    {
+        if (_raceStrategyWidget != null)
+        {
+            _raceStrategyWidget.Close();
+            _raceStrategyWidget = null;
+            
+            _logger.LogInformation("Race Strategy Widget hidden");
+            WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>
@@ -282,6 +351,12 @@ public class WidgetManager
     /// </summary>
     public bool HasWidgetType(WidgetType type)
     {
+        // Special handling for RaceStrategy
+        if (type == WidgetType.RaceStrategy)
+        {
+            return _raceStrategyWidget != null && _raceStrategyWidget.IsVisible;
+        }
+        
         return _activeWidgets.Values.Any(w => w.WidgetType == type && w.IsVisible);
     }
 
@@ -290,6 +365,12 @@ public class WidgetManager
     /// </summary>
     public IEnumerable<WidgetBase> GetWidgetsByType(WidgetType type)
     {
+        // Special handling for RaceStrategy (returns empty since it's not a WidgetBase)
+        if (type == WidgetType.RaceStrategy)
+        {
+            return Enumerable.Empty<WidgetBase>();
+        }
+        
         return _activeWidgets.Values.Where(w => w.WidgetType == type);
     }
 

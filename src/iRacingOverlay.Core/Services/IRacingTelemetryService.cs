@@ -42,7 +42,12 @@ namespace iRacingOverlay.Core.Services;
     TelemetryVar.LapDeltaToBestLap_DD, // seconds - Delta-delta (rate of change)
     TelemetryVar.LapDeltaToSessionBestLap, // seconds - Delta to session best
     TelemetryVar.SessionTimeRemain, // seconds
-    
+
+    // CRITICAL SESSION LAP/TIME VARS (USER INSIGHT: Use SDK directly instead of calculating!)
+    TelemetryVar.SessionLapsTotal,  // Total laps in the race (replaces buggy SessionLaps)
+    TelemetryVar.SessionLapsRemain, // Laps remaining (direct from SDK - NO CALCULATION NEEDED!)
+    TelemetryVar.SessionTimeTotal,  // Total session time
+
     // MVP 3+ - Advanced telemetry
     TelemetryVar.LFtempCL,        // Left Front tire temp - center left
     TelemetryVar.LFtempCM,        // Left Front tire temp - center middle
@@ -173,7 +178,11 @@ namespace iRacingOverlay.Core.Services;
     TelemetryVar.PlayerCarSLBlinkRPM,   // float - Blink threshold (over-rev warning)
 
     // ===== PHASE 2: PIT LIMITER DETECTION =====
-    TelemetryVar.dcPitSpeedLimiterToggle // bool - Pit speed limiter active state
+    TelemetryVar.dcPitSpeedLimiterToggle, // bool - Pit speed limiter active state
+    
+    // ===== PHASE 10.8: PIT REPAIR TIMES (Damage Assessment) =====
+    TelemetryVar.PitRepairLeft,       // float - Time for mandatory repairs (seconds)
+    TelemetryVar.PitOptRepairLeft     // float - Time for optional repairs (seconds)
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -208,6 +217,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private float _trackPitSpeedLimit = 0f; // Pit speed limit in m/s (parsed from "55.98 kph" format)
     private bool _sessionInfoParsed = false;
     private Dictionary<int, string> _carIdxToCarNumber = new(); // CarIdx -> Car Number mapping (for pit exit display)
+    private Dictionary<int, string> _carIdxToDriverName = new(); // CarIdx -> Driver Name mapping (for competitor intelligence)
 
     public ConnectionStatus Status
     {
@@ -504,9 +514,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     : 0f,
                 // Use Lap as LapsCompleted (they're equivalent in iRacing)
                 LapsCompleted = sdkData.Lap.GetValueOrDefault(),
-                // Set SessionLaps and SessionLapsRemainEx to 0 for now (will be populated if SDK supports it)
-                SessionLaps = 0,
-                SessionLapsRemainEx = 0,
+                // FIX: Use direct SDK values instead of 0 (USER INSIGHT: No calculation needed!)
+                SessionLaps = 0, // DEPRECATED - kept for backward compat
+                SessionLapsTotal = sdkData.SessionLapsTotal.GetValueOrDefault(),
+                SessionLapsRemain = sdkData.SessionLapsRemain.GetValueOrDefault(),
+                // NOTE: SessionLapsRemainEx already exists and is auto-updated by SDK
+                SessionTimeTotal = (float)sdkData.SessionTimeTotal.GetValueOrDefault(),
                 WaterTemp = sdkData.WaterTemp.GetValueOrDefault(),
                 WaterLevel = sdkData.WaterLevel.GetValueOrDefault(),
                 OilTemp = sdkData.OilTemp.GetValueOrDefault(),
@@ -621,6 +634,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 TrackLength = _trackLength,
                 TrackPitSpeedLimit = _trackPitSpeedLimit,
                 CarIdxToCarNumber = _carIdxToCarNumber.Count > 0 ? new Dictionary<int, string>(_carIdxToCarNumber) : null,
+                CarIdxToDriverName = _carIdxToDriverName.Count > 0 ? new Dictionary<int, string>(_carIdxToDriverName) : null,
 
                 // Live Position Calculation
                 SessionState = (int)sdkData.SessionState.GetValueOrDefault(),
@@ -652,9 +666,19 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 YawRate = sdkData.YawRate.GetValueOrDefault(),
 
                 // ===== PHASE 2: PIT LIMITER DETECTION =====
-                PitSpeedLimiterActive = sdkData.dcPitSpeedLimiterToggle.GetValueOrDefault()
+                PitSpeedLimiterActive = sdkData.dcPitSpeedLimiterToggle.GetValueOrDefault(),
+                
+                // ===== PIT REPAIR TIMES (Phase 10.8: Damage Assessment) =====
+                PitRepairLeft = sdkData.PitRepairLeft.GetValueOrDefault(),
+                PitOptRepairLeft = sdkData.PitOptRepairLeft.GetValueOrDefault()
             };
-            
+
+            // ===== CRITICAL: CALCULATE ACTUAL LEADING LAP & RACE LEADER LAP =====
+            // These values are ESSENTIAL for accurate race end and fuel calculations
+            // ActualLeadingLapNumber = highest lap any car is on (regardless of position)
+            // RaceLeaderLapNumber = lap that P1 (by position) is on
+            CalculateLeadingLapNumbers(sdkData, data);
+
             // Calculate live positions (handles race mode, qualifying mode, and position freezing)
             data.LivePosition = _livePositionCalculator.CalculateLivePosition(data, classOnly: false);
             data.LiveClassPosition = _livePositionCalculator.CalculateLivePosition(data, classOnly: true);
@@ -790,6 +814,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     {
                         inDriversArray = true;
                         _carIdxToCarNumber.Clear(); // Reset car number mapping for new session
+                        _carIdxToDriverName.Clear(); // Reset driver name mapping for new session
                     }
                     else if (inDriversArray)
                     {
@@ -816,6 +841,16 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             {
                                 _carNumber = carNumber;
                                 _logger.LogInformation("Parsed car number: {CarNumber}", _carNumber);
+                            }
+                        }
+                        else if (trimmed.StartsWith("UserName:"))
+                        {
+                            var userName = ExtractYamlValue(trimmed).Trim('"', '\'');
+                            
+                            // Store driver name for ALL drivers (not just player)
+                            if (currentDriverCarIdx >= 0)
+                            {
+                                _carIdxToDriverName[currentDriverCarIdx] = userName;
                             }
                         }
                     }
@@ -1186,6 +1221,105 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         if (diff > 0.5f) diff -= 1.0f;   // Car closer going backward
         
         return diff; // Positive = ahead, negative = behind
+    }
+
+    /// <summary>
+    /// Calculate ActualLeadingLapNumber and RaceLeaderLapNumber from CarIdx arrays.
+    /// CRITICAL for accurate race end and fuel calculations.
+    ///
+    /// ActualLeadingLapNumber = highest lap any car is currently on (race end condition)
+    /// RaceLeaderLapNumber = lap that P1 (by position) is on (may differ if leader is lapped)
+    ///
+    /// Example: In a 20-lap race with lapped cars:
+    /// - Car #5 (P1 by position) on lap 18 (lapped) → RaceLeaderLapNumber = 18
+    /// - Car #10 (P2 by position) on lap 19 (unlapping) → ActualLeadingLapNumber = 19
+    /// Race ends when ActualLeadingLapNumber reaches SessionLaps (20), NOT when RaceLeaderLapNumber does.
+    /// </summary>
+    private void CalculateLeadingLapNumbers(dynamic sdkData, Models.TelemetryData data)
+    {
+        try
+        {
+            // Calculate ActualLeadingLapNumber (highest lap any car is on)
+            if (sdkData.CarIdxLap != null && sdkData.CarIdxLap.Length > 0)
+            {
+                // Find the maximum lap number across all cars (filter out invalid values)
+                // CarIdxLap contains -1 for cars not in session, so filter those out
+                int maxLap = 0;
+                for (int i = 0; i < sdkData.CarIdxLap.Length; i++)
+                {
+                    int carLap = sdkData.CarIdxLap[i];
+                    if (carLap > maxLap)
+                    {
+                        maxLap = carLap;
+                    }
+                }
+
+                data.ActualLeadingLapNumber = maxLap;
+
+                // Fallback: If no valid laps found, use player's lap
+                if (data.ActualLeadingLapNumber == 0)
+                {
+                    data.ActualLeadingLapNumber = data.Lap;
+                }
+            }
+            else
+            {
+                // No CarIdxLap data available - use player's lap as fallback
+                data.ActualLeadingLapNumber = data.Lap;
+            }
+
+            // Calculate RaceLeaderLapNumber (P1 by position's lap)
+            if (sdkData.CarIdxPosition != null && sdkData.CarIdxLap != null)
+            {
+                // Find the car in P1 position
+                int leaderIdx = -1;
+                for (int i = 0; i < sdkData.CarIdxPosition.Length; i++)
+                {
+                    if (sdkData.CarIdxPosition[i] == 1) // Position 1 = race leader
+                    {
+                        leaderIdx = i;
+                        break;
+                    }
+                }
+
+                if (leaderIdx >= 0 && leaderIdx < sdkData.CarIdxLap.Length)
+                {
+                    data.RaceLeaderLapNumber = sdkData.CarIdxLap[leaderIdx];
+                }
+                else
+                {
+                    // Couldn't find P1 - use ActualLeadingLapNumber as fallback
+                    data.RaceLeaderLapNumber = data.ActualLeadingLapNumber;
+                }
+            }
+            else
+            {
+                // No position data - use ActualLeadingLapNumber as fallback
+                data.RaceLeaderLapNumber = data.ActualLeadingLapNumber;
+            }
+
+            // Debug logging for first few laps to verify calculations
+            if (data.Lap <= 3)
+            {
+                _logger?.LogInformation(
+                    "[LAP_CALC] Player: Lap {PlayerLap}, Completed {Completed} | " +
+                    "ActualLeading: {ActualLeading} | RaceLeader(P1): {RaceLeader} | " +
+                    "SessionLaps: {SessionLaps}",
+                    data.Lap,
+                    data.LapsCompleted,
+                    data.ActualLeadingLapNumber,
+                    data.RaceLeaderLapNumber,
+                    data.SessionLaps
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error calculating leading lap numbers");
+            // Set safe fallback values
+            data.ActualLeadingLapNumber = data.Lap;
+            data.RaceLeaderLapNumber = data.Lap;
+        }
     }
 
     public async Task DisconnectAsync()
