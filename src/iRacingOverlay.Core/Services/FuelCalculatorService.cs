@@ -97,6 +97,9 @@ public class FuelCalculatorService
     // Pit lap accuracy fix (Phase 1: FUEL_PIT_LAP_AND_FLAGS_FIX.md)
     private float _lastLapDistPct = 0f;  // Track lap distance percentage from previous update
     private int _virtualLapsCompleted = 0;  // Lap counter relative to pit entry (not start/finish)
+    
+    // Grid start lap detection - track LapDistPct when lap starts to detect partial laps
+    private float _lapDistPctAtLapStart = 0f;  // LapDistPct when current lap started
 
     // ENHANCEMENT: Dynamic pit entry detection (learns from first pit stop instead of hardcoded value)
     private float? _learnedPitEntryPct = null;  // Learned pit entry location (null = not yet learned)
@@ -159,6 +162,11 @@ public class FuelCalculatorService
             _lastFuelLevel = telemetry.FuelLevel;
             CurrentData.StartingFuel = telemetry.FuelLevel;
             _isFirstUpdate = false;
+            
+            // FIX: Save initial LapDistPct for grid start detection
+            // If we start behind S/F line (e.g., Oulton), this will be > 0
+            _lapDistPctAtLapStart = telemetry.LapDistPct;
+            LogDebug($"INIT: Starting at LapDistPct={telemetry.LapDistPct:P1} - Grid start detection enabled");
             
             // Phase 9: Apply historical predictions at session start
             ApplyHistoricalPredictions(telemetry);
@@ -453,6 +461,7 @@ public class FuelCalculatorService
                     _pittedThisLap = false; // Reset flag
                     _lapsCompletedWhenProcessed = 0; // Mark lap 0 as processed
                     _sessionStateAtLapStart = telemetry.SessionState; // Save for next lap
+                    _lapDistPctAtLapStart = telemetry.LapDistPct; // Save starting position for lap 1
                     LogDebug($"   _fuelAtLapStart reset to {_fuelAtLapStart:F2}L for lap 1");
                 }
                 else if (telemetry.LapsCompleted != _lapsCompletedWhenProcessed)
@@ -467,6 +476,10 @@ public class FuelCalculatorService
                 // FIX: Save SessionState for the NEW lap that's starting (checked when this lap completes)
                 // This captures parade/racing state at lap START instead of lap END
                 _sessionStateAtLapStart = telemetry.SessionState;
+                
+                // FIX: Save LapDistPct for the NEW lap that's starting
+                // Used to detect grid start partial laps (where grid is behind S/F line)
+                _lapDistPctAtLapStart = telemetry.LapDistPct;
             }
         }
         
@@ -766,10 +779,24 @@ public class FuelCalculatorService
         // Only actual refueling should mark a lap as a pit lap
         // Tow is handled separately and should not exclude lap from averages
         bool wasPitLap = wasRefueled;
+        
+        // FIX: Detect grid start partial laps - when grid is behind S/F line
+        // At race start, lap 1 may only cover a small portion of the track (grid to S/F)
+        // This uses very little fuel (e.g., 0.09L instead of 1.0L) and corrupts averages
+        // Detection: Lap 1 with less than 50% track distance covered
+        float lapDistanceCovered = 1.0f - _lapDistPctAtLapStart; // How much of track we actually covered
+        if (lapDistanceCovered < 0) lapDistanceCovered += 1.0f; // Handle wrap-around
+        bool isGridStartLap = telemetry.LapsCompleted == 1 && lapDistanceCovered < 0.5f;
+        
+        if (isGridStartLap)
+        {
+            LogDebug($"🏁 GRID START LAP DETECTED: Lap 1 only covered {lapDistanceCovered:P0} of track (started at {_lapDistPctAtLapStart:P0})");
+            LogDebug($"   Fuel used: {fuelUsed:F3}L - This lap will be EXCLUDED from averages");
+        }
 
         // DEBUG: Log lap completion details with ALL validity flags
         LogDebug($"Lap {telemetry.LapsCompleted} completed: FuelAtStart={_fuelAtLapStart:F3}L, FuelAtEnd={fuelAtLapEnd:F3}L, FuelUsed={fuelUsed:F3}L");
-        LogDebug($"  Flags: PitLap={wasPitLap}, OutLap={isOutLap}, Formation={isFormationLap}, PaceLap={isPaceLap} (SessionState@Start={_sessionStateAtLapStart}, @End={telemetry.SessionState}), EnteredPitRoad={pittedThisLap}");
+        LogDebug($"  Flags: PitLap={wasPitLap}, OutLap={isOutLap}, Formation={isFormationLap}, PaceLap={isPaceLap}, GridStart={isGridStartLap} (SessionState@Start={_sessionStateAtLapStart}, @End={telemetry.SessionState}), EnteredPitRoad={pittedThisLap}");
 
         // Create lap history record
         var lapRecord = new FuelLapHistory
@@ -785,6 +812,8 @@ public class FuelCalculatorService
             IsFormationLap = isFormationLap,
             IsOutLap = isOutLap, // Flag out-laps for exclusion from averages (cool tires, careful driving)
             IsIncompleteLap = false, // If OnLapCompleted fires, the lap WAS completed (LapDistPct resets to 0)
+            IsGridStartLap = isGridStartLap, // FIX: Grid start partial lap (grid behind S/F line)
+            LapDistanceCovered = lapDistanceCovered, // Track percentage of lap covered
             Timestamp = DateTime.UtcNow,
             IncidentCountAtStart = _lastIncidentCount,  // Incident count at lap start
             IncidentCountAtEnd = telemetry.PlayerCarMyIncidentCount,  // Incident count at lap end
@@ -792,7 +821,7 @@ public class FuelCalculatorService
         };
         
         // DEBUG: Log validation result
-        LogDebug($"  IsValidForAveraging={lapRecord.IsValidForAveraging} (needs: !PitLap && !Formation && !Incomplete && !PaceLap && !OutLap && FuelUsed>0)");
+        LogDebug($"  IsValidForAveraging={lapRecord.IsValidForAveraging} (needs: !PitLap && !Formation && !Incomplete && !PaceLap && !OutLap && !GridStart && FuelUsed>0)");
         
         // Update incident tracking for next lap
         _lastIncidentCount = telemetry.PlayerCarMyIncidentCount;
@@ -2922,6 +2951,7 @@ public class FuelCalculatorService
         _lapsCompletedWhenProcessed = -1;
         _lastIncidentCount = 0;  // Reset incident tracking
         _lastDelta = 0f;  // Reset delta tracking
+        _lapDistPctAtLapStart = 0f;  // Reset grid start lap tracking
         
         // Reset pit stop tracking
         _currentPitStop = null;
