@@ -93,6 +93,7 @@ public partial class MainWindow : Window
     private void BtnHome_Click(object sender, RoutedEventArgs e) => NavigateToHome();
     private void BtnDashboard_Click(object sender, RoutedEventArgs e) => NavigateToDashboard();
     private void BtnOverlay_Click(object sender, RoutedEventArgs e) => NavigateToOverlay();
+    private void BtnSetupEngineering_Click(object sender, RoutedEventArgs e) => OpenSetupEngineeringMode();
     private void BtnSettings_Click(object sender, RoutedEventArgs e) => NavigateToSettings();
 
     private void NavigateToHome()
@@ -139,11 +140,27 @@ public partial class MainWindow : Window
         SetActiveButton(BtnSettings);
     }
 
+    private void OpenSetupEngineeringMode()
+    {
+        try
+        {
+            var setupWindow = new Windows.SetupEngineering.SetupEngineeringWindow();
+            setupWindow.Show();
+            _logger.LogInformation("Setup Engineering Mode opened");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open Setup Engineering window");
+            MessageBox.Show($"Error opening Setup Engineering Mode: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void SetActiveButton(System.Windows.Controls.Button activeButton)
     {
         BtnHome.Tag = null;
         BtnDashboard.Tag = null;
         BtnOverlay.Tag = null;
+        BtnSetupEngineering.Tag = null;
         BtnSettings.Tag = null;
         activeButton.Tag = "Active";
     }

@@ -349,7 +349,7 @@ public partial class SetupEngineeringWindow : Window
     /// <summary>
     /// Generate ML recommendations
     /// </summary>
-    private async void GenerateMLButton_Click(object sender, RoutedEventArgs e)
+    private void GenerateMLButton_Click(object sender, RoutedEventArgs e)
     {
         if (_lastComparison == null) return;
         
@@ -368,6 +368,12 @@ public partial class SetupEngineeringWindow : Window
             );
             
             // Display recommendation
+            if (prediction == null)
+            {
+                ShowStatus("⚠️ ML service unavailable", isError: true);
+                return;
+            }
+            
             var recoBorder = new Border
             {
                 Background = new SolidColorBrush(Color.FromRgb(45, 45, 48)),

@@ -57,6 +57,11 @@
                         Style="{StaticResource NavigationButton}"
                         Click="BtnOverlay_Click"
                         Width="220" Margin="0,0,15,0"/>
+                <Button x:Name="BtnSetupEngineering" 
+                        Content="🔧 Setup Engineering" 
+                        Style="{StaticResource NavigationButton}"
+                        Click="BtnSetupEngineering_Click"
+                        Width="240" Margin="0,0,15,0"/>
                 <Button x:Name="BtnSettings" 
                         Content="⚙️ Settings" 
                         Style="{StaticResource NavigationButton}"
