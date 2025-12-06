@@ -23,6 +23,11 @@ namespace iRacingOverlay.WPF.Controls
         private int _currentLap = 1;
         private List<StintProjection> _stints = new();
         
+        // Change detection for performance optimization
+        private int _lastRenderedTotalLaps = -1;
+        private int _lastRenderedCurrentLap = -1;
+        private int _lastRenderedStintCount = -1;
+        
         // Visual settings
         private const double PIXELS_PER_LAP_BASE = 12.0; // Base pixels per lap at 100% zoom
         private const double LAP_MARKER_INTERVAL = 5;    // Show lap number every 5 laps
@@ -38,12 +43,30 @@ namespace iRacingOverlay.WPF.Controls
         
         /// <summary>
         /// Update timeline with race data
+        /// PERFORMANCE FIX: Only redraw if data actually changed
         /// </summary>
         public void UpdateTimeline(FuelData fuelData, int totalLaps, List<StintProjection> stints)
         {
-            _totalLaps = totalLaps > 0 ? totalLaps : 50;
-            _currentLap = fuelData.CurrentLap;
+            int newTotalLaps = totalLaps > 0 ? totalLaps : 50;
+            int newCurrentLap = fuelData.CurrentLap;
+            int newStintCount = stints?.Count ?? 0;
+            
+            // PERFORMANCE: Skip redraw if nothing changed
+            // This prevents expensive canvas clearing/redrawing every 500ms
+            if (newTotalLaps == _lastRenderedTotalLaps && 
+                newCurrentLap == _lastRenderedCurrentLap && 
+                newStintCount == _lastRenderedStintCount)
+            {
+                return; // No changes, skip expensive redraw
+            }
+            
+            _totalLaps = newTotalLaps;
+            _currentLap = newCurrentLap;
             _stints = stints ?? new List<StintProjection>();
+            
+            _lastRenderedTotalLaps = newTotalLaps;
+            _lastRenderedCurrentLap = newCurrentLap;
+            _lastRenderedStintCount = newStintCount;
             
             RedrawTimeline();
         }
