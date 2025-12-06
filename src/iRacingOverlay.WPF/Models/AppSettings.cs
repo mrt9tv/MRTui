@@ -256,6 +256,23 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public bool StartMinimized { get; set; } = false;
 
+    // ===== SNAP-TO-GRID SETTINGS (Phase 3.1) =====
+    
+    /// <summary>
+    /// Enable snap-to-grid when dragging widgets
+    /// </summary>
+    public bool SnapToGridEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// Grid size in pixels for snap-to-grid (default: 20px)
+    /// </summary>
+    public int SnapToGridSize { get; set; } = 20;
+    
+    /// <summary>
+    /// Show visual grid overlay when dragging widgets
+    /// </summary>
+    public bool ShowGridOverlay { get; set; } = true;
+
     // Hotkey Settings
     /// <summary>
     /// Modifier key for toggle lock hotkey (Ctrl, Alt, Shift, or None)

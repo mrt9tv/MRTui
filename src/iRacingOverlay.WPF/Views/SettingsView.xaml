@@ -294,6 +294,90 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Snap-to-Grid (Phase 3.1) -->
+                    <Border Background="{StaticResource DarkSurface}"
+                            BorderBrush="{StaticResource TealPrimary}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="15"
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="📐 Snap-to-Grid (Phase 3.1)" 
+                                     FontSize="16"
+                                     FontWeight="Bold"
+                                     Foreground="{StaticResource TealPrimary}"
+                                     Margin="0,0,0,15"/>
+
+                            <!-- Enable Snap-to-Grid -->
+                            <Grid Margin="0,0,0,15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Enable Snap-to-Grid" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Automatically align widgets to grid points when dragging"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding SnapToGridEnabled}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Grid Size -->
+                            <Grid Margin="0,0,0,15" IsEnabled="{Binding SnapToGridEnabled}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Grid Size" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Distance between grid points (pixels)"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Slider Width="150"
+                                          Minimum="10"
+                                          Maximum="50"
+                                          Value="{Binding SnapToGridSize}"
+                                          TickFrequency="5"
+                                          IsSnapToTickEnabled="True"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,10,0"/>
+                                    <TextBlock Text="{Binding SnapToGridSize, StringFormat={}{0}px}"
+                                             FontWeight="Bold"
+                                             Foreground="{StaticResource TealPrimary}"
+                                             VerticalAlignment="Center"
+                                             MinWidth="45"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Show Grid Overlay -->
+                            <Grid Margin="0,0,0,0" IsEnabled="{Binding SnapToGridEnabled}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Show Grid Overlay" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Display visual grid lines while dragging widgets (future feature)"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding ShowGridOverlay}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                     <!-- Fuel Widget Phase 3: Pit Strategy -->
                     <Border Background="{StaticResource DarkSurface}"
                             BorderBrush="{StaticResource OrangePrimary}"

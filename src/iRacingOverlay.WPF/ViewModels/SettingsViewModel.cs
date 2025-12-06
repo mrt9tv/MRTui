@@ -284,6 +284,59 @@ public class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    // ===== SNAP-TO-GRID PROPERTIES (Phase 3.1) =====
+
+    /// <summary>
+    /// Enable snap-to-grid when dragging widgets
+    /// </summary>
+    public bool SnapToGridEnabled
+    {
+        get => _settings.SnapToGridEnabled;
+        set
+        {
+            if (_settings.SnapToGridEnabled != value)
+            {
+                _settings.SnapToGridEnabled = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Grid size in pixels for snap-to-grid (10-50px, default 20px)
+    /// </summary>
+    public int SnapToGridSize
+    {
+        get => _settings.SnapToGridSize;
+        set
+        {
+            if (_settings.SnapToGridSize != value)
+            {
+                _settings.SnapToGridSize = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Show visual grid overlay when dragging widgets (future feature)
+    /// </summary>
+    public bool ShowGridOverlay
+    {
+        get => _settings.ShowGridOverlay;
+        set
+        {
+            if (_settings.ShowGridOverlay != value)
+            {
+                _settings.ShowGridOverlay = value;
+                OnPropertyChanged();
+                SaveAndNotify();
+            }
+        }
+    }
+
     /// <summary>
     /// Application version from centralized VersionInfo
     /// </summary>

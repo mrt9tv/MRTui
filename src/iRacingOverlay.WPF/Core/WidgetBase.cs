@@ -92,7 +92,7 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
-    /// Enable window dragging via mouse
+    /// Enable window dragging via mouse with snap-to-grid support
     /// </summary>
     private void EnableDragging()
     {
@@ -104,6 +104,21 @@ public abstract class WidgetBase : Window
             try
             {
                 DragMove();
+                
+                // Apply snap-to-grid after drag (Phase 3.1)
+                var appSettings = Models.AppSettings.Instance;
+                if (appSettings.SnapToGridEnabled)
+                {
+                    var snapped = Utilities.SnapToGridHelper.SnapWindowPosition(
+                        Left, 
+                        Top, 
+                        appSettings.SnapToGridSize, 
+                        appSettings.SnapToGridEnabled
+                    );
+                    
+                    Left = snapped.Left;
+                    Top = snapped.Top;
+                }
                 
                 // Update config with new position after drag
                 Config.X = Left;
@@ -117,8 +132,27 @@ public abstract class WidgetBase : Window
         };
         
         // Subscribe to LocationChanged to update config when window moves
+        // Also apply snap-to-grid during drag
         LocationChanged += (sender, e) =>
         {
+            var appSettings = Models.AppSettings.Instance;
+            if (appSettings.SnapToGridEnabled && !_isLocked)
+            {
+                var snapped = Utilities.SnapToGridHelper.SnapWindowPosition(
+                    Left, 
+                    Top, 
+                    appSettings.SnapToGridSize, 
+                    appSettings.SnapToGridEnabled
+                );
+                
+                // Only update if snapping actually changed the position
+                if (Math.Abs(Left - snapped.Left) > 0.1 || Math.Abs(Top - snapped.Top) > 0.1)
+                {
+                    Left = snapped.Left;
+                    Top = snapped.Top;
+                }
+            }
+            
             Config.X = Left;
             Config.Y = Top;
         };
