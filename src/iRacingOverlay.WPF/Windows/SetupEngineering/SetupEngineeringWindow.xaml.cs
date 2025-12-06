@@ -34,6 +34,15 @@ public partial class SetupEngineeringWindow : Window
     private int _lastLapNumber = -1;
     private int _sessionLapCount = 0;
     
+    // Sector timing tracking
+    private float _sector1StartTime = 0f;
+    private float _sector2StartTime = 0f;
+    private float _sector3StartTime = 0f;
+    private float _sector1Time = 0f;
+    private float _sector2Time = 0f;
+    private float _sector3Time = 0f;
+    private float _lapStartFuel = 0f;
+    
     public SetupEngineeringWindow(ITelemetryService? telemetryService = null)
     {
         InitializeComponent();
@@ -90,11 +99,55 @@ public partial class SetupEngineeringWindow : Window
             {
                 var latest = sessions.First();
                 TrackCarText.Text = $"{latest.TrackName} - {latest.CarName}";
+                
+                // Load setups for the latest session to populate ComboBoxes
+                _currentSessionId = latest.SessionId;
+                await LoadSetupListAsync();
             }
         }
         catch (Exception ex)
         {
             ShowStatus($"Error loading sessions: {ex.Message}", isError: true);
+        }
+    }
+    
+    /// <summary>
+    /// Load setup configurations for current session and populate ComboBoxes
+    /// </summary>
+    private async Task LoadSetupListAsync()
+    {
+        if (_currentSessionId == null) return;
+        
+        try
+        {
+            // Get all setups from current session
+            var setups = await _database.ListSetupsAsync(_currentSessionId);
+            
+            // Populate ComboBoxes with setup names
+            var setupDisplayItems = setups.Select(s => new
+            {
+                Display = $"{s.SetupName} ({s.LapCount} laps" + 
+                          (s.BestLapTime.HasValue ? $", Best: {s.BestLapTime.Value:F3}s)" : ")"),
+                SetupId = s.SetupId,
+                SetupName = s.SetupName
+            }).ToList();
+            
+            Dispatcher.Invoke(() =>
+            {
+                BaselineSetupCombo.ItemsSource = setupDisplayItems;
+                BaselineSetupCombo.DisplayMemberPath = "Display";
+                BaselineSetupCombo.SelectedValuePath = "SetupId";
+                
+                ModifiedSetupCombo.ItemsSource = setupDisplayItems;
+                ModifiedSetupCombo.DisplayMemberPath = "Display";
+                ModifiedSetupCombo.SelectedValuePath = "SetupId";
+                
+                ShowStatus($"✅ Loaded {setups.Count} setup(s) for comparison", isError: false);
+            });
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"⚠️ Error loading setup list: {ex.Message}", isError: true);
         }
     }
     
@@ -106,6 +159,31 @@ public partial class SetupEngineeringWindow : Window
         // Store latest telemetry data
         _lastTelemetryData = telemetry;
         
+        // Track sector times during active session (iRacing uses 3 sectors: 0-33%, 33-66%, 66-100%)
+        if (_currentSessionId != null)
+        {
+            var lapPct = telemetry.LapDistPct;
+            var sessionTime = (float)telemetry.SessionTime;
+            
+            // Sector 1: 0% → 33.33%
+            if (lapPct < 0.05f && _sector1StartTime == 0f) // Crossed start/finish
+            {
+                _sector1StartTime = sessionTime;
+                _lapStartFuel = telemetry.FuelLevel;
+            }
+            else if (lapPct >= 0.333f && lapPct < 0.400f && _sector1StartTime > 0f && _sector2StartTime == 0f)
+            {
+                _sector2StartTime = sessionTime;
+                _sector1Time = _sector2StartTime - _sector1StartTime;
+            }
+            // Sector 2: 33.33% → 66.66%
+            else if (lapPct >= 0.666f && lapPct < 0.733f && _sector2StartTime > 0f && _sector3StartTime == 0f)
+            {
+                _sector3StartTime = sessionTime;
+                _sector2Time = _sector3StartTime - _sector2StartTime;
+            }
+        }
+        
         // Track lap changes during active session
         if (_currentSessionId != null && telemetry.Lap != _lastLapNumber)
         {
@@ -114,8 +192,19 @@ public partial class SetupEngineeringWindow : Window
             {
                 _sessionLapCount++;
                 
+                // Calculate Sector 3 time (from 66.66% to 100%)
+                _sector3Time = telemetry.LapLastLapTime - (_sector1Time + _sector2Time);
+                
                 // Record lap to database (async without await to avoid blocking telemetry)
                 _ = RecordLapAsync(telemetry);
+                
+                // Reset sector tracking for next lap
+                _sector1StartTime = 0f;
+                _sector2StartTime = 0f;
+                _sector3StartTime = 0f;
+                _sector1Time = 0f;
+                _sector2Time = 0f;
+                _sector3Time = 0f;
                 
                 // Update UI on dispatcher thread
                 Dispatcher.Invoke(() =>
@@ -155,18 +244,35 @@ public partial class SetupEngineeringWindow : Window
         
         try
         {
+            // Calculate fuel used (start of lap fuel - end of lap fuel)
+            var fuelUsed = _lapStartFuel > 0 ? _lapStartFuel - telemetry.FuelLevel : (float?)null;
+            
+            // Package sector times (only if we have valid data)
+            float[]? sectorTimes = null;
+            if (_sector1Time > 0 && _sector2Time > 0 && _sector3Time > 0)
+            {
+                sectorTimes = new[] { _sector1Time, _sector2Time, _sector3Time };
+            }
+            
+            // Package tire temps (all 4 tires, center reading)
+            float[]? tireTemps = null;
+            if (telemetry.LFtempCM > 0 && telemetry.RFtempCM > 0 && telemetry.LRtempCM > 0 && telemetry.RRtempCM > 0)
+            {
+                tireTemps = new[] { telemetry.LFtempCM, telemetry.RFtempCM, telemetry.LRtempCM, telemetry.RRtempCM };
+            }
+            
             // Store lap telemetry data
             await _database.AddLapAsync(
                 setupId: _currentSetupId,
                 lapNumber: _sessionLapCount,
                 lapTime: telemetry.LapLastLapTime,
-                sectorTimes: null, // TODO: Parse sector times from telemetry
-                fuelUsed: null, // TODO: Calculate fuel used from FuelLevel delta
-                avgTireTemps: null,
+                sectorTimes: sectorTimes,
+                fuelUsed: fuelUsed,
+                avgTireTemps: tireTemps,
                 avgSpeed: telemetry.Speed,
-                maxSpeed: null,
+                maxSpeed: null, // TODO: Track max speed during lap
                 avgThrottle: telemetry.Throttle,
-                isValid: true, // TODO: Add validation logic
+                isValid: true, // TODO: Add validation logic (check for off-tracks, incidents)
                 incidentCount: 0
             );
         }
@@ -296,6 +402,9 @@ public partial class SetupEngineeringWindow : Window
             // Update UI with initial info
             TrackCarText.Text = $"{trackName} - {carInfo} | Laps: 0";
             
+            // Load setups for comparison ComboBoxes
+            await LoadSetupListAsync();
+            
             if (_telemetryService == null || _lastTelemetryData == null)
             {
                 ShowStatus("⚠️ Session started (no telemetry connection)", isError: false);
@@ -372,15 +481,27 @@ public partial class SetupEngineeringWindow : Window
     private async void CompareButton_Click(object sender, RoutedEventArgs e)
     {
         if (BaselineSetupCombo.SelectedItem == null || ModifiedSetupCombo.SelectedItem == null)
+        {
+            ShowStatus("⚠️ Please select both baseline and modified setups", isError: true);
             return;
+        }
         
         try
         {
             ShowStatus("Comparing setups...", isError: false);
             
-            // Get setup IDs (simplified - actual implementation would extract from ComboBox items)
-            var baselineId = "baseline-setup-id";  // TODO: Get from selected item
-            var modifiedId = "modified-setup-id";  // TODO: Get from selected item
+            // Extract setup IDs from selected items (dynamic objects from LINQ query)
+            dynamic baselineItem = BaselineSetupCombo.SelectedItem;
+            dynamic modifiedItem = ModifiedSetupCombo.SelectedItem;
+            
+            var baselineId = (string)baselineItem.SetupId;
+            var modifiedId = (string)modifiedItem.SetupId;
+            
+            if (baselineId == modifiedId)
+            {
+                ShowStatus("⚠️ Cannot compare a setup with itself", isError: true);
+                return;
+            }
             
             // Perform comparison
             var comparison = await _comparisonService.CompareSetupsAsync(baselineId, modifiedId);

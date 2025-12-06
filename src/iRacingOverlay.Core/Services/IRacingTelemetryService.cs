@@ -953,6 +953,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             {
                                 currentDriverCarIdx = idx;
                                 isPlayerDriver = (currentDriverCarIdx == driverCarIdx);
+                                _logger.LogDebug("Parsing driver CarIdx={CarIdx}, PlayerCarIdx={PlayerCarIdx}, IsPlayer={IsPlayer}", 
+                                    currentDriverCarIdx, driverCarIdx, isPlayerDriver);
                             }
                         }
                         else if (trimmed.StartsWith("CarNumber:"))
@@ -969,7 +971,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             if (isPlayerDriver)
                             {
                                 _carNumber = carNumber;
-                                _logger.LogInformation("Parsed car number: {CarNumber}", _carNumber);
+                                _logger.LogInformation("Parsed player car number: {CarNumber}", _carNumber);
                             }
                         }
                         else if (trimmed.StartsWith("UserName:"))
@@ -982,15 +984,24 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                                 _carIdxToDriverName[currentDriverCarIdx] = userName;
                             }
                         }
-                        else if (trimmed.StartsWith("CarScreenName:"))
+                        else if (trimmed.StartsWith("CarScreenName:") || trimmed.StartsWith("CarScreenNameShort:"))
                         {
                             var carScreenName = ExtractYamlValue(trimmed).Trim('"', '\'');
                             
+                            _logger.LogDebug("Found CarScreenName='{Name}' for CarIdx={CarIdx}, IsPlayer={IsPlayer}", 
+                                carScreenName, currentDriverCarIdx, isPlayerDriver);
+                            
                             // Store player's car model name
-                            if (isPlayerDriver)
+                            if (isPlayerDriver && !string.IsNullOrEmpty(carScreenName))
                             {
                                 _carScreenName = carScreenName;
-                                _logger.LogInformation("Parsed car screen name: {CarScreenName}", _carScreenName);
+                                _logger.LogInformation("✅ Parsed player car screen name: {CarScreenName}", _carScreenName);
+                            }
+                            // FALLBACK: If we somehow missed the player check, use ANY CarScreenName if we don't have one yet
+                            else if (string.IsNullOrEmpty(_carScreenName) && !string.IsNullOrEmpty(carScreenName))
+                            {
+                                _carScreenName = carScreenName;
+                                _logger.LogWarning("⚠️ Using fallback CarScreenName: {CarScreenName} (player detection may have failed)", _carScreenName);
                             }
                         }
                     }
