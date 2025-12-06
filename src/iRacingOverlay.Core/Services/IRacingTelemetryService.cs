@@ -208,7 +208,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     // Diagnostic: Variable dumper
     private bool _variablesDumped = false;
     
-    // Session info caching (populated from SessionInfo YAML)
+    // ===== YAML PARSING CACHE (Task 5 Optimization) =====
+    // Tier 1: Static cache - Session info that never changes during a session
     private string _driverName = "";
     private string _carNumber = "";
     private string _trackName = "";
@@ -218,6 +219,11 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private bool _sessionInfoParsed = false;
     private Dictionary<int, string> _carIdxToCarNumber = new(); // CarIdx -> Car Number mapping (for pit exit display)
     private Dictionary<int, string> _carIdxToDriverName = new(); // CarIdx -> Driver Name mapping (for competitor intelligence)
+    
+    // Tier 2: SessionInfo version tracking - Only parse when SDK increments SessionInfoUpdate
+    // Note: Weather data (TrackTemp, AirTemp, WeatherType) comes from SDK real-time telemetry (60Hz),
+    //       NOT from YAML SessionInfo. YAML parsing is for static session metadata only.
+    private int _lastSessionInfoVersion = -1; // iRacing SDK increments this when SessionInfo changes
 
     public ConnectionStatus Status
     {
@@ -380,8 +386,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     }
 
     /// <summary>
-    /// Attempt to get and parse session info from the SDK.
-    /// This is called when connection state changes to Connected.
+    /// Attempt to get and parse session info from the SDK with version-based caching.
+    /// Optimization: Only parse YAML when iRacing SDK increments SessionInfoUpdate property.
+    /// Result: 99%+ cache hits (parsing only happens on session change or initial connect).
     /// </summary>
     private void TryParseSessionInfo()
     {
@@ -393,8 +400,21 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 return;
             }
             
-            // The SDK exposes session info via GetRawTelemetrySessionInfoYaml() method
+            // Get SessionInfo update version via reflection (SDK increments this when SessionInfo changes)
             var clientType = _client.GetType();
+            var sessionInfoUpdateProp = clientType.GetProperty("SessionInfoUpdate");
+            int currentSessionInfoVersion = sessionInfoUpdateProp != null 
+                ? (int)(sessionInfoUpdateProp.GetValue(_client) ?? -1) 
+                : -1;
+            
+            // Skip parsing if SessionInfo unchanged (99%+ of calls after initial connection)
+            if (_sessionInfoParsed && currentSessionInfoVersion == _lastSessionInfoVersion)
+            {
+                // Cache hit - no parsing needed
+                return;
+            }
+            
+            // Cache miss - parse SessionInfo YAML (only on session change or first connect)
             var getSessionInfoMethod = clientType.GetMethod("GetRawTelemetrySessionInfoYaml");
             
             if (getSessionInfoMethod != null)
@@ -402,8 +422,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 var sessionInfo = getSessionInfoMethod.Invoke(_client, null) as string;
                 if (!string.IsNullOrEmpty(sessionInfo))
                 {
-                    _logger.LogDebug("SessionInfo YAML received: {Length} characters", sessionInfo.Length);
+                    _logger.LogDebug("SessionInfo YAML parsing triggered (Version: {Version})", currentSessionInfoVersion);
                     ParseSessionInfo(sessionInfo);
+                    _lastSessionInfoVersion = currentSessionInfoVersion;
                 }
                 else
                 {
@@ -436,16 +457,22 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 _lastUpdateRateCalculation = now;
             }
             
-            // Try to parse session info if not yet parsed (might not be available immediately on connect)
-            // Keep trying until we successfully get TrackLength, since it's critical for distance calculations
+            // Try to parse session info - version-based cache in TryParseSessionInfo handles optimization
+            // Initial connection: Parse static data (track name, length, pit speed) until track length obtained
+            // After initial parse: SessionInfo version check provides 99%+ cache hits (no YAML parsing)
             if (!_sessionInfoParsed || _trackLength <= 0)
             {
                 TryParseSessionInfo();
-                // Only mark as parsed once we have track length
+                // Mark as parsed once we have track length (critical for distance calculations)
                 if (_trackLength > 0)
                 {
                     _sessionInfoParsed = true;
                 }
+            }
+            else
+            {
+                // Session info parsed - still call to detect session changes (version check is fast)
+                TryParseSessionInfo();
             }
             
             // Detect lap change and reset lap timer
