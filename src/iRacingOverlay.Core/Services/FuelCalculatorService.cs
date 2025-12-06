@@ -57,6 +57,10 @@ public class FuelCalculatorService
     private readonly PitStopTracker _pitStopTracker;
     private readonly LiveFuelCalculator _liveFuelCalculator;
     
+    // Optional Fine-Tuning: Extracted service fields
+    private readonly LapValidator _lapValidator;
+    private readonly TemperatureCompensationService _temperatureCompensation;
+    
     // EMA (Exponential Moving Average) tracking - REMOVED: No longer used, replaced by DeltaTrackingService
     // private float _emaValue = 0f;  // Current EMA value
     // private bool _emaInitialized = false;  // Whether EMA has been initialized with first lap
@@ -70,11 +74,6 @@ public class FuelCalculatorService
     // Pit stop tracking (Phase 6: Extracted to PitStopTracker service)
     private readonly SessionPersistenceService _persistenceService;
     private SessionStatistics? _sessionStats = null;
-    
-    // REMOVED: Fuel pressure tracking (not available in iRacing SDK)
-    // private bool _baselineFuelPressureEstablished = false;
-    // private readonly List<float> _fuelPressureHistory = new();
-    // private const int BASELINE_LAPS_NEEDED = 3;
     
     // Dynamic buffer configuration
     private float _bufferLaps = 1.0f;  // User-configured base buffer
@@ -114,6 +113,10 @@ public class FuelCalculatorService
         // Phase 6: Extract complex methods to services
         _pitStopTracker = new PitStopTracker();
         _liveFuelCalculator = new LiveFuelCalculator();
+        
+        // Optional Fine-Tuning: Extracted services
+        _lapValidator = new LapValidator();
+        _temperatureCompensation = new TemperatureCompensationService();
         
         // Phase 9: Initialize history service (load async in background)
         _historyService = new History.TelemetryHistoryService();
@@ -195,10 +198,6 @@ public class FuelCalculatorService
             telemetry.PlayerCarClass, 
             telemetry.FuelLevelMax
         );
-        
-        // Track fuel pressure and establish baseline (Enhanced Phase 2.1)
-        // REMOVED: Fuel pressure tracking (not available in iRacing SDK)
-        // UpdateFuelPressureTracking(telemetry);
         
         // FIX #3: Update lap completion context (race position awareness)
         UpdateLapCompletionContext(telemetry);
@@ -675,89 +674,21 @@ public class FuelCalculatorService
     /// <param name="fuelBeforePit">Fuel level saved before entering pits (0 if didn't pit)</param>
     private void OnLapCompleted(TelemetryData telemetry, bool wasRefueled, bool pittedThisLap, float fuelBeforePit)
     {
-        // FIX: Use saved fuel level from before pit entry to calculate fuel used
-        // This prevents refueling from contaminating the lap fuel calculation
-        float fuelAtLapEnd = pittedThisLap && fuelBeforePit > 0 ? fuelBeforePit : telemetry.FuelLevel;
-        float fuelUsed = _fuelAtLapStart - fuelAtLapEnd;
-
-        LogDebug($"LAP {telemetry.LapsCompleted} fuel calculation: Start={_fuelAtLapStart:F2}L, End={fuelAtLapEnd:F2}L, Used={fuelUsed:F3}L, Pitted={pittedThisLap}");
-
-        // ===== USER INSIGHT: TOW DETECTION USING SDK DATA ONLY =====
-        // REMOVED: Heuristic "low fuel = tow" detection (caused false positives on lap 1)
-        // NEW: Use ONLY SDK refueling flag - if fuel increased, SDK tells us directly
-        //
-        // EXAMPLE OF THE PROBLEM:
-        //   OLD: Lap 1 uses 0.044L (formation lap) → marked as "tow" → excluded from averages ❌
-        //   NEW: Lap 1 uses 0.044L → only marked invalid if it's truly a refuel event ✅
-        //
-        // BENEFITS:
-        //   - Uses actual SDK data (fuel delta > 0.3L = refuel) instead of guessing
-        //   - No false positives on legitimate low-fuel laps (formation, slow starts)
-        //   - Cleaner logic, fewer invalid lap exclusions
-        //
-        // NOTE: wasRefueled parameter already contains the SDK refueling indicator
-        //       No need for separate tow detection - refuel IS the tow indicator
-
-        // Detect out-lap: first lap after leaving pits (previous lap was pit lap OR just left pits flag)
-        bool isOutLap = _justLeftPits || (_lapHistory.Count > 0 && _lapHistory.Last().WasPitLap);
-
-        // FIX: Formation lap (lap 0) is skipped BEFORE calling this function
-        // No need to check for formation lap here
-        bool isFormationLap = false;
-
-        // FIX: Check if this is a pace lap using SessionState from lap START (not lap END)
-        // PROBLEM: If lap 1 starts during parade (SessionState=3) but green flag drops mid-lap,
-        //          SessionState will be 4 (Racing) when lap completes, incorrectly marking it as non-pace
-        // SOLUTION: Use _sessionStateAtLapStart which was saved when the lap began
-        bool isPaceLap = _sessionStateAtLapStart == 3;
-
-        // FIX: WasPitLap should ONLY be true if we actually REFUELED (not low fuel or tow)
-        // Only actual refueling should mark a lap as a pit lap
-        // Tow is handled separately and should not exclude lap from averages
-        bool wasPitLap = wasRefueled;
-        
-        // FIX: Detect grid start partial laps - when grid is behind S/F line
-        // At race start, lap 1 may only cover a small portion of the track (grid to S/F)
-        // This uses very little fuel (e.g., 0.09L instead of 1.0L) and corrupts averages
-        // Detection: Lap 1 with less than 50% track distance covered
-        float lapDistanceCovered = 1.0f - _lapDistPctAtLapStart; // How much of track we actually covered
-        if (lapDistanceCovered < 0) lapDistanceCovered += 1.0f; // Handle wrap-around
-        bool isGridStartLap = telemetry.LapsCompleted == 1 && lapDistanceCovered < 0.5f;
-        
-        if (isGridStartLap)
-        {
-            LogDebug($"🏁 GRID START LAP DETECTED: Lap 1 only covered {lapDistanceCovered:P0} of track (started at {_lapDistPctAtLapStart:P0})");
-            LogDebug($"   Fuel used: {fuelUsed:F3}L - This lap will be EXCLUDED from averages");
-        }
-
-        // DEBUG: Log lap completion details with ALL validity flags
-        LogDebug($"Lap {telemetry.LapsCompleted} completed: FuelAtStart={_fuelAtLapStart:F3}L, FuelAtEnd={fuelAtLapEnd:F3}L, FuelUsed={fuelUsed:F3}L");
-        LogDebug($"  Flags: PitLap={wasPitLap}, OutLap={isOutLap}, Formation={isFormationLap}, PaceLap={isPaceLap}, GridStart={isGridStartLap} (SessionState@Start={_sessionStateAtLapStart}, @End={telemetry.SessionState}), EnteredPitRoad={pittedThisLap}");
-
-        // Create lap history record
-        var lapRecord = new FuelLapHistory
-        {
-            LapNumber = telemetry.LapsCompleted,
-            FuelUsed = Math.Max(0, fuelUsed), // Don't record negative fuel
-            LapTime = telemetry.LapLastLapTime,
-            FuelAtStart = _fuelAtLapStart,
-            FuelAtEnd = fuelAtLapEnd, // Use saved fuel if pitted, current fuel otherwise
-            FlagStatus = _currentFlagStatus,
-            WasPitLap = wasPitLap, // True if refueled (or towed with refuel)
-            RefuelAmount = wasRefueled ? CurrentData.LastRefuelAmount : 0, // Only record refuel if SDK detected fuel increase
-            IsFormationLap = isFormationLap,
-            IsOutLap = isOutLap, // Flag out-laps for exclusion from averages (cool tires, careful driving)
-            IsIncompleteLap = false, // If OnLapCompleted fires, the lap WAS completed (LapDistPct resets to 0)
-            IsGridStartLap = isGridStartLap, // FIX: Grid start partial lap (grid behind S/F line)
-            LapDistanceCovered = lapDistanceCovered, // Track percentage of lap covered
-            Timestamp = DateTime.UtcNow,
-            IncidentCountAtStart = _lastIncidentCount,  // Incident count at lap start
-            IncidentCountAtEnd = telemetry.PlayerCarMyIncidentCount,  // Incident count at lap end
-            SessionState = _sessionStateAtLapStart  // FIX: Use SessionState from lap START for accurate pace lap detection
-        };
-        
-        // DEBUG: Log validation result
-        LogDebug($"  IsValidForAveraging={lapRecord.IsValidForAveraging} (needs: !PitLap && !Formation && !Incomplete && !PaceLap && !OutLap && !GridStart && FuelUsed>0)");
+        // Optional Fine-Tuning: Use LapValidator for all lap validation logic
+        var previousLapWasPitLap = _lapHistory.Count > 0 && _lapHistory.Last().WasPitLap;
+        var lapRecord = _lapValidator.ValidateAndCreateLapRecord(
+            telemetry,
+            _fuelAtLapStart,
+            wasRefueled,
+            pittedThisLap,
+            fuelBeforePit,
+            _justLeftPits,
+            _sessionStateAtLapStart,
+            _lapDistPctAtLapStart,
+            previousLapWasPitLap,
+            _currentFlagStatus,
+            _lastIncidentCount
+        );
         
         // Update incident tracking for next lap
         _lastIncidentCount = telemetry.PlayerCarMyIncidentCount;
@@ -765,21 +696,11 @@ public class FuelCalculatorService
         _lapHistory.Add(lapRecord);
         CurrentData.LapsCompleted = telemetry.LapsCompleted;
         
-        // Update last lap fuel usage
+        // Update last lap fuel usage and lap-to-lap delta
         if (lapRecord.IsValidForAveraging)
         {
             CurrentData.FuelUsedLastLap = lapRecord.FuelUsed;
-            
-            // Calculate lap-to-lap delta
-            var previousValidLap = _lapHistory
-                .Where(l => l.IsValidForAveraging && l.LapNumber < lapRecord.LapNumber)
-                .OrderByDescending(l => l.LapNumber)
-                .FirstOrDefault();
-            
-            if (previousValidLap != null)
-            {
-                CurrentData.LapToLapDelta = lapRecord.FuelUsed - previousValidLap.FuelUsed;
-            }
+            CurrentData.LapToLapDelta = _lapValidator.CalculateLapToLapDelta(_lapHistory, lapRecord);
         }
         
         // Reset for next lap
@@ -1040,55 +961,6 @@ public class FuelCalculatorService
     // Phase 5: GenerateStrategicAlerts (86 lines, never called - FuelSavingCalculator has its own version)
 
     /// <summary>
-    /// REMOVED: Fuel pressure tracking (not available in iRacing SDK)
-    /// </summary>
-    /*
-    private void UpdateFuelPressureTracking(TelemetryData telemetry)
-    {
-        float currentPressure = telemetry.FuelPress;
-        
-        // Establish baseline pressure from first few laps (when fuel tank is full)
-        if (!_baselineFuelPressureEstablished && _lapHistory.Count < BASELINE_LAPS_NEEDED)
-        {
-            // Only track pressure when fuel is above 80% (ensures fuel pump is fully submerged)
-            if (telemetry.FuelLevelPct > 0.8f && currentPressure > 0)
-            {
-                _fuelPressureHistory.Add(currentPressure);
-            }
-            
-            // Once we have enough samples, calculate baseline
-            if (_fuelPressureHistory.Count >= 5)
-            {
-                // Use median to avoid outliers from sensor noise
-                var sortedPressures = _fuelPressureHistory.OrderBy(p => p).ToList();
-                CurrentData.BaselineFuelPressure = sortedPressures[sortedPressures.Count / 2];
-                _baselineFuelPressureEstablished = true;
-                LogDebug($"BASELINE FUEL PRESSURE ESTABLISHED: {CurrentData.BaselineFuelPressure:F2} bar");
-            }
-        }
-        
-        // Calculate pressure drop if baseline established
-        if (_baselineFuelPressureEstablished && CurrentData.BaselineFuelPressure > 0)
-        {
-            float pressureDrop = CurrentData.BaselineFuelPressure - currentPressure;
-            CurrentData.FuelPressureDropPct = (pressureDrop / CurrentData.BaselineFuelPressure) * 100f;
-            
-            // Warning threshold: >10% drop from baseline indicates low fuel risk
-            CurrentData.FuelPressureLow = CurrentData.FuelPressureDropPct > 10f;
-            
-            // Additional critical threshold: >20% drop = imminent sputtering
-            if (CurrentData.FuelPressureDropPct > 20f)
-            {
-                LogDebug($"CRITICAL: Fuel pressure dropped {CurrentData.FuelPressureDropPct:F1}% from baseline ({currentPressure:F2} bar vs {CurrentData.BaselineFuelPressure:F2} bar)");
-            }
-            else if (CurrentData.FuelPressureLow)
-            {
-                LogDebug($"WARNING: Fuel pressure dropped {CurrentData.FuelPressureDropPct:F1}% from baseline ({currentPressure:F2} bar vs {CurrentData.BaselineFuelPressure:F2} bar)");
-            }
-        }
-    }
-    */
-    
     /// <summary>
     /// Update lap completion context for enhanced race position awareness (FIX #3)
     /// Accounts for: track position, leader's laps, being lapped, lap time projection
@@ -1372,59 +1244,13 @@ public class FuelCalculatorService
     public IReadOnlyList<FuelLapHistory> GetLapHistory() => _lapHistory.AsReadOnly();
     
     /// <summary>
+    /// <summary>
     /// Apply temperature correction to fuel consumption averages (ENHANCEMENT)
-    /// Adjusts fuel consumption based on air temperature differences from historical baseline
-    /// Scientific basis: Hotter air = less dense = less power = richer mixture = more fuel
-    /// Rule of thumb: +10°C = +2-3% fuel consumption
+    /// Optional Fine-Tuning: Delegated to TemperatureCompensationService
     /// </summary>
     private void ApplyTemperatureCorrection(TelemetryData telemetry)
     {
-        // Skip if no historical data available
-        if (_sessionStats == null || !_sessionStats.HasSufficientData)
-        {
-            CurrentData.TemperatureCorrectionFactor = 1.0f;
-            CurrentData.TemperatureCorrectionReason = "";
-            return;
-        }
-
-        float currentAirTemp = telemetry.AirTemp;
-        float historicalAirTemp = _sessionStats.AvgAirTemp;
-        float tempDelta = currentAirTemp - historicalAirTemp;
-
-        // Apply correction: +10°C = +2.5% fuel consumption
-        // Formula: 1.0 + (tempDelta * 0.0025)
-        // Example: +12°C → 1.0 + (12 * 0.0025) = 1.03 (3% more fuel)
-        float correctionFactor = 1.0f + (tempDelta * 0.0025f);
-
-        // Limit correction to ±10% to avoid extreme values from sensor errors
-        correctionFactor = Math.Clamp(correctionFactor, 0.9f, 1.1f);
-
-        CurrentData.TemperatureCorrectionFactor = correctionFactor;
-
-        if (Math.Abs(tempDelta) > 5f)
-        {
-            float correctionPct = (correctionFactor - 1.0f) * 100f;
-            CurrentData.TemperatureCorrectionReason =
-                $"Air temp {tempDelta:+0.0;-0.0}°C vs historical avg ({correctionPct:+0.0;-0.0}% fuel)";
-            LogDebug($"TEMP CORRECTION: {currentAirTemp:F1}°C vs {historicalAirTemp:F1}°C → {correctionFactor:F3}x factor ({correctionPct:+0.0;-0.0}%)");
-
-            // FIX #3 (CORRECTED): Apply temperature correction to stored averages ONCE per calculation cycle
-            // This is called AFTER CalculateAverages() populates the values, so we modify them once
-            // On next cycle, CalculateAverages() will recalculate from raw lap data, then this applies correction again
-            // This prevents compounding because we always start from fresh raw averages each cycle
-            if (CurrentData.AvgFuelPerLap_Last > 0)
-                CurrentData.AvgFuelPerLap_Last *= correctionFactor;
-            if (CurrentData.AvgFuelPerLap_L5 > 0)
-                CurrentData.AvgFuelPerLap_L5 *= correctionFactor;
-            if (CurrentData.AvgFuelPerLap_L10 > 0)
-                CurrentData.AvgFuelPerLap_L10 *= correctionFactor;
-            if (CurrentData.AvgFuelPerLap_Session > 0)
-                CurrentData.AvgFuelPerLap_Session *= correctionFactor;
-        }
-        else
-        {
-            CurrentData.TemperatureCorrectionReason = "";
-        }
+        _temperatureCompensation.ApplyTemperatureCorrection(telemetry, _sessionStats, CurrentData);
     }
 
     /// <summary>
