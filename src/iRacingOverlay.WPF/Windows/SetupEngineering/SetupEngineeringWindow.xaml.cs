@@ -169,7 +169,11 @@ public partial class SetupEngineeringWindow : Window
             if (lapPct < 0.05f && _sector1StartTime == 0f) // Crossed start/finish
             {
                 _sector1StartTime = sessionTime;
-                _lapStartFuel = telemetry.FuelLevel;
+                // Only set lap start fuel after first lap (avoid 4x fuel bug on lap 1)
+                if (_sessionLapCount > 0)
+                {
+                    _lapStartFuel = telemetry.FuelLevel;
+                }
             }
             else if (lapPct >= 0.333f && lapPct < 0.400f && _sector1StartTime > 0f && _sector2StartTime == 0f)
             {
@@ -210,9 +214,16 @@ public partial class SetupEngineeringWindow : Window
                 Dispatcher.Invoke(() =>
                 {
                     var trackName = telemetry.TrackName ?? "Unknown Track";
-                    var carName = !string.IsNullOrEmpty(telemetry.CarScreenName) 
-                        ? telemetry.CarScreenName 
-                        : (!string.IsNullOrEmpty(telemetry.CarNumber) ? $"Car #{telemetry.CarNumber}" : "Unknown Car");
+                    // Priority: CarScreenName > CarNumber > Placeholder
+                    var carName = "Current Car";
+                    if (!string.IsNullOrEmpty(telemetry.CarScreenName))
+                    {
+                        carName = telemetry.CarScreenName;
+                    }
+                    else if (!string.IsNullOrEmpty(telemetry.CarNumber))
+                    {
+                        carName = $"Car #{telemetry.CarNumber}";
+                    }
                     TrackCarText.Text = $"{trackName} - {carName} | Laps: {_sessionLapCount}";
                     
                     // Display current setup name from iRacing garage
@@ -261,6 +272,11 @@ public partial class SetupEngineeringWindow : Window
                 tireTemps = new[] { telemetry.LFtempCM, telemetry.RFtempCM, telemetry.LRtempCM, telemetry.RRtempCM };
             }
             
+            // Validation: Lap is valid if it has sector times AND fuel data AND reasonable lap time
+            bool isValid = sectorTimes != null 
+                && fuelUsed.HasValue && fuelUsed.Value > 0 && fuelUsed.Value < 10f  // Reasonable fuel range
+                && telemetry.LapLastLapTime > 30f;  // Reasonable lap time (>30s)
+            
             // Store lap telemetry data
             await _database.AddLapAsync(
                 setupId: _currentSetupId,
@@ -272,7 +288,7 @@ public partial class SetupEngineeringWindow : Window
                 avgSpeed: telemetry.Speed,
                 maxSpeed: null, // TODO: Track max speed during lap
                 avgThrottle: telemetry.Throttle,
-                isValid: true, // TODO: Add validation logic (check for off-tracks, incidents)
+                isValid: isValid,
                 incidentCount: 0
             );
         }
@@ -745,27 +761,55 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
-    /// Display setup parameters in Setup Changes tab
+    /// Display setup parameters in Setup Changes tab (ALL parameters, not just subset)
     /// </summary>
     private void DisplaySetupChanges(SetupData setup)
     {
         var changes = new List<SetupChangeDisplay>();
         
-        // Aero
+        // AERO
         if (setup.Aero.FrontWing.HasValue)
             changes.Add(new SetupChangeDisplay { Category = "Aero", Parameter = "Front Wing", BaselineValue = "-", ModifiedValue = $"{setup.Aero.FrontWing:F1}", Delta = "-", Unit = "°" });
         if (setup.Aero.RearWing.HasValue)
             changes.Add(new SetupChangeDisplay { Category = "Aero", Parameter = "Rear Wing", BaselineValue = "-", ModifiedValue = $"{setup.Aero.RearWing:F1}", Delta = "-", Unit = "°" });
+        if (setup.Aero.RakeAngle.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Aero", Parameter = "Rake Angle", BaselineValue = "-", ModifiedValue = $"{setup.Aero.RakeAngle:F2}", Delta = "-", Unit = "°" });
         
-        // Chassis
+        // CHASSIS
         if (setup.Chassis.FrontARB.HasValue)
-            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Front ARB", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.FrontARB:F0}", Delta = "-", Unit = "" });
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Front ARB", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.FrontARB:F0}", Delta = "-", Unit = "clicks" });
         if (setup.Chassis.RearARB.HasValue)
-            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Rear ARB", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.RearARB:F0}", Delta = "-", Unit = "" });
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Rear ARB", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.RearARB:F0}", Delta = "-", Unit = "clicks" });
         if (setup.Chassis.BrakeBias.HasValue)
             changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Brake Bias", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.BrakeBias:F1}", Delta = "-", Unit = "%" });
+        if (setup.Chassis.FrontRideHeight.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Front Ride Height", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.FrontRideHeight:F1}", Delta = "-", Unit = "mm" });
+        if (setup.Chassis.RearRideHeight.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Rear Ride Height", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.RearRideHeight:F1}", Delta = "-", Unit = "mm" });
+        if (setup.Chassis.FrontSpring.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Front Spring", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.FrontSpring:F0}", Delta = "-", Unit = "N/mm" });
+        if (setup.Chassis.RearSpring.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Rear Spring", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.RearSpring:F0}", Delta = "-", Unit = "N/mm" });
+        if (setup.Chassis.FrontWeight.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Front Weight", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.FrontWeight:F0}", Delta = "-", Unit = "kg" });
+        if (setup.Chassis.RearWeight.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Rear Weight", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.RearWeight:F0}", Delta = "-", Unit = "kg" });
         
-        // Tires
+        // DAMPERS
+        if (setup.Dampers.FrontCompression.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Dampers", Parameter = "Front Compression", BaselineValue = "-", ModifiedValue = $"{setup.Dampers.FrontCompression:F0}", Delta = "-", Unit = "clicks" });
+        if (setup.Dampers.RearCompression.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Dampers", Parameter = "Rear Compression", BaselineValue = "-", ModifiedValue = $"{setup.Dampers.RearCompression:F0}", Delta = "-", Unit = "clicks" });
+        if (setup.Dampers.FrontRebound.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Dampers", Parameter = "Front Rebound", BaselineValue = "-", ModifiedValue = $"{setup.Dampers.FrontRebound:F0}", Delta = "-", Unit = "clicks" });
+        if (setup.Dampers.RearRebound.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Dampers", Parameter = "Rear Rebound", BaselineValue = "-", ModifiedValue = $"{setup.Dampers.RearRebound:F0}", Delta = "-", Unit = "clicks" });
+        if (setup.Dampers.FrontBumpStiffness.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Dampers", Parameter = "Front Bump", BaselineValue = "-", ModifiedValue = $"{setup.Dampers.FrontBumpStiffness:F0}", Delta = "-", Unit = "clicks" });
+        if (setup.Dampers.RearBumpStiffness.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Dampers", Parameter = "Rear Bump", BaselineValue = "-", ModifiedValue = $"{setup.Dampers.RearBumpStiffness:F0}", Delta = "-", Unit = "clicks" });
+        
+        // TIRES (Pressures)
         if (setup.Tires.LeftFrontPressure.HasValue)
             changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LF Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftFrontPressure:F1}", Delta = "-", Unit = "kPa" });
         if (setup.Tires.RightFrontPressure.HasValue)
@@ -775,8 +819,32 @@ public partial class SetupEngineeringWindow : Window
         if (setup.Tires.RightRearPressure.HasValue)
             changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RR Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightRearPressure:F1}", Delta = "-", Unit = "kPa" });
         
+        // TIRES (Camber)
+        if (setup.Tires.LeftFrontCamber.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LF Camber", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftFrontCamber:F2}", Delta = "-", Unit = "°" });
+        if (setup.Tires.RightFrontCamber.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RF Camber", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightFrontCamber:F2}", Delta = "-", Unit = "°" });
+        if (setup.Tires.LeftRearCamber.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LR Camber", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftRearCamber:F2}", Delta = "-", Unit = "°" });
+        if (setup.Tires.RightRearCamber.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RR Camber", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightRearCamber:F2}", Delta = "-", Unit = "°" });
+        
+        // TIRES (Toe)
+        if (setup.Tires.LeftFrontToe.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LF Toe", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftFrontToe:F2}", Delta = "-", Unit = "°" });
+        if (setup.Tires.RightFrontToe.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RF Toe", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightFrontToe:F2}", Delta = "-", Unit = "°" });
+        if (setup.Tires.LeftRearToe.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LR Toe", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftRearToe:F2}", Delta = "-", Unit = "°" });
+        if (setup.Tires.RightRearToe.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RR Toe", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightRearToe:F2}", Delta = "-", Unit = "°" });
+        
+        // BRAKES
+        if (setup.Brakes.BrakePressure.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Brakes", Parameter = "Brake Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Brakes.BrakePressure:F1}", Delta = "-", Unit = "%" });
+        
         SetupChangesDataGrid.ItemsSource = changes;
-        ShowStatus($"📊 Displayed {changes.Count} setup parameters in Setup Changes tab", isError: false);
+        ShowStatus($"📊 Displayed {changes.Count} setup parameters (all categories: Aero, Chassis, Dampers, Tires, Brakes)", isError: false);
     }
     
     /// <summary>
