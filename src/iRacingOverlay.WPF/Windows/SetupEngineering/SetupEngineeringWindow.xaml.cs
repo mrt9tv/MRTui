@@ -67,6 +67,13 @@ public partial class SetupEngineeringWindow : Window
             await _database.InitializeAsync();
             await _mlService.LoadModelsAsync();
             await LoadSessionsAsync();
+            
+            // Wire up tab selection events for lazy loading
+            var mainTab = this.FindName("MainTabControl");
+            if (mainTab is TabControl tabControl)
+            {
+                tabControl.SelectionChanged += TabControl_SelectionChanged;
+            }
         };
     }
     
@@ -183,6 +190,56 @@ public partial class SetupEngineeringWindow : Window
         catch
         {
             // Ignore errors in background UI update
+        }
+    }
+    
+    /// <summary>
+    /// Handle tab selection changes to populate data on-demand
+    /// </summary>
+    private void TabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.Source is not TabControl) return;
+        
+        var tabControl = sender as TabControl;
+        if (tabControl?.SelectedItem is not TabItem selectedTab) return;
+        
+        var header = selectedTab.Header?.ToString();
+        
+        if (header == "Lap Data")
+        {
+            _ = LoadLapDataAsync();
+        }
+        else if (header == "Sector Analysis")
+        {
+            ShowStatus("ℹ️ Sector Analysis: Select two setups to compare", isError: false);
+        }
+        else if (header == "Setup Changes")
+        {
+            ShowStatus("ℹ️ Setup Changes: Load a setup file to view parameters", isError: false);
+        }
+    }
+    
+    /// <summary>
+    /// Load lap data for current session
+    /// </summary>
+    private async Task LoadLapDataAsync()
+    {
+        if (_currentSetupId == null)
+        {
+            LapDataGrid.ItemsSource = null;
+            ShowStatus("ℹ️ No active session. Start a session to see lap data.", isError: false);
+            return;
+        }
+        
+        try
+        {
+            var laps = await _database.GetLapsAsync(_currentSetupId, validOnly: false);
+            LapDataGrid.ItemsSource = laps.OrderBy(l => l.LapNumber).ToList();
+            ShowStatus($"✅ Loaded {laps.Count} laps", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"❌ Error loading laps: {ex.Message}", isError: true);
         }
     }
     
@@ -503,6 +560,9 @@ public partial class SetupEngineeringWindow : Window
                     var summary = GenerateSetupSummary(setup);
                     MessageBox.Show(summary, "Setup Loaded", MessageBoxButton.OK, MessageBoxImage.Information);
                     
+                    // Display setup parameters in Setup Changes tab
+                    DisplaySetupChanges(setup);
+                    
                     // TODO Phase 3.6: Store setup to database and enable comparison
                 }
             }
@@ -556,6 +616,41 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
+    /// Display setup parameters in Setup Changes tab
+    /// </summary>
+    private void DisplaySetupChanges(SetupData setup)
+    {
+        var changes = new List<SetupChangeDisplay>();
+        
+        // Aero
+        if (setup.Aero.FrontWing.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Aero", Parameter = "Front Wing", BaselineValue = "-", ModifiedValue = $"{setup.Aero.FrontWing:F1}", Delta = "-", Unit = "°" });
+        if (setup.Aero.RearWing.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Aero", Parameter = "Rear Wing", BaselineValue = "-", ModifiedValue = $"{setup.Aero.RearWing:F1}", Delta = "-", Unit = "°" });
+        
+        // Chassis
+        if (setup.Chassis.FrontARB.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Front ARB", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.FrontARB:F0}", Delta = "-", Unit = "" });
+        if (setup.Chassis.RearARB.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Rear ARB", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.RearARB:F0}", Delta = "-", Unit = "" });
+        if (setup.Chassis.BrakeBias.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Chassis", Parameter = "Brake Bias", BaselineValue = "-", ModifiedValue = $"{setup.Chassis.BrakeBias:F1}", Delta = "-", Unit = "%" });
+        
+        // Tires
+        if (setup.Tires.LeftFrontPressure.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LF Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftFrontPressure:F1}", Delta = "-", Unit = "kPa" });
+        if (setup.Tires.RightFrontPressure.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RF Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightFrontPressure:F1}", Delta = "-", Unit = "kPa" });
+        if (setup.Tires.LeftRearPressure.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "LR Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Tires.LeftRearPressure:F1}", Delta = "-", Unit = "kPa" });
+        if (setup.Tires.RightRearPressure.HasValue)
+            changes.Add(new SetupChangeDisplay { Category = "Tires", Parameter = "RR Pressure", BaselineValue = "-", ModifiedValue = $"{setup.Tires.RightRearPressure:F1}", Delta = "-", Unit = "kPa" });
+        
+        SetupChangesDataGrid.ItemsSource = changes;
+        ShowStatus($"📊 Displayed {changes.Count} setup parameters in Setup Changes tab", isError: false);
+    }
+    
+    /// <summary>
     /// Generate ML recommendations using live telemetry data
     /// Works WITHOUT needing .sto file comparison!
     /// </summary>
@@ -586,7 +681,28 @@ public partial class SetupEngineeringWindow : Window
             // Display recommendation
             if (prediction == null)
             {
-                ShowStatus("⚠️ ML service unavailable", isError: true);
+                MLRecommendationsPanel.Children.Add(new TextBlock
+                {
+                    Text = "ℹ️ ML Recommendations - Phase 3.6 Feature",
+                    FontSize = 16,
+                    FontWeight = FontWeights.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 10)
+                });
+                
+                MLRecommendationsPanel.Children.Add(new TextBlock
+                {
+                    Text = "ML models are not yet trained. This feature will provide AI-powered setup suggestions based on:\n\n" +
+                           "• Your driving style from telemetry\n" +
+                           "• Track characteristics\n" +
+                           "• Historical setup performance\n" +
+                           "• Predicted lap time improvements\n\n" +
+                           "Status: Coming in Phase 3.6 (ML Model Integration)",
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                    Margin = new Thickness(0, 10, 0, 0)
+                });
+                
+                ShowStatus("ℹ️ ML models not yet trained - Phase 3.6 feature", isError: false);
                 return;
             }
             
@@ -660,4 +776,17 @@ public partial class SetupEngineeringWindow : Window
         _database.Dispose();
         base.OnClosed(e);
     }
+}
+
+/// <summary>
+/// Display model for Setup Changes tab
+/// </summary>
+public class SetupChangeDisplay
+{
+    public string Category { get; set; } = "";
+    public string Parameter { get; set; } = "";
+    public string BaselineValue { get; set; } = "";
+    public string ModifiedValue { get; set; } = "";
+    public string Delta { get; set; } = "";
+    public string Unit { get; set; } = "";
 }

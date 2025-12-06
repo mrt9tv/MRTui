@@ -182,7 +182,7 @@
             </GroupBox>
 
             <!-- Right Panel: Tabs -->
-            <TabControl Grid.Column="1" Background="#1E1E1E" BorderBrush="#3E3E42" Margin="5,0,0,0">
+            <TabControl x:Name="MainTabControl" Grid.Column="1" Background="#1E1E1E" BorderBrush="#3E3E42" Margin="5,0,0,0">
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
                         <Setter Property="Template">
