@@ -632,6 +632,12 @@ public class TelemetryData
     public string CarNumber { get; set; } = string.Empty;
     
     /// <summary>
+    /// Car model/screen name (e.g., "Ferrari 488 GT3", "Formula IR-04")
+    /// Parsed from YAML SessionInfo → DriverInfo → Drivers[PlayerIdx] → CarScreenName
+    /// </summary>
+    public string CarScreenName { get; set; } = string.Empty;
+    
+    /// <summary>
     /// Track name
     /// </summary>
     public string TrackName { get; set; } = string.Empty;

@@ -63,7 +63,7 @@
 
         <!-- DataGrid Style -->
         <Style TargetType="DataGrid">
-            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Background" Value="#1E1E1E"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="#3E3E42"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -75,6 +75,17 @@
             <Setter Property="IsReadOnly" Value="True"/>
             <Setter Property="SelectionMode" Value="Single"/>
             <Setter Property="AlternatingRowBackground" Value="#2D2D30"/>
+            <Setter Property="RowBackground" Value="#252526"/>
+        </Style>
+        
+        <!-- DataGrid Column Header Style -->
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="#00D4FF"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
         </Style>
     </Window.Resources>
 

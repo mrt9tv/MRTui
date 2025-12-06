@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -25,7 +26,13 @@ public partial class SetupEngineeringWindow : Window
     private readonly ITelemetryService? _telemetryService;
     
     private string? _currentSessionId;
+    private string? _currentSetupId; // Active setup being tested
     private SetupComparison? _lastComparison;
+    
+    // Lap tracking
+    private iRacingOverlay.Core.Models.TelemetryData? _lastTelemetryData;
+    private int _lastLapNumber = -1;
+    private int _sessionLapCount = 0;
     
     public SetupEngineeringWindow(ITelemetryService? telemetryService = null)
     {
@@ -38,6 +45,21 @@ public partial class SetupEngineeringWindow : Window
         _comparisonService = new LapComparisonService(_database);
         _setupParser = new SetupFileParser();
         _mlService = new MLModelService();
+        
+        // Subscribe to live telemetry updates
+        if (_telemetryService != null)
+        {
+            _telemetryService.TelemetryUpdated += OnTelemetryUpdated;
+        }
+        
+        // Cleanup on close
+        Closing += (s, e) =>
+        {
+            if (_telemetryService != null)
+            {
+                _telemetryService.TelemetryUpdated -= OnTelemetryUpdated;
+            }
+        };
         
         // Initialize async
         Loaded += async (s, e) =>
@@ -70,6 +92,101 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
+    /// Handle live telemetry updates for lap tracking
+    /// </summary>
+    private void OnTelemetryUpdated(object? sender, iRacingOverlay.Core.Models.TelemetryData telemetry)
+    {
+        // Store latest telemetry data
+        _lastTelemetryData = telemetry;
+        
+        // Track lap changes during active session
+        if (_currentSessionId != null && telemetry.Lap != _lastLapNumber)
+        {
+            // Skip first lap detection (lap number changes from -1 to 0 or 1)
+            if (_lastLapNumber >= 0 && telemetry.LapLastLapTime > 0)
+            {
+                _sessionLapCount++;
+                
+                // Record lap to database (async without await to avoid blocking telemetry)
+                _ = RecordLapAsync(telemetry);
+                
+                // Update UI on dispatcher thread
+                Dispatcher.Invoke(() =>
+                {
+                    var trackName = telemetry.TrackName ?? "Unknown Track";
+                    var carName = !string.IsNullOrEmpty(telemetry.CarScreenName) 
+                        ? telemetry.CarScreenName 
+                        : (!string.IsNullOrEmpty(telemetry.CarNumber) ? $"Car #{telemetry.CarNumber}" : "Unknown Car");
+                    TrackCarText.Text = $"{trackName} - {carName} | Laps: {_sessionLapCount}";
+                    
+                    // Update statistics
+                    UpdateLapStatistics();
+                    
+                    var lapTime = telemetry.LapLastLapTime;
+                    ShowStatus($"📊 Lap {_sessionLapCount} completed ({lapTime:F3}s)", isError: false);
+                });
+            }
+            
+            _lastLapNumber = telemetry.Lap;
+        }
+    }
+    
+    /// <summary>
+    /// Record completed lap to database
+    /// </summary>
+    private async Task RecordLapAsync(iRacingOverlay.Core.Models.TelemetryData telemetry)
+    {
+        if (_currentSetupId == null) return;
+        
+        try
+        {
+            // Store lap telemetry data
+            await _database.AddLapAsync(
+                setupId: _currentSetupId,
+                lapNumber: _sessionLapCount,
+                lapTime: telemetry.LapLastLapTime,
+                sectorTimes: null, // TODO: Parse sector times from telemetry
+                fuelUsed: null, // TODO: Calculate fuel used from FuelLevel delta
+                avgTireTemps: null,
+                avgSpeed: telemetry.Speed,
+                maxSpeed: null,
+                avgThrottle: telemetry.Throttle,
+                isValid: true, // TODO: Add validation logic
+                incidentCount: 0
+            );
+        }
+        catch (Exception ex)
+        {
+            Dispatcher.Invoke(() => ShowStatus($"⚠️ Error recording lap: {ex.Message}", isError: true));
+        }
+    }
+    
+    /// <summary>
+    /// Update lap statistics display
+    /// </summary>
+    private async void UpdateLapStatistics()
+    {
+        if (_currentSetupId == null) return;
+        
+        try
+        {
+            var laps = await _database.GetLapsAsync(_currentSetupId, validOnly: false);
+            
+            var totalLaps = laps.Count;
+            var validLaps = laps.Count(l => l.IsValid);
+            var outliers = totalLaps - validLaps;
+            
+            LapCountText.Text = totalLaps.ToString();
+            ValidLapCountText.Text = validLaps.ToString();
+            OutlierCountText.Text = outliers.ToString();
+        }
+        catch
+        {
+            // Ignore errors in background UI update
+        }
+    }
+    
+    /// <summary>
     /// Start new setup engineering session
     /// </summary>
     private async void StartSessionButton_Click(object sender, RoutedEventArgs e)
@@ -77,24 +194,51 @@ public partial class SetupEngineeringWindow : Window
         try
         {
             // Get track/car from live iRacing telemetry if available
-            // TODO: Subscribe to TelemetryUpdated event and store last data
-            var trackName = "Unknown Track";
-            var carName = "Unknown Car";
+            var trackName = _lastTelemetryData?.TrackName ?? "Unknown Track";
+            var carInfo = !string.IsNullOrEmpty(_lastTelemetryData?.CarScreenName)
+                ? _lastTelemetryData.CarScreenName
+                : (!string.IsNullOrEmpty(_lastTelemetryData?.CarNumber) 
+                    ? $"Car #{_lastTelemetryData.CarNumber}" 
+                    : "Unknown Car");
             var sessionType = "Practice";
+            
+            // Reset lap tracking
+            _sessionLapCount = 0;
+            _lastLapNumber = _lastTelemetryData?.Lap ?? -1;
             
             var sessionId = await _database.CreateSessionAsync(
                 trackName: trackName,
-                carName: carName,
+                carName: carInfo,
                 sessionType: sessionType,
                 notes: "Setup engineering session (live telemetry)"
             );
             
+            // Create default setup for this session
+            var setupId = await _database.AddSetupAsync(
+                sessionId: sessionId,
+                setupName: "Live Session Setup",
+                setupData: "{}", // Empty JSON for now
+                setupChanges: null,
+                isBaseline: true
+            );
+            
             _currentSessionId = sessionId;
+            _currentSetupId = setupId;
             SessionNameText.Text = $"Session {sessionId.Substring(0, 8)}...";
             StartSessionButton.IsEnabled = false;
             EndSessionButton.IsEnabled = true;
             
-            ShowStatus("✅ Session started. Begin recording laps...", isError: false);
+            // Update UI with initial info
+            TrackCarText.Text = $"{trackName} - {carInfo} | Laps: 0";
+            
+            if (_telemetryService == null || _lastTelemetryData == null)
+            {
+                ShowStatus("⚠️ Session started (no telemetry connection)", isError: false);
+            }
+            else
+            {
+                ShowStatus("✅ Session started. Begin recording laps...", isError: false);
+            }
         }
         catch (Exception ex)
         {
@@ -113,10 +257,18 @@ public partial class SetupEngineeringWindow : Window
         {
             await _database.EndSessionAsync(_currentSessionId);
             
+            var lapInfo = _sessionLapCount > 0 ? $" ({_sessionLapCount} laps recorded)" : "";
+            
+            // Reset session state
+            _currentSessionId = null;
+            _currentSetupId = null;
+            _sessionLapCount = 0;
+            _lastLapNumber = -1;
+            
             StartSessionButton.IsEnabled = true;
             EndSessionButton.IsEnabled = false;
             
-            ShowStatus("✅ Session ended", isError: false);
+            ShowStatus($"✅ Session ended{lapInfo}", isError: false);
         }
         catch (Exception ex)
         {
@@ -326,13 +478,14 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
-    /// Load .sto setup file
+    /// Load setup file (.htm HTML export recommended, .sto binary not yet supported)
     /// </summary>
     private async void LoadSetupFileButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
-            Filter = "iRacing Setup files (*.sto)|*.sto|All files (*.*)|*.*"
+            Filter = "iRacing HTML Setup (*.htm;*.html)|*.htm;*.html|iRacing Binary Setup (*.sto)|*.sto|All files (*.*)|*.*",
+            Title = "Load iRacing Setup (HTML format recommended)"
         };
         
         if (dialog.ShowDialog() == true)
@@ -343,16 +496,63 @@ public partial class SetupEngineeringWindow : Window
                 
                 if (setup != null)
                 {
-                    ShowStatus($"✅ Loaded setup: {dialog.FileName}", isError: false);
+                    var fileName = Path.GetFileName(dialog.FileName);
+                    ShowStatus($"✅ Loaded setup: {fileName}", isError: false);
                     
-                    // TODO: Add setup to database and refresh combo boxes
+                    // Display setup summary in status
+                    var summary = GenerateSetupSummary(setup);
+                    MessageBox.Show(summary, "Setup Loaded", MessageBoxButton.OK, MessageBoxImage.Information);
+                    
+                    // TODO Phase 3.6: Store setup to database and enable comparison
                 }
+            }
+            catch (NotSupportedException ex)
+            {
+                // Binary .sto file - show helpful message
+                MessageBox.Show(
+                    ex.Message + "\n\n" +
+                    "To export as HTML:\n" +
+                    "1. Open iRacing\n" +
+                    "2. Go to Garage → Setup\n" +
+                    "3. Click 'Export' button\n" +
+                    "4. Save as .htm file",
+                    "Binary Format Not Supported",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                ShowStatus("⚠️ Binary .sto format not supported - use HTML export", isError: true);
             }
             catch (Exception ex)
             {
                 ShowStatus($"❌ Error loading setup: {ex.Message}", isError: true);
+                MessageBox.Show($"Failed to load setup:\n\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+    }
+    
+    /// <summary>
+    /// Generate human-readable setup summary
+    /// </summary>
+    private string GenerateSetupSummary(SetupData setup)
+    {
+        var summary = new System.Text.StringBuilder();
+        summary.AppendLine("📋 SETUP PARAMETERS\n");
+        
+        summary.AppendLine("✈️ AERO:");
+        summary.AppendLine($"  Front Wing: {setup.Aero.FrontWing}°");
+        summary.AppendLine($"  Rear Wing: {setup.Aero.RearWing}°\n");
+        
+        summary.AppendLine("🏁 TIRES (Cold Pressure):");
+        summary.AppendLine($"  LF: {setup.Tires.LeftFrontPressure:F1} kPa");
+        summary.AppendLine($"  RF: {setup.Tires.RightFrontPressure:F1} kPa");
+        summary.AppendLine($"  LR: {setup.Tires.LeftRearPressure:F1} kPa");
+        summary.AppendLine($"  RR: {setup.Tires.RightRearPressure:F1} kPa\n");
+        
+        summary.AppendLine("🔧 CHASSIS:");
+        summary.AppendLine($"  Front ARB: {setup.Chassis.FrontARB}");
+        summary.AppendLine($"  Rear ARB: {setup.Chassis.RearARB}");
+        summary.AppendLine($"  Brake Bias: {setup.Chassis.BrakeBias:F1}%");
+        
+        return summary.ToString();
     }
     
     /// <summary>
@@ -367,14 +567,17 @@ public partial class SetupEngineeringWindow : Window
             
             MLRecommendationsPanel.Children.Clear();
             
-            // Get current track/car info
-            // TODO: Store last telemetry data in field from TelemetryUpdated event
-            var trackName = "Current Track";
-            var carName = "Current Car";
+            // Get current track/car info from live telemetry
+            var trackName = _lastTelemetryData?.TrackName ?? "Current Track";
+            var carInfo = !string.IsNullOrEmpty(_lastTelemetryData?.CarScreenName)
+                ? _lastTelemetryData.CarScreenName
+                : (!string.IsNullOrEmpty(_lastTelemetryData?.CarNumber) 
+                    ? $"Car #{_lastTelemetryData.CarNumber}" 
+                    : "Current Car");
             
             // Generate prediction using current live data (no .sto files needed!)
             var prediction = _mlService.PredictSetupChange(
-                carName: carName,
+                carName: carInfo,
                 trackName: trackName,
                 baselineSetup: new SetupParameterFeatures { SetupName = "Current (Live)" },
                 proposedSetup: new SetupParameterFeatures { SetupName = "Suggested" }

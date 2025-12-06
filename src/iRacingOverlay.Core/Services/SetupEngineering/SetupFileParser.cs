@@ -1,5 +1,6 @@
 using System.Xml;
 using System.Text.Json;
+using iRacingOverlay.Core.Services.Setup;
 
 namespace iRacingOverlay.Core.Services.SetupEngineering;
 
@@ -37,10 +38,11 @@ namespace iRacingOverlay.Core.Services.SetupEngineering;
 /// </summary>
 public class SetupFileParser
 {
+    private readonly HtmlSetupParser _htmlParser = new();
+    
     /// <summary>
-    /// Parse iRacing .sto file into structured setup data
-    /// NOTE: .sto files are BINARY format, not XML text
-    /// This is a placeholder - real implementation requires binary parsing or iRacing SDK
+    /// Parse iRacing setup file (.sto binary or .htm HTML export)
+    /// RECOMMENDED: Use .htm files exported from iRacing garage for better compatibility
     /// </summary>
     public async Task<SetupData?> ParseSetupFileAsync(string filePath)
     {
@@ -51,6 +53,16 @@ public class SetupFileParser
         
         try
         {
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            
+            // HTML files (.htm/.html) - RECOMMENDED FORMAT
+            if (extension == ".htm" || extension == ".html")
+            {
+                var setupConfig = _htmlParser.ParseHtmlFile(filePath);
+                return ConvertToSetupData(setupConfig);
+            }
+            
+            // Binary .sto files
             // Check if file is binary (first byte is 0x03 for .sto files)
             var firstBytes = new byte[4];
             using (var fs = File.OpenRead(filePath))
@@ -64,7 +76,8 @@ public class SetupFileParser
                 throw new NotSupportedException(
                     "iRacing .sto files are in binary format. " +
                     "Binary parsing is not yet implemented. " +
-                    "Please export setup as XML or use iRacing SDK for binary parsing.");
+                    "💡 TIP: Export your setup as HTML from iRacing garage (File → Export as HTML) " +
+                    "for better compatibility and human readability!");
             }
             
             // Try XML parsing (for future XML export support)
@@ -78,6 +91,70 @@ public class SetupFileParser
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Failed to parse setup file: {ex.Message}", ex);
+        }
+    }
+    
+    /// <summary>
+    /// Convert HTML-parsed SetupConfiguration to SetupData format
+    /// </summary>
+    private SetupData? ConvertToSetupData(SetupConfiguration config)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(config.SetupData)) return null;
+            
+            var parameters = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(config.SetupData);
+            if (parameters == null) return null;
+            
+            var setup = new SetupData();
+            
+            // Helper to safely get numeric values
+            float GetFloat(string key) => parameters.ContainsKey(key) && parameters[key].ValueKind == JsonValueKind.Number 
+                ? parameters[key].GetSingle() 
+                : 0f;
+            
+            // Aero
+            setup.Aero.FrontWing = GetFloat("Aero_FrontWing");
+            setup.Aero.RearWing = GetFloat("Aero_RearWing");
+            
+            // Chassis/ARB - explicit nullable conversion
+            var frontARB = GetFloat("Front_ARB");
+            var rearARB = GetFloat("Rear_ARB");
+            setup.Chassis.FrontARB = frontARB != 0 ? (float?)frontARB : null;
+            setup.Chassis.RearARB = rearARB != 0 ? (float?)rearARB : null;
+            setup.Chassis.BrakeBias = GetFloat("Front_BrakeBias");
+            
+            // Tires (pressures)
+            setup.Tires.LeftFrontPressure = GetFloat("LEFTFRONT_ColdPressure");
+            setup.Tires.RightFrontPressure = GetFloat("RIGHTFRONT_ColdPressure");
+            setup.Tires.LeftRearPressure = GetFloat("LEFTREAR_ColdPressure");
+            setup.Tires.RightRearPressure = GetFloat("RIGHTREAR_ColdPressure");
+            
+            // Ride heights
+            setup.Chassis.FrontRideHeight = GetFloat("LF_RideHeight");
+            setup.Chassis.RearRideHeight = GetFloat("Rear_RideHeight");
+            
+            // Springs
+            setup.Chassis.FrontSpring = GetFloat("LF_SpringRate");
+            setup.Chassis.RearSpring = GetFloat("LR_SpringRate");
+            
+            // Camber/Toe (average left/right)
+            var lfCamber = GetFloat("LF_Camber");
+            var rfCamber = GetFloat("RF_Camber");
+            setup.Tires.LeftFrontCamber = lfCamber;
+            setup.Tires.RightFrontCamber = rfCamber;
+            
+            var lrCamber = GetFloat("LR_Camber");
+            var rrCamber = GetFloat("RR_Camber");
+            setup.Tires.LeftRearCamber = lrCamber;
+            setup.Tires.RightRearCamber = rrCamber;
+            
+            return setup;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SetupFileParser] ⚠️ Error converting HTML setup: {ex.Message}");
+            return null;
         }
     }
     
@@ -115,8 +192,8 @@ public class SetupFileParser
         var chassis = root.SelectSingleNode("Chassis") as XmlElement;
         if (chassis == null) return;
         
-        setup.Chassis.FrontARB = ParseInt(chassis, "FrontARB");
-        setup.Chassis.RearARB = ParseInt(chassis, "RearARB");
+        setup.Chassis.FrontARB = ParseFloat(chassis, "FrontARB");
+        setup.Chassis.RearARB = ParseFloat(chassis, "RearARB");
         setup.Chassis.FrontRideHeight = ParseFloat(chassis, "FrontRideHeight");
         setup.Chassis.RearRideHeight = ParseFloat(chassis, "RearRideHeight");
         setup.Chassis.FrontSpring = ParseFloat(chassis, "FrontSpring");
@@ -336,8 +413,8 @@ public class SetupData
 
 public class ChassisSetup
 {
-    public int? FrontARB { get; set; }          // Anti-roll bar (1-11 clicks)
-    public int? RearARB { get; set; }
+    public float? FrontARB { get; set; }        // Anti-roll bar (1-11 clicks, may have fractional values)
+    public float? RearARB { get; set; }
     public float? FrontRideHeight { get; set; } // mm
     public float? RearRideHeight { get; set; }
     public float? FrontSpring { get; set; }     // N/mm
@@ -380,8 +457,8 @@ public class TiresSetup
 
 public class AeroSetup
 {
-    public int? FrontWing { get; set; }     // Clicks or degrees
-    public int? RearWing { get; set; }
+    public float? FrontWing { get; set; }   // Clicks or degrees (may have fractional values)
+    public float? RearWing { get; set; }
     public float? RakeAngle { get; set; }   // degrees
 }
 

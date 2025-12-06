@@ -212,6 +212,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     // Tier 1: Static cache - Session info that never changes during a session
     private string _driverName = "";
     private string _carNumber = "";
+    private string _carScreenName = ""; // Car model name (e.g., "Ferrari 488 GT3")
     private string _trackName = "";
     private string _sessionType = "";
     private float _trackLength = 0f;
@@ -668,6 +669,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // Session info (populated from SessionInfo YAML parsing)
                 DriverName = _driverName,
                 CarNumber = _carNumber,
+                CarScreenName = _carScreenName,
                 TrackName = _trackName,
                 SessionType = _sessionType,
                 TrackLength = _trackLength,
@@ -961,6 +963,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             if (currentDriverCarIdx >= 0)
                             {
                                 _carIdxToDriverName[currentDriverCarIdx] = userName;
+                            }
+                        }
+                        else if (trimmed.StartsWith("CarScreenName:"))
+                        {
+                            var carScreenName = ExtractYamlValue(trimmed).Trim('"', '\'');
+                            
+                            // Store player's car model name
+                            if (isPlayerDriver)
+                            {
+                                _carScreenName = carScreenName;
+                                _logger.LogInformation("Parsed car screen name: {CarScreenName}", _carScreenName);
                             }
                         }
                     }
