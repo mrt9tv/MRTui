@@ -33,6 +33,9 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
         private TelemetryData? _latestTelemetry; // Store latest telemetry for competitor intelligence
         private DateTime _lastUIUpdate = DateTime.MinValue;
         private const int UI_UPDATE_THROTTLE_MS = 500; // Update UI max once per 500ms
+        
+        // Performance: Cache competitor intelligence to avoid expensive LINQ queries every 500ms
+        private int _lastCompetitorUpdateLap = -1;
 
         public RaceStrategyWidget(FuelCalculatorService fuelCalculator, TireStrategyService tireStrategy, ILogger<RaceStrategyWidget> logger, ITelemetryService? telemetryService = null)
         {
@@ -1261,6 +1264,10 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
             if (_latestTelemetry == null)
                 return;
 
+            // PERFORMANCE: Only update competitor lists when lap changes
+            // Gap displays update every call, but expensive LINQ queries only on lap change
+            bool shouldUpdateCompetitorLists = _latestTelemetry.Lap != _lastCompetitorUpdateLap;
+
             // Get gap to leader
             float gapToLeader = _competitorIntelligence.GetGapToLeader(_latestTelemetry);
             var leader = _competitorIntelligence.GetLeader(_latestTelemetry, sameClassOnly: true);
@@ -1341,37 +1348,43 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
                 _valueSmoothing.Reset("gap_behind"); // Reset smoothing when no car behind
             }
             
-            // Get recent pit activity
-            var recentPits = _competitorIntelligence.GetRecentPitActivity(5);
-            
-            // Update Recent Pit Activity list in POSITIONS tab
-            RecentPitActivityList.ItemsSource = recentPits;
-            
-            // Get fastest competitors for lap time comparison
-            var fastestCompetitors = _competitorIntelligence.GetCompetitors(_latestTelemetry, sameClassOnly: true)
-                .Where(c => c.BestLapTime > 0)
-                .OrderBy(c => c.BestLapTime)
-                .Take(10)
-                .Select(c => new LapTimeViewModel
+            // PERFORMANCE: Only update expensive lists when lap changes
+            if (shouldUpdateCompetitorLists)
+            {
+                // Get recent pit activity
+                var recentPits = _competitorIntelligence.GetRecentPitActivity(5);
+                
+                // Update Recent Pit Activity list in POSITIONS tab
+                RecentPitActivityList.ItemsSource = recentPits;
+                
+                // Get fastest competitors for lap time comparison
+                var fastestCompetitors = _competitorIntelligence.GetCompetitors(_latestTelemetry, sameClassOnly: true)
+                    .Where(c => c.BestLapTime > 0)
+                    .OrderBy(c => c.BestLapTime)
+                    .Take(10)
+                    .Select(c => new LapTimeViewModel
+                    {
+                        Position = c.Position,
+                        DriverName = c.DriverName,
+                        LastLapTime = FormatLapTime(c.LastLapTime),
+                        BestLapTime = FormatLapTime(c.BestLapTime)
+                    })
+                    .ToList();
+                
+                // Update Lap Time Comparison list
+                LapTimeComparisonList.ItemsSource = fastestCompetitors;
+                
+                // Log pit activity
+                if (recentPits.Count > 0 && recentPits[0].PitLap == _latestTelemetry.Lap)
                 {
-                    Position = c.Position,
-                    DriverName = c.DriverName,
-                    LastLapTime = FormatLapTime(c.LastLapTime),
-                    BestLapTime = FormatLapTime(c.BestLapTime)
-                })
-                .ToList();
-            
-            // Update Lap Time Comparison list
-            LapTimeComparisonList.ItemsSource = fastestCompetitors;
+                    var pit = recentPits[0];
+                    _logger.LogDebug("Competitor Intelligence - P{Position}: {DriverName} ({CarNumber}) - {Status} on Lap {PitLap}", pit.Position, pit.DriverName, pit.CarNumber, pit.Status, pit.PitLap);
+                }
+                
+                _lastCompetitorUpdateLap = _latestTelemetry.Lap;
+            }
             
             // Phase 10.6 Complete: Gap displays, pit activity tracking, lap time comparison
-
-            // Log pit activity
-            if (recentPits.Count > 0 && recentPits[0].PitLap == _latestTelemetry.Lap)
-            {
-                var pit = recentPits[0];
-                _logger.LogDebug("Competitor Intelligence - P{Position}: {DriverName} ({CarNumber}) - {Status} on Lap {PitLap}", pit.Position, pit.DriverName, pit.CarNumber, pit.Status, pit.PitLap);
-            }
         }
 
         /// <summary>
