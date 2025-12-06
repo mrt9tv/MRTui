@@ -128,6 +128,35 @@
                 <!-- General Settings Tab -->
                 <StackPanel Visibility="{Binding SelectedTab, Converter={StaticResource TabVisibilityConverter}, ConverterParameter=General}">
                     <TextBlock Text="General Settings" Style="{StaticResource SectionHeaderStyle}"/>
+                    
+                    <!-- Live Preview Indicator (Phase 3.2) -->
+                    <Border Background="{StaticResource TealPrimary}"
+                            BorderBrush="{StaticResource TealPrimary}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            Padding="10,8"
+                            Margin="0,0,0,20">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                     Text="👁️"
+                                     FontSize="18"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                     Text="Live Preview Active - All changes apply to widgets instantly"
+                                     FontSize="12"
+                                     FontWeight="Bold"
+                                     Foreground="White"
+                                     VerticalAlignment="Center"
+                                     TextWrapping="Wrap"/>
+                        </Grid>
+                    </Border>
 
                     <!-- Unit System -->
                     <Border Background="{StaticResource DarkSurface}"
@@ -169,6 +198,35 @@
                 <!-- Widgets Settings Tab -->
                 <StackPanel Visibility="{Binding SelectedTab, Converter={StaticResource TabVisibilityConverter}, ConverterParameter=Widgets}">
                     <TextBlock Text="Widget Controls" Style="{StaticResource SectionHeaderStyle}"/>
+                    
+                    <!-- Live Preview Indicator (Phase 3.2) -->
+                    <Border Background="{StaticResource TealPrimary}"
+                            BorderBrush="{StaticResource TealPrimary}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            Padding="10,8"
+                            Margin="0,0,0,20">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                     Text="👁️"
+                                     FontSize="18"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                     Text="Live Preview Active - All changes apply to widgets instantly"
+                                     FontSize="12"
+                                     FontWeight="Bold"
+                                     Foreground="White"
+                                     VerticalAlignment="Center"
+                                     TextWrapping="Wrap"/>
+                        </Grid>
+                    </Border>
 
                     <!-- Toggle Lock Hotkey with Lock Checkbox -->
                     <Border Background="{StaticResource DarkSurface}"
