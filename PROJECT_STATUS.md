@@ -1,19 +1,21 @@
 # 🏁 iRacing Telemetry Overlay - Project Summary
 
-## Current Status: v0.7.0 [STABLE] - ABS Indicator Enhancement ✅
+## Current Status: v0.7.1 [DEVELOPMENT] - Setup Engineering Mode ✅
 
-**Production-ready overlay system with refined ABS visual feedback!**
+**Production-ready overlay system + NEW Setup Engineering Mode!**
 
-**Latest:** ABS indicator with opacity fading (0.3 inactive, 1.0 active) and fixed fuel blink conflicts.
+**Latest:** Phase 3 Setup Engineering Mode operational with live telemetry ML predictions (Dec 6, 2025)  
+**Branch**: `feature/phase3-setup-engineering` (10 commits, ready for testing)
 
 ---
 
 ## What You Have Right Now
 
 ### 🎯 Working Application
-- **Modern MRT UI Manager** with Dashboard, Overlay, and Settings pages
+- **Modern MRT UI Manager** with Dashboard, Overlay, Settings, and **NEW Setup Engineering** pages
 - **4 Widget Types** with advanced per-field configuration
 - **Phase 2 Visual Enhancements** (gradient, shift point ring, glow effects)
+- **Phase 3 Setup Engineering Mode** (SQLite database, lap comparison, ML predictions)
 - **Complete Settings Persistence** (layout.json + settings.json)
 - **Real-time connection** to iRacing simulator (25-60 Hz)
 - **Performance:** <2% CPU, ~80MB RAM

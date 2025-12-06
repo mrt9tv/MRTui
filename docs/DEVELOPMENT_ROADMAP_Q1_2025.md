@@ -1,9 +1,11 @@
 # MRT Overlay Development Roadmap
 ## Q1 2025: Service Architecture + Three-Mode System
 
-**Status**: 🎯 PLANNING PHASE  
-**Timeline**: 6-8 weeks total  
-**Priority Order**: Service Splitting → Mode Infrastructure → Setup Engineering → Strategy Scouting
+**Status**: 🚀 PHASE 3 COMPLETE - Setup Engineering Mode Operational  
+**Current**: Phase 3.1-3.4 ✅ Complete (Dec 6, 2025)  
+**Next**: Phase 3.5 ML Integration → Phase 4 Strategy Scouting  
+**Timeline**: 6-8 weeks total (Started Dec 6, 2025)  
+**Branch**: `feature/phase3-setup-engineering` (10 commits)
 
 ---
 
@@ -521,13 +523,16 @@ new TelemetryProfile
 - Efficient storage (2MB/minute for Setup, 200KB/minute for Strategy)
 - Unit tests for all profiles
 
----
+## Phase 3: Setup Engineering Mode (✅ CORE COMPLETE - Dec 6, 2025)
 
-## Phase 3: Setup Engineering Mode (2 weeks)
+**Goal**: Full setup development workflow  
+**Status**: ✅ Phase 3.1-3.4 Complete, Phase 3.5 Pending
 
-**Goal**: Full setup development workflow
+### Week 1: Core Features (✅ COMPLETE)
 
-### Week 1: Core Features
+#### 3.1 Setup Session Management (✅ COMPLETE - commit f34aade)
+
+**Delivered**: SQLite database with 3 tables, 6 indexes, full CRUD operations
 
 #### 3.1 Setup Session Management (2 days)
 
@@ -547,12 +552,12 @@ new TelemetryProfile
 │                                      │
 │ [New Session] [Load Session]        │
 │                                      │
-│ Current Setup: "Baseline_v1"        │
-│ [Save Setup] [Load iRacing Setup]   │
-└──────────────────────────────────────┘
-```
+#### 3.2 Lap Comparison Service (✅ COMPLETE - commit caec547)
 
-#### 3.2 Lap Comparison Service (3 days)
+**Delivered**:
+- ✅ Statistical comparison (Welch's t-test, 95% confidence threshold)
+- ✅ Sector-level analysis with outlier filtering (>3σ)
+- ✅ Human-readable recommendationse (3 days)
 
 **Features**:
 - Statistical comparison (t-test, 95% confidence)
@@ -586,9 +591,33 @@ public class LapComparisonService
             IsSignificant = confidence >= 95,
             BaselineAvg = baselineAvg,
             ModifiedAvg = modifiedAvg
-        };
-    }
-}
+#### 3.3 iRacing Setup File Parser (✅ COMPLETE - commit 58345f4)
+
+**Delivered**:
+- ✅ Binary format detection (.sto files are binary, not XML)
+- ✅ Clear error messaging for unsupported format
+- ✅ XML parsing path preserved for future support
+
+#### 3.4 Setup Engineering UI (✅ COMPLETE - commit b89b8f9)
+
+**Delivered**:
+- ✅ 715-line WPF window with 4 tabs
+- ✅ Session management controls
+- ✅ Setup comparison panel
+- ✅ ML recommendations tab
+- ✅ CSV export functionality
+
+#### 3.5 Live Telemetry ML Integration (✅ COMPLETE - commit 3189553)
+
+**Delivered**:
+- ✅ ML works with LIVE telemetry (no .sto files required!)
+- ✅ ITelemetryService integration for real-time data
+- ✅ Predictions enabled by default
+- ✅ UI messaging clarifies .sto files optional
+
+### Week 2: ML Integration & Export (⏳ IN PROGRESS)
+
+#### 3.6 Real ML Model Integration (⏳ PENDING)
 ```
 
 ### Week 2: ML Integration & Export
@@ -839,19 +868,22 @@ _fuelCalculator.LoadStrategyPlan(strategyPlan);
 - Each service method tested independently
 - Edge cases, error handling
 - Mock dependencies
+## Timeline Summary (UPDATED Dec 6, 2025)
 
-**Integration Tests** (50+ tests):
-- Service interactions
-- SQLite CRUD operations
-- Mode transitions
+| Phase | Duration | Start Date | End Date | Status |
+|-------|----------|------------|----------|--------|
+| 0. Performance Fixes | 1 day | Dec 6 | Dec 6 | ✅ Complete |
+| 3. Setup Engineering Core | 1 day | Dec 6 | Dec 6 | ✅ Complete |
+| 3. Setup Engineering ML | 2 days | Dec 9 | Dec 10 | ⏳ In Progress |
+| 1. Service Refactoring | 3 days | Dec 11 | Dec 13 | ⏭️ Planned |
+| 2. Mode Infrastructure | 2 weeks | Dec 16 | Dec 27 | ⏭️ Planned |
+| 4. Strategy Scouting | 2 weeks | Dec 30 | Jan 10 | ⏭️ Planned |
+| 5. Integration & Polish | 1 week | Jan 13 | Jan 17 | ⏭️ Planned |
+| 6. Testing (Ongoing) | - | Dec 6 | Jan 17 | 🔄 Ongoing |
 
-**End-to-End Tests** (10+ tests):
-- Full workflows (Setup → Strategy → Driving)
-- Real telemetry data
-- Performance benchmarks
+**Total Duration**: ~6 weeks (December 6, 2025 - January 17, 2025)
 
-### Coverage Targets
-
+**Note**: Phase 3 jumped ahead of Phases 1-2 due to immediate user needs. Service refactoring will follow.
 | Service | Unit Tests | Coverage |
 |---------|------------|----------|
 | FuelAveragingService | 20+ | 90% |
