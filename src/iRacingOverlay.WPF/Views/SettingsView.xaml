@@ -128,6 +128,35 @@
                 <!-- General Settings Tab -->
                 <StackPanel Visibility="{Binding SelectedTab, Converter={StaticResource TabVisibilityConverter}, ConverterParameter=General}">
                     <TextBlock Text="General Settings" Style="{StaticResource SectionHeaderStyle}"/>
+                    
+                    <!-- Live Preview Indicator (Phase 3.2) -->
+                    <Border Background="{StaticResource TealPrimary}"
+                            BorderBrush="{StaticResource TealPrimary}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            Padding="10,8"
+                            Margin="0,0,0,20">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                     Text="👁️"
+                                     FontSize="18"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                     Text="Live Preview Active - All changes apply to widgets instantly"
+                                     FontSize="12"
+                                     FontWeight="Bold"
+                                     Foreground="White"
+                                     VerticalAlignment="Center"
+                                     TextWrapping="Wrap"/>
+                        </Grid>
+                    </Border>
 
                     <!-- Unit System -->
                     <Border Background="{StaticResource DarkSurface}"
@@ -169,6 +198,35 @@
                 <!-- Widgets Settings Tab -->
                 <StackPanel Visibility="{Binding SelectedTab, Converter={StaticResource TabVisibilityConverter}, ConverterParameter=Widgets}">
                     <TextBlock Text="Widget Controls" Style="{StaticResource SectionHeaderStyle}"/>
+                    
+                    <!-- Live Preview Indicator (Phase 3.2) -->
+                    <Border Background="{StaticResource TealPrimary}"
+                            BorderBrush="{StaticResource TealPrimary}"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            Padding="10,8"
+                            Margin="0,0,0,20">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0"
+                                     Text="👁️"
+                                     FontSize="18"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,10,0"/>
+                            
+                            <TextBlock Grid.Column="1"
+                                     Text="Live Preview Active - All changes apply to widgets instantly"
+                                     FontSize="12"
+                                     FontWeight="Bold"
+                                     Foreground="White"
+                                     VerticalAlignment="Center"
+                                     TextWrapping="Wrap"/>
+                        </Grid>
+                    </Border>
 
                     <!-- Toggle Lock Hotkey with Lock Checkbox -->
                     <Border Background="{StaticResource DarkSurface}"
@@ -291,6 +349,90 @@
 
                             <TextBlock Text="Show or hide all widgets instantly. Works even when racing in iRacing."
                                      Style="{StaticResource SettingDescriptionStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Snap-to-Grid (Phase 3.1) -->
+                    <Border Background="{StaticResource DarkSurface}"
+                            BorderBrush="{StaticResource TealPrimary}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="15"
+                            Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock Text="📐 Snap-to-Grid (Phase 3.1)" 
+                                     FontSize="16"
+                                     FontWeight="Bold"
+                                     Foreground="{StaticResource TealPrimary}"
+                                     Margin="0,0,0,15"/>
+
+                            <!-- Enable Snap-to-Grid -->
+                            <Grid Margin="0,0,0,15">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Enable Snap-to-Grid" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Automatically align widgets to grid points when dragging"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding SnapToGridEnabled}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <!-- Grid Size -->
+                            <Grid Margin="0,0,0,15" IsEnabled="{Binding SnapToGridEnabled}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Grid Size" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Distance between grid points (pixels)"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Slider Width="150"
+                                          Minimum="10"
+                                          Maximum="50"
+                                          Value="{Binding SnapToGridSize}"
+                                          TickFrequency="5"
+                                          IsSnapToTickEnabled="True"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,10,0"/>
+                                    <TextBlock Text="{Binding SnapToGridSize, StringFormat={}{0}px}"
+                                             FontWeight="Bold"
+                                             Foreground="{StaticResource TealPrimary}"
+                                             VerticalAlignment="Center"
+                                             MinWidth="45"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Show Grid Overlay -->
+                            <Grid Margin="0,0,0,0" IsEnabled="{Binding SnapToGridEnabled}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Show Grid Overlay" Style="{StaticResource SettingLabelStyle}"/>
+                                    <TextBlock Text="Display visual grid lines while dragging widgets (future feature)"
+                                             Style="{StaticResource SettingDescriptionStyle}"/>
+                                </StackPanel>
+
+                                <CheckBox Grid.Column="1"
+                                        IsChecked="{Binding ShowGridOverlay}"
+                                        Style="{StaticResource MRT.ToggleButton}"
+                                        VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
