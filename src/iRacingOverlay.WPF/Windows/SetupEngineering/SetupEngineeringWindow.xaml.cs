@@ -255,8 +255,12 @@ public partial class SetupEngineeringWindow : Window
         
         try
         {
+            // CRITICAL FIX: Detect outlap using SessionFlags (bit 0x04000000 = on warmup lap)
+            bool isOutlap = (telemetry.SessionFlags & 0x04000000) != 0 || telemetry.OnPitRoad;
+            
             // Calculate fuel used (start of lap fuel - end of lap fuel)
-            var fuelUsed = _lapStartFuel > 0 ? _lapStartFuel - telemetry.FuelLevel : (float?)null;
+            // Skip fuel calculation on outlap to avoid 2x fuel usage bug
+            var fuelUsed = (!isOutlap && _lapStartFuel > 0) ? _lapStartFuel - telemetry.FuelLevel : (float?)null;
             
             // Package sector times (only if we have valid data)
             float[]? sectorTimes = null;
@@ -272,8 +276,9 @@ public partial class SetupEngineeringWindow : Window
                 tireTemps = new[] { telemetry.LFtempCM, telemetry.RFtempCM, telemetry.LRtempCM, telemetry.RRtempCM };
             }
             
-            // Validation: Lap is valid if it has sector times AND fuel data AND reasonable lap time
-            bool isValid = sectorTimes != null 
+            // Validation: Lap is valid if it has sector times AND fuel data AND reasonable lap time AND not outlap
+            bool isValid = !isOutlap
+                && sectorTimes != null 
                 && fuelUsed.HasValue && fuelUsed.Value > 0 && fuelUsed.Value < 10f  // Reasonable fuel range
                 && telemetry.LapLastLapTime > 30f;  // Reasonable lap time (>30s)
             
@@ -316,6 +321,9 @@ public partial class SetupEngineeringWindow : Window
             LapCountText.Text = totalLaps.ToString();
             ValidLapCountText.Text = validLaps.ToString();
             OutlierCountText.Text = outliers.ToString();
+            
+            // CRITICAL FIX: Refresh setup ComboBoxes to show updated lap counts
+            await LoadSetupListAsync();
         }
         catch
         {

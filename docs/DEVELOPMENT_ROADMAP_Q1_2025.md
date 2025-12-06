@@ -643,8 +643,94 @@ public class LapComparisonService
 
 **Next**: Phase 3.7 - End-to-end testing with live iRacing session
 
-#### 3.7 CatBoost/ONNX Model Training (⏭️ FUTURE)
+#### 3.7 Neural Network Setup Advisor (🔄 IN PROGRESS - Dec 6, 2025)
+
+**Goal**: Analyze current setup and proactively suggest improvements based on driving behavior
+
+**Architecture**: Neural Network (ONNX) replaces physics heuristics
+
+**New Features**:
+1. **Automatic Handling Detection** (no user input needed!):
+   - Oversteer detection (steering corrections + lateral G)
+   - Understeer detection (throttle position + speed gain)
+   - Brake lockup detection (wheel speed vs vehicle speed)
+   - Corner-specific analysis (Turn 1 vs Turn 7)
+   - Tire degradation patterns
+
+2. **Neural Network Model**:
+   - Input: 50+ features (setup, driving behavior, tires, track conditions)
+   - Architecture: 3 hidden layers (128→64→32 neurons)
+   - Output: 10 setup parameter adjustments + confidence score
+   - Training: Transfer learning from iRacing telemetry dataset
+
+3. **Proactive Recommendations**:
+   - "Oversteer detected in Turn 7 → Try +2 clicks rear ARB"
+   - "Front tire temps 5°C higher → Reduce front wing 1 click"
+   - "Brake lockups detected → Increase brake bias +0.5%"
+   - Predicted lap time improvement for each suggestion
+
+**Input Features** (no manual entry required):
+```csharp
+public class DrivingBehaviorFeatures
+{
+    // Auto-detected from telemetry
+    public float OversteerSeverity { get; set; }      // 0-10 (steering corrections)
+    public float UndersteerSeverity { get; set; }     // 0-10 (throttle scrubbing)
+    public float BrakeStability { get; set; }         // Lockup frequency
+    public float CornerEntryInstability { get; set; } // Steering variance
+    public float CornerExitTraction { get; set; }     // Throttle smoothness
+    
+    // Tire analysis
+    public float FrontTireDegRate { get; set; }       // °C increase per lap
+    public float RearTireDegRate { get; set; }
+    public float TireImbalance { get; set; }          // LF vs RF temp delta
+    
+    // Corner-specific (auto-segmented)
+    public Dictionary<int, CornerAnalysis> CornerProblems { get; set; }
+}
 ```
+
+**Detection Algorithms**:
+- `HandlingDetector.DetectOversteer()` - Steering rate + lateral G analysis
+- `HandlingDetector.DetectUndersteer()` - Throttle position + speed gain
+- `HandlingDetector.DetectLockups()` - Wheel speed vs vehicle speed
+- `CornerSegmenter.AnalyzeCorners()` - Automatic corner identification
+
+**Neural Network Workflow**:
+1. User runs 5-10 laps on current setup
+2. System detects handling issues automatically
+3. NN analyzes 50+ features (setup + behavior + tires + track)
+4. Generates 3-5 ranked recommendations with confidence scores
+5. User tries recommended change, repeat
+
+**Why NN > Physics Heuristics**:
+- ✅ Detects complex parameter interactions (wing + ARB + tire pressure)
+- ✅ Learns from YOUR driving style (personalized)
+- ✅ Corner-level analysis (Turn 7 oversteer vs Turn 1 understeer)
+- ✅ Adapts to track conditions (temperature, rubber buildup)
+
+**Training Data**:
+- Transfer learning from public iRacing telemetry datasets
+- Fine-tuning on user's historical laps
+- Continuous learning from A/B testing results
+
+**Deliverables**:
+- ✅ `HandlingDetector.cs` - Automatic oversteer/understeer/lockup detection
+- ✅ `DrivingBehaviorFeatures.cs` - 50+ feature model
+- ✅ `NeuralNetworkSetupAdvisor.cs` - ONNX model integration
+- ✅ Enhanced UI with proactive recommendations panel
+- ✅ A/B testing framework (try suggestion, measure result)
+
+**Next Steps**:
+1. Implement `HandlingDetector` with telemetry-based detection
+2. Collect training dataset from iRacing community
+3. Train NN model (PyTorch → ONNX export)
+4. Integrate ONNX runtime into MLModelService
+5. Build A/B testing feedback loop
+
+**Timeline**: 2-3 weeks (Dec 9 - Dec 27, 2025)
+
+---
 
 ### Week 2: ML Integration & Export
 
@@ -899,19 +985,19 @@ _fuelCalculator.LoadStrategyPlan(strategyPlan);
 | Phase | Duration | Start Date | End Date | Status |
 |-------|----------|------------|----------|--------|
 | 0. Performance Fixes | 1 day | Dec 6 | Dec 6 | ✅ Complete |
-| 3. Setup Engineering Core | 1 day | Dec 6 | Dec 6 | ✅ Complete |
-| 3. Setup Engineering ML | 1 day | Dec 6 | Dec 6 | ✅ Complete |
-| 1. Service Refactoring | 3 days | Dec 9 | Dec 11 | ⏭️ Planned |
-| 2. Mode Infrastructure | 2 weeks | Dec 12 | Dec 23 | ⏭️ Planned |
-| 4. Strategy Scouting | 2 weeks | Dec 26 | Jan 8 | ⏭️ Planned |
-| 5. Integration & Polish | 1 week | Jan 9 | Jan 15 | ⏭️ Planned |
-| 6. Testing (Ongoing) | - | Dec 6 | Jan 15 | 🔄 Ongoing |
+| 3.1-3.6 Setup Engineering Core + ML | 1 day | Dec 6 | Dec 6 | ✅ Complete |
+| 3.7 Neural Network Setup Advisor | 3 weeks | Dec 9 | Dec 27 | 🔄 In Progress |
+| 1. Service Refactoring | 3 days | Dec 30 | Jan 3 | ⏭️ Planned |
+| 2. Mode Infrastructure | 2 weeks | Jan 6 | Jan 17 | ⏭️ Planned |
+| 4. Strategy Scouting | 2 weeks | Jan 20 | Jan 31 | ⏭️ Planned |
+| 5. Integration & Polish | 1 week | Feb 3 | Feb 7 | ⏭️ Planned |
+| 6. Testing (Ongoing) | - | Dec 6 | Feb 7 | 🔄 Ongoing |
 
-**Total Duration**: ~6 weeks (December 6, 2025 - January 15, 2025)
+**Total Duration**: ~9 weeks (December 6, 2025 - February 7, 2026)
 
-**Note**: Phase 3 completed 1 day early! ML integration delivered with physics-based predictions + live setup tracking.
+**Note**: Phase 3.7 (Neural Network Setup Advisor) added to roadmap - AI-powered proactive recommendations based on driving behavior analysis!
 
-**Note**: Phase 3 jumped ahead of Phases 1-2 due to immediate user needs. Service refactoring will follow.
+**Note**: Phase 3 jumped ahead of Phases 1-2 due to immediate user needs. Phase 3.7 will complete NN integration before service refactoring begins.
 | Service | Unit Tests | Coverage |
 |---------|------------|----------|
 | FuelAveragingService | 20+ | 90% |
