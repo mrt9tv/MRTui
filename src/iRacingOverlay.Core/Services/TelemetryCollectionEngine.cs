@@ -195,7 +195,8 @@ public class TelemetryCollectionEngine
             LapDistPct = telemetry.LapDistPct,
             SessionTimeRemain = (float)telemetry.SessionTimeRemain,
             Speed = telemetry.Speed,
-            Throttle = telemetry.Throttle
+            Throttle = telemetry.Throttle,
+            SteeringWheelAngle = telemetry.SteeringWheelAngle  // For corner detection
         };
         
         // Mode-specific channel collection
@@ -444,6 +445,7 @@ public class TelemetrySnapshot
     public float? FuelLevel { get; set; }
     public float? RPM { get; set; }
     public int? Gear { get; set; }
+    public float? SteeringWheelAngle { get; set; }  // Radians - for corner detection
     
     // Setup Engineering - Suspension (16 channels)
     public float? LFshockDefl { get; set; }

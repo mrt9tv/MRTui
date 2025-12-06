@@ -4,17 +4,23 @@ namespace iRacingOverlay.Core.Services;
 
 /// <summary>
 /// Turn-by-turn telemetry learning system
-/// Analyzes sector-level performance per lap, track, and vehicle combination
+/// Analyzes sector-level AND corner-level performance per lap, track, and vehicle
 /// 
 /// Purpose:
-/// - Learn optimal speed/throttle/braking profiles for each corner
+/// - Learn optimal speed/throttle/braking profiles for each sector AND corner
 /// - Detect performance anomalies (slow corners, lockups, oversteer)
-/// - Compare driver performance across sectors over time
+/// - Compare driver performance across sectors/corners over time
 /// - Build corner-specific insights for Setup Engineering and Strategy Scouting
 /// 
+/// Features:
+/// - Dynamic sector count (uses actual track sector count from SessionInfo YAML)
+/// - Corner detection within sectors (steering angle + speed analysis)
+/// - Per-corner performance profiles (speed, throttle, G-forces)
+/// 
 /// Storage:
-/// - Per-vehicle, per-track sector profiles in %APPDATA%/MRTOverlay/SectorProfiles/
-/// - JSON format: {TrackName}/{CarName}/sector_{N}.json
+/// - Per-vehicle, per-track profiles in %APPDATA%/MRTOverlay/SectorProfiles/
+/// - JSON format: {TrackName}_{CarName}.json
+/// - Contains sector profiles + corner profiles (nested structure)
 /// </summary>
 public class SectorTelemetryAnalyzer
 {
@@ -30,6 +36,12 @@ public class SectorTelemetryAnalyzer
     // Statistics
     private int _sectorsAnalyzed = 0;
     private int _profilesUpdated = 0;
+    
+    // Corner detection configuration
+    private readonly bool _enableCornerDetection = true;  // Enable corner-by-corner learning
+    private const float CORNER_STEERING_THRESHOLD = 5.0f;  // Degrees - minimum steering to detect corner
+    private const float CORNER_SPEED_DROP_THRESHOLD = 0.85f;  // 15% speed drop indicates corner entry
+    private const int CORNER_MIN_SAMPLES = 10;  // Minimum samples to consider a corner valid
     
     public SectorTelemetryAnalyzer()
     {
@@ -156,6 +168,77 @@ public class SectorTelemetryAnalyzer
         }
         
         return slices;
+    }
+    
+    /// <summary>
+    /// Detect individual corners within a sector using steering angle and speed analysis
+    /// Returns list of corner slices with telemetry samples for each corner
+    /// </summary>
+    private List<CornerTelemetrySlice> DetectCornersInSector(SectorTelemetrySlice sectorSlice)
+    {
+        var corners = new List<CornerTelemetrySlice>();
+        
+        if (!_enableCornerDetection || sectorSlice.Samples.Count < CORNER_MIN_SAMPLES * 2)
+            return corners;  // Not enough data for corner detection
+        
+        var samples = sectorSlice.Samples;
+        int cornerNumber = 0;
+        bool inCorner = false;
+        int cornerStartIdx = 0;
+        float sectorMaxSpeed = samples.Max(s => s.Speed);
+        
+        for (int i = 1; i < samples.Count; i++)
+        {
+            var current = samples[i];
+            var previous = samples[i - 1];
+            
+            // Detect corner entry: steering angle increase + speed drop
+            float steeringAngle = Math.Abs(current.SteeringWheelAngle ?? 0f) * (180f / (float)Math.PI);  // Convert to degrees
+            float speedRatio = current.Speed / sectorMaxSpeed;
+            bool hasSignificantSteering = steeringAngle > CORNER_STEERING_THRESHOLD;
+            bool hasSpeedDrop = speedRatio < CORNER_SPEED_DROP_THRESHOLD;
+            
+            if (!inCorner && hasSignificantSteering && hasSpeedDrop)
+            {
+                // Corner entry detected
+                inCorner = true;
+                cornerStartIdx = i;
+            }
+            else if (inCorner)
+            {
+                // Check for corner exit: steering returns to straight, speed increases
+                bool steeringReducing = steeringAngle < CORNER_STEERING_THRESHOLD;
+                bool speedIncreasing = current.Speed > previous.Speed;
+                
+                if (steeringReducing && speedIncreasing)
+                {
+                    // Corner exit detected
+                    int cornerEndIdx = i;
+                    int cornerSampleCount = cornerEndIdx - cornerStartIdx;
+                    
+                    if (cornerSampleCount >= CORNER_MIN_SAMPLES)
+                    {
+                        // Valid corner detected
+                        var cornerSamples = samples.Skip(cornerStartIdx).Take(cornerSampleCount).ToList();
+                        
+                        corners.Add(new CornerTelemetrySlice
+                        {
+                            SectorNumber = sectorSlice.SectorNumber,
+                            CornerNumber = cornerNumber,
+                            StartPct = cornerSamples.First().LapDistPct,
+                            EndPct = cornerSamples.Last().LapDistPct,
+                            Samples = cornerSamples
+                        });
+                        
+                        cornerNumber++;
+                    }
+                    
+                    inCorner = false;
+                }
+            }
+        }
+        
+        return corners;
     }
     
     /// <summary>
@@ -459,6 +542,7 @@ public class SectorTelemetryAnalyzer
 
 /// <summary>
 /// Vehicle-specific sector profile (learned over time)
+/// Enhanced with corner-by-corner learning
 /// </summary>
 public class VehicleSectorProfile
 {
@@ -466,6 +550,7 @@ public class VehicleSectorProfile
     public string CarName { get; set; } = "";
     public int LapCount { get; set; }
     public List<SectorProfile> Sectors { get; set; } = new();
+    public List<CornerProfile> Corners { get; set; } = new();  // NEW: Corner-by-corner profiles
 }
 
 /// <summary>
@@ -484,11 +569,45 @@ public class SectorProfile
 }
 
 /// <summary>
+/// Historical profile for a single corner (within a sector)
+/// Finer-grained learning for corner-by-corner analysis
+/// </summary>
+public class CornerProfile
+{
+    public int SectorNumber { get; set; }
+    public int CornerNumber { get; set; }  // Corner number within sector (0-indexed)
+    public float StartPct { get; set; }     // Approximate start LapDistPct
+    public float EndPct { get; set; }       // Approximate end LapDistPct
+    public float BestCornerTime { get; set; }
+    public int BestLapNumber { get; set; }
+    public float AvgSpeed { get; set; }
+    public float MinSpeed { get; set; }     // Minimum speed (apex speed)
+    public float AvgThrottle { get; set; }
+    public float AvgLatAccel { get; set; }
+    public float MaxLatAccel { get; set; }  // Peak cornering G-force
+    public int LapCount { get; set; }
+    public DateTime LastUpdated { get; set; }
+}
+
+/// <summary>
 /// Telemetry samples for a single sector
 /// </summary>
 public class SectorTelemetrySlice
 {
     public int SectorNumber { get; set; }
+    public float StartPct { get; set; }
+    public float EndPct { get; set; }
+    public List<TelemetrySnapshot> Samples { get; set; } = new();
+}
+
+/// <summary>
+/// Telemetry samples for a single corner (within a sector)
+/// Detected dynamically using steering angle and speed analysis
+/// </summary>
+public class CornerTelemetrySlice
+{
+    public int SectorNumber { get; set; }
+    public int CornerNumber { get; set; }  // Corner number within sector
     public float StartPct { get; set; }
     public float EndPct { get; set; }
     public List<TelemetrySnapshot> Samples { get; set; } = new();
