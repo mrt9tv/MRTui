@@ -9,6 +9,7 @@ using iRacingOverlay.Core.Services.Tire;
 using iRacingOverlay.Core.Services.ValueSmoothing;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Controls;
+using Microsoft.Extensions.Logging;
 
 namespace iRacingOverlay.WPF.Widgets.RaceStrategy
 {
@@ -24,16 +25,20 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
         private readonly WeatherTrackService _weatherTrack;
         private readonly PitIntelligenceService _pitIntelligence;
         private readonly ITelemetryService? _telemetryService;
-        private readonly ValueSmoothingService _valueSmoothing; // Anti-flicker smoothing for gap values
+        private readonly ValueSmoothingService _valueSmoothing;
+        private readonly ILogger<RaceStrategyWidget> _logger; // Anti-flicker smoothing for gap values
         // REMOVED: Drag functionality not implemented yet
         // private bool _isDragging;
         // private Point _dragStartPoint;
         private TelemetryData? _latestTelemetry; // Store latest telemetry for competitor intelligence
+        private DateTime _lastUIUpdate = DateTime.MinValue;
+        private const int UI_UPDATE_THROTTLE_MS = 500; // Update UI max once per 500ms
 
-        public RaceStrategyWidget(FuelCalculatorService fuelCalculator, TireStrategyService tireStrategy, ITelemetryService? telemetryService = null)
+        public RaceStrategyWidget(FuelCalculatorService fuelCalculator, TireStrategyService tireStrategy, ILogger<RaceStrategyWidget> logger, ITelemetryService? telemetryService = null)
         {
             _fuelCalculator = fuelCalculator ?? throw new ArgumentNullException(nameof(fuelCalculator));
             _tireStrategy = tireStrategy ?? throw new ArgumentNullException(nameof(tireStrategy));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _competitorIntelligence = new CompetitorIntelligenceService();
             _weatherTrack = new WeatherTrackService();
             _pitIntelligence = new PitIntelligenceService();
@@ -94,24 +99,74 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
         }
 
         /// <summary>
-        /// Handle fuel data updates
+        /// Calculate time gap to a specific position using telemetry arrays
+        /// Returns gap in seconds, or -1 if calculation not possible
+        /// </summary>
+        private float CalculateGapToPosition(TelemetryData? data, int targetPosition)
+        {
+            if (data == null || targetPosition < 1 || data.CarIdxPosition == null || data.CarIdxLapDistPct == null)
+                return -1f;
+
+            // Find car in target position
+            int targetCarIdx = -1;
+            for (int i = 0; i < data.CarIdxPosition.Length; i++)
+            {
+                if (data.CarIdxPosition[i] == targetPosition)
+                {
+                    targetCarIdx = i;
+                    break;
+                }
+            }
+
+            if (targetCarIdx == -1 || data.PlayerCarIdx < 0)
+                return -1f;
+
+            // Get lap distance percentages
+            float playerPct = data.LapDistPct;
+            float targetPct = data.CarIdxLapDistPct[targetCarIdx];
+
+            // Calculate distance difference (in track percentage)
+            float distDiff = Math.Abs(playerPct - targetPct);
+
+            // Convert to time using last lap time as estimate
+            if (data.LapLastLapTime > 0)
+            {
+                return distDiff * data.LapLastLapTime;
+            }
+
+            return -1f;
+        }
+
+        /// <summary>
+        /// Handle fuel data updates (throttled for performance)
         /// </summary>
         private void OnFuelDataUpdated(object? sender, FuelData data)
         {
+            // Throttle updates to prevent excessive Dispatcher.Invoke calls
+            var now = DateTime.UtcNow;
+            if ((now - _lastUIUpdate).TotalMilliseconds < UI_UPDATE_THROTTLE_MS)
+                return;
+            
+            _lastUIUpdate = now;
             Dispatcher.Invoke(() => UpdateUI(data));
         }
 
         /// <summary>
-        /// Handle telemetry updates for competitor intelligence
+        /// Handle telemetry updates for competitor intelligence (throttled for performance)
         /// </summary>
         private void OnTelemetryUpdated(object? sender, TelemetryData data)
         {
             _latestTelemetry = data;
             
-            // Update weather tracking
+            // Update weather tracking (lightweight, no UI)
             _weatherTrack.Update(data);
             
-            // Update pit activity tracking
+            // Throttle UI updates to prevent performance issues
+            var now = DateTime.UtcNow;
+            if ((now - _lastUIUpdate).TotalMilliseconds < UI_UPDATE_THROTTLE_MS)
+                return;
+            
+            // Update pit activity tracking with throttled UI updates
             Dispatcher.Invoke(() =>
             {
                 if (_latestTelemetry != null)
@@ -766,23 +821,9 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
             {
                 YourPositionText.Text = $"P{data.RacePosition}";
                 
-                // Calculate position change (placeholder - would need starting position data)
-                int positionChange = 0; // TODO: Track from race start
-                if (positionChange > 0)
-                {
-                    PositionChangeText.Text = $"▲ {positionChange} since start";
-                    PositionChangeText.Foreground = (System.Windows.Media.Brush)FindResource("BrushGreen");
-                }
-                else if (positionChange < 0)
-                {
-                    PositionChangeText.Text = $"▼ {Math.Abs(positionChange)} since start";
-                    PositionChangeText.Foreground = (System.Windows.Media.Brush)FindResource("BrushRed");
-                }
-                else
-                {
-                    PositionChangeText.Text = "Same position";
-                    PositionChangeText.Foreground = (System.Windows.Media.Brush)FindResource("BrushTeal");
-                }
+                // Position change tracking requires race start position history (future enhancement)
+                PositionChangeText.Text = "Monitoring";
+                PositionChangeText.Foreground = (System.Windows.Media.Brush)FindResource("BrushTeal");
             }
             else
             {
@@ -790,14 +831,34 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
                 PositionChangeText.Text = "Not in race";
             }
             
-            // Gap ahead (placeholder - would need relative timing data)
-            float gapAhead = 2.4f; // TODO: Get from telemetry
-            GapAheadText.Text = $"{gapAhead:F1}s";
-            CarAheadText.Text = data.RacePosition > 1 ? $"to P{data.RacePosition - 1}" : "Leading";
+            // Gap ahead (calculated from telemetry)
+            var gapAhead = CalculateGapToPosition(_latestTelemetry, data.RacePosition - 1);
+            if (data.RacePosition > 1 && gapAhead >= 0)
+            {
+                GapAheadText.Text = $"{gapAhead:F1}s";
+                CarAheadText.Text = $"to P{data.RacePosition - 1}";
+            }
+            else if (data.RacePosition == 1)
+            {
+                GapAheadText.Text = "--";
+                CarAheadText.Text = "Leading";
+            }
+            else
+            {
+                GapAheadText.Text = "--";
+                CarAheadText.Text = "--";
+            }
             
-            // Gap behind (placeholder - would need relative timing data)
-            float gapBehind = 3.8f; // TODO: Get from telemetry
-            GapBehindText.Text = $"{gapBehind:F1}s";
+            // Gap behind (calculated from telemetry)
+            var gapBehind = CalculateGapToPosition(_latestTelemetry, data.RacePosition + 1);
+            if (gapBehind >= 0)
+            {
+                GapBehindText.Text = $"{gapBehind:F1}s";
+            }
+            else
+            {
+                GapBehindText.Text = "--";
+            }
             CarBehindText.Text = data.RacePosition < data.TotalCars ? $"to P{data.RacePosition + 1}" : "Last";
             
             // Pit strategy impact predictions
@@ -982,10 +1043,10 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
                     tempTrendText!.Text = $"Calculating trend... ({secondsCollected}s / 100s needed)";
                     tempTrendText.Foreground = (System.Windows.Media.Brush)FindResource("BrushGray");
                     
-                    // DEBUG: Log why trend calculation is blocked
+                    // Log why trend calculation is blocked
                     if (weather.HistorySampleCount > 0 && weather.HistorySampleCount < 600)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[Weather] Trend blocked: {weather.HistorySampleCount} samples ({secondsCollected}s), need 600 (100s)");
+                        _logger.LogDebug("Weather trend blocked: {SampleCount} samples ({SecondsCollected}s), need 600 (100s)", weather.HistorySampleCount, secondsCollected);
                     }
                 }
                 
@@ -1147,12 +1208,12 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
                 // Log additional info for fog and rain tires
                 if (weather.FogLevel > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Weather] Fog: {weather.FogLevel:F0}%");
+                    _logger.LogDebug("Weather fog level: {FogLevel:F0}%", weather.FogLevel);
                 }
                 
                 if (weather.IsWetTrack)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Weather] Rain tires: ALLOWED");
+                    _logger.LogDebug("Weather: Rain tires ALLOWED");
                 }
                 
                 // Update damage assessment
@@ -1185,10 +1246,10 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
                 pitActionText!.Text = pitEstimate.RecommendedAction;
             });
             
-            // For now, log to debug
+            // Log weather changes
             if (weather.IsWeatherChanging)
             {
-                System.Diagnostics.Debug.WriteLine($"[Weather] {weather.ChangeDescription}");
+                _logger.LogInformation("Weather change: {ChangeDescription}", weather.ChangeDescription);
             }
         }
 
@@ -1303,17 +1364,13 @@ namespace iRacingOverlay.WPF.Widgets.RaceStrategy
             // Update Lap Time Comparison list
             LapTimeComparisonList.ItemsSource = fastestCompetitors;
             
-            // TODO Phase 10.6 Next Steps:
-            // 1. ✅ Add "Gap to Leader" display in OVERVIEW tab - COMPLETE
-            // 2. ✅ Add "Recent Pit Activity" list in POSITIONS tab - COMPLETE
-            // 3. ✅ Add "Lap Time Comparison" table in POSITIONS tab - COMPLETE
-            // 4. Add visual indicators for competitors currently pitting (optional enhancement)
+            // Phase 10.6 Complete: Gap displays, pit activity tracking, lap time comparison
 
-            // Log pit activity for debugging
+            // Log pit activity
             if (recentPits.Count > 0 && recentPits[0].PitLap == _latestTelemetry.Lap)
             {
                 var pit = recentPits[0];
-                System.Diagnostics.Debug.WriteLine($"[Competitor Intelligence] P{pit.Position}: {pit.DriverName} ({pit.CarNumber}) - {pit.Status} on Lap {pit.PitLap}");
+                _logger.LogDebug("Competitor Intelligence - P{Position}: {DriverName} ({CarNumber}) - {Status} on Lap {PitLap}", pit.Position, pit.DriverName, pit.CarNumber, pit.Status, pit.PitLap);
             }
         }
 

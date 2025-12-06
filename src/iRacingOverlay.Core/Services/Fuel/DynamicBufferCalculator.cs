@@ -7,11 +7,11 @@ namespace iRacingOverlay.Core.Services.Fuel;
 /// </summary>
 public class DynamicBufferCalculator
 {
-    private const float BaseBufferLaps = 0.5f;
-    
     /// <summary>
     /// Calculate dynamic buffer based on multiple factors
     /// </summary>
+    /// <param name="userBufferLaps">User-configured base buffer laps</param>
+    /// <param name="enableDynamicBuffer">Whether to apply dynamic adjustments</param>
     public BufferData Calculate(
         float consistencyFactor,
         int currentPosition,
@@ -20,12 +20,21 @@ public class DynamicBufferCalculator
         int yellowFlagCount,
         int currentLap,
         int totalLaps,
-        bool isTimedSession)
+        bool isTimedSession,
+        float userBufferLaps,
+        bool enableDynamicBuffer)
     {
         var bufferData = new BufferData
         {
-            TotalBuffer = BaseBufferLaps
+            TotalBuffer = userBufferLaps  // Use user setting instead of hardcoded value
         };
+        
+        // If dynamic buffer disabled, return user setting immediately
+        if (!enableDynamicBuffer)
+        {
+            bufferData.Reason = $"Fixed: {userBufferLaps:F2} laps (dynamic buffer disabled)";
+            return bufferData;
+        }
         
         var reasons = new List<string>();
         
@@ -78,11 +87,11 @@ public class DynamicBufferCalculator
         // Build reason string
         if (reasons.Count > 0)
         {
-            bufferData.Reason = $"Base: {BaseBufferLaps:F2} | {string.Join(" | ", reasons)}";
+            bufferData.Reason = $"Base: {userBufferLaps:F2} | {string.Join(" | ", reasons)}";
         }
         else
         {
-            bufferData.Reason = $"Base: {BaseBufferLaps:F2} (no adjustments)";
+            bufferData.Reason = $"Base: {userBufferLaps:F2} (no adjustments)";
         }
         
         return bufferData;

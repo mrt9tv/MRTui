@@ -73,20 +73,6 @@ public class AppSettings : INotifyPropertyChanged
     public bool FuelWidget_ShowBar { get; set; } = true;
 
     /// <summary>
-    /// [OBSOLETE - Replaced by FuelWidget_ShowRange]
-    /// Show Last 10 laps average - removed to simplify display
-    /// </summary>
-    [Obsolete("L10 display has been removed. Use FuelWidget_ShowRange instead.", false)]
-    public bool FuelWidget_ShowL10 { get; set; } = false;
-
-    /// <summary>
-    /// [OBSOLETE - Replaced by FuelWidget_ShowRange]
-    /// Show session average fuel consumption - removed to simplify display
-    /// </summary>
-    [Obsolete("SESSION display has been removed. Use FuelWidget_ShowRange instead.", false)]
-    public bool FuelWidget_ShowSession { get; set; } = false;
-
-    /// <summary>
     /// Show fuel range (min-max consumption) instead of L10/SESSION averages
     /// Displays: "RANGE: 2.50-3.10L" showing consumption variance
     /// </summary>
@@ -123,56 +109,11 @@ public class AppSettings : INotifyPropertyChanged
     public bool FuelWidget_ShowTrendIndicator { get; set; } = true;
 
     /// <summary>
-    /// [OBSOLETE - Legacy setting, no longer used]
-    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
-    /// This property is kept for backward compatibility with existing config files.
-    /// </summary>
-    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
-    public bool FuelWidget_ShowIRacingDelta { get; set; } = true;
-
-    /// <summary>
-    /// [OBSOLETE - Legacy setting, no longer used]
-    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
-    /// This property is kept for backward compatibility with existing config files.
-    /// </summary>
-    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
-    public bool FuelWidget_ShowCanFinish { get; set; } = true;
-
-    /// <summary>
-    /// [OBSOLETE - Legacy setting, no longer used]
-    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
-    /// This property is kept for backward compatibility with existing config files.
-    /// </summary>
-    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
-    public bool FuelWidget_ShowPitFuel { get; set; } = true;
-
-    /// <summary>
-    /// [OBSOLETE - Legacy setting, no longer used]
-    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
-    /// This property is kept for backward compatibility with existing config files.
-    /// </summary>
-    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
-    public bool FuelWidget_ShowPressure { get; set; } = false;
-
-    /// <summary>
-    /// [OBSOLETE - Legacy setting, no longer used]
-    /// Individual field toggles have been replaced by FuelWidget_ShowPitStrategy master toggle.
-    /// This property is kept for backward compatibility with existing config files.
-    /// </summary>
-    [Obsolete("Individual field toggles are no longer used. Use FuelWidget_ShowPitStrategy instead.", false)]
-    public bool FuelWidget_ShowPitWindow { get; set; } = true;
-
-    /// <summary>
     /// Show entire pit strategy section (LAPS, TO GO, PRESS, PIT, PIT IN)
     /// MASTER TOGGLE: When ON, shows all pit strategy fields. When OFF, hides entire section for minimal widget.
     /// This single toggle controls all pit strategy visibility (individual field toggles have been removed).
     /// </summary>
     public bool FuelWidget_ShowPitStrategy { get; set; } = true;
-
-    /// <summary>
-    /// Show fuel pressure field (PRESS) within pit strategy section
-    /// </summary>
-    public bool FuelWidget_ShowFuelPressure { get; set; } = false;
 
     // Fuel Widget Strategy
     /// <summary>
@@ -228,8 +169,6 @@ public class AppSettings : INotifyPropertyChanged
     public double FuelWidget_Y { get; set; } = 50;
     
     // Fuel Widget Phase 3: Fuel Saving Mode
-    // REMOVED: FuelWidget_EnableFuelSaving (unused - was never checked in code)
-    
     /// <summary>
     /// Show lift point suggestions for fuel saving (disabled by default - generic suggestions not track-specific)
     /// </summary>
@@ -507,7 +446,7 @@ public class AppSettings : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            // Log error but don't crash the app
+            // Log error but don't crash the app - AppSettings is singleton, cannot inject ILogger
             System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
         }
     }
@@ -541,7 +480,7 @@ public class AppSettings : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            // Log error but return default settings
+            // Log error but return default settings - AppSettings is singleton, cannot inject ILogger
             System.Diagnostics.Debug.WriteLine($"Failed to load settings: {ex.Message}");
         }
         

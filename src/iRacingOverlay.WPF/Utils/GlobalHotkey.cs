@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using Microsoft.Extensions.Logging;
 
 namespace iRacingOverlay.WPF.Utils;
 
@@ -15,6 +16,7 @@ public class GlobalHotkey : IDisposable
     private const int WM_HOTKEY = 0x0312;
     private readonly Window _window;
     private readonly int _hotkeyId;
+    private readonly ILogger<GlobalHotkey>? _logger;
     private HwndSource? _source;
     private bool _isRegistered = false;
 
@@ -39,10 +41,11 @@ public class GlobalHotkey : IDisposable
         Win = 8
     }
 
-    public GlobalHotkey(Window window, int hotkeyId = 1)
+    public GlobalHotkey(Window window, int hotkeyId = 1, ILogger<GlobalHotkey>? logger = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _hotkeyId = hotkeyId;
+        _logger = logger;
 
         // Set up the WndProc hook immediately if window is already loaded
         if (_window.IsLoaded)
@@ -71,11 +74,11 @@ public class GlobalHotkey : IDisposable
         if (_source != null)
         {
             _source.AddHook(WndProc);
-            System.Diagnostics.Debug.WriteLine($"GlobalHotkey: WndProc hook installed for hotkey ID {_hotkeyId}");
+            _logger?.LogDebug("WndProc hook installed for hotkey ID {HotkeyId}", _hotkeyId);
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"GlobalHotkey: ERROR - Failed to get HwndSource for hotkey ID {_hotkeyId}");
+            _logger?.LogError("Failed to get HwndSource for hotkey ID {HotkeyId}", _hotkeyId);
         }
     }
 
@@ -86,7 +89,7 @@ public class GlobalHotkey : IDisposable
     {
         if (msg == WM_HOTKEY && wParam.ToInt32() == _hotkeyId)
         {
-            System.Diagnostics.Debug.WriteLine($"GlobalHotkey: WM_HOTKEY received for ID {_hotkeyId}!");
+            _logger?.LogDebug("WM_HOTKEY received for ID {HotkeyId}", _hotkeyId);
             HotkeyPressed?.Invoke(this, EventArgs.Empty);
             handled = true;
         }
@@ -110,7 +113,7 @@ public class GlobalHotkey : IDisposable
 
         if (hwnd == IntPtr.Zero)
         {
-            System.Diagnostics.Debug.WriteLine("GlobalHotkey: Window handle is null, cannot register hotkey");
+            _logger?.LogWarning("Window handle is null, cannot register hotkey");
             return false;
         }
 
@@ -128,7 +131,7 @@ public class GlobalHotkey : IDisposable
         uint vkCode = GetVirtualKeyCode(key);
         if (vkCode == 0)
         {
-            System.Diagnostics.Debug.WriteLine($"GlobalHotkey: Invalid key '{key}'");
+            _logger?.LogWarning("Invalid key: {Key}", key);
             return false;
         }
 
@@ -137,11 +140,11 @@ public class GlobalHotkey : IDisposable
 
         if (_isRegistered)
         {
-            System.Diagnostics.Debug.WriteLine($"GlobalHotkey: Registered {modifierKey} + {key} (VK: 0x{vkCode:X})");
+            _logger?.LogInformation("Registered hotkey: {Modifier} + {Key} (VK: 0x{VkCode:X})", modifierKey, key, vkCode);
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"GlobalHotkey: Failed to register {modifierKey} + {key}");
+            _logger?.LogWarning("Failed to register hotkey: {Modifier} + {Key}", modifierKey, key);
         }
 
         return _isRegistered;
@@ -161,7 +164,7 @@ public class GlobalHotkey : IDisposable
         if (hwnd != IntPtr.Zero)
         {
             UnregisterHotKey(hwnd, _hotkeyId);
-            System.Diagnostics.Debug.WriteLine("GlobalHotkey: Unregistered");
+            _logger?.LogDebug("Hotkey unregistered");
         }
 
         _isRegistered = false;

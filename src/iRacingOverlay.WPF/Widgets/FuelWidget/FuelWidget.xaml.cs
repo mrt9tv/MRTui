@@ -375,17 +375,17 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidgets
                     canFinishRow.Height = showStrategy ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
             }
 
-            // Fuel Pressure - Row 13 (can be toggled independently)
+            // REMOVED: Fuel Pressure - not available in iRacing SDK
+            // var pressureGrid = FindName("PressureGrid") as FrameworkElement;
+            // var pressureRow = FindName("PressureRow") as RowDefinition;
+            // Always hide pressure field
             var pressureGrid = FindName("PressureGrid") as FrameworkElement;
             var pressureRow = FindName("PressureRow") as RowDefinition;
             if (pressureGrid != null)
             {
-                // Show pressure if both pit strategy AND pressure toggle are enabled
-                bool showPressure = showStrategy && settings.FuelWidget_ShowFuelPressure;
-
-                pressureGrid.Visibility = showPressure ? Visibility.Visible : Visibility.Collapsed;
+                pressureGrid.Visibility = Visibility.Collapsed;
                 if (pressureRow != null)
-                    pressureRow.Height = showPressure ? new GridLength(1, GridUnitType.Auto) : new GridLength(0);
+                    pressureRow.Height = new GridLength(0);
             }
 
             // PIT (Fuel to Add) - Row 14

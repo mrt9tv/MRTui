@@ -230,7 +230,7 @@ public class LivePositionCalculator
     /// <summary>
     /// QUALIFYING MODE: Calculate position based on fastest lap time
     /// Lower time = better position
-    /// Cars without lap times are ranked below cars with times (TODO: use iRating as tiebreaker)
+    /// Cars without lap times are ranked below cars with times (iRating tiebreaker: future enhancement)
     /// </summary>
     public int CalculateQualifyingPosition(TelemetryData data, bool classOnly = true)
     {
@@ -281,8 +281,8 @@ public class LivePositionCalculator
         if (playerBestTime <= 0)
         {
             // Player has no valid lap - rank below all cars with times
-            // Among cars without times, we rank by... (TODO: iRating)
-            // For now, rank at bottom
+            // Future: Use iRating for tiebreaker among cars without times
+            // Current: Rank at bottom
             int position = carsWithTimesTotal + carsWithoutTimes + 1;
 
             // DEBUG: Log qualifying position when no lap time

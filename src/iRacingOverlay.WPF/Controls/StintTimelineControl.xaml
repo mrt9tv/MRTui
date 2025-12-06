@@ -66,8 +66,8 @@
         
         <!-- Timeline Canvas with ScrollViewer -->
         <ScrollViewer Grid.Row="1" 
-                     HorizontalScrollBarVisibility="Auto"
-                     VerticalScrollBarVisibility="Hidden"
+                     HorizontalScrollBarVisibility="Disabled"
+                     VerticalScrollBarVisibility="Disabled"
                      Margin="0">
             <Grid MinWidth="600">
                 <Grid.RowDefinitions>

@@ -22,6 +22,7 @@ public class WidgetManager
     private readonly FuelCalculatorService _fuelCalculatorService;
     private readonly TireStrategyService _tireStrategyService;
     private readonly ILogger<WidgetManager> _logger;
+    private readonly IServiceProvider _serviceProvider;
     private readonly Dictionary<Guid, WidgetBase> _activeWidgets = new();
     private readonly Dictionary<WidgetType, Func<ITelemetryService, WidgetConfig, WidgetBase>> _widgetFactories = new();
     
@@ -34,12 +35,13 @@ public class WidgetManager
     public event EventHandler<Guid>? WidgetRemoved;
     public event EventHandler? WidgetVisibilityChanged;
 
-    public WidgetManager(ITelemetryService telemetryService, FuelCalculatorService fuelCalculatorService, TireStrategyService tireStrategyService, ILogger<WidgetManager> logger)
+    public WidgetManager(ITelemetryService telemetryService, FuelCalculatorService fuelCalculatorService, TireStrategyService tireStrategyService, ILogger<WidgetManager> logger, IServiceProvider serviceProvider)
     {
         _telemetryService = telemetryService ?? throw new ArgumentNullException(nameof(telemetryService));
         _fuelCalculatorService = fuelCalculatorService ?? throw new ArgumentNullException(nameof(fuelCalculatorService));
         _tireStrategyService = tireStrategyService ?? throw new ArgumentNullException(nameof(tireStrategyService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
         RegisterWidgetFactories();
     }
@@ -52,19 +54,11 @@ public class WidgetManager
         _widgetFactories[WidgetType.MRTOne] = (service, config) =>
             new Widgets.MRTOneWidget.MRTOneWidget(service, config);
 
-        _widgetFactories[WidgetType.Data] = (service, config) =>
-            new Widgets.DataWidget.DataWidget(service, config);
-
         _widgetFactories[WidgetType.Fuel] = (service, config) =>
             new Widgets.FuelWidgets.FuelWidget(service, _fuelCalculatorService, config);
 
-        // TODO: Uncomment as we create more widgets
-        // _widgetFactories[WidgetType.TelemetryTable] = (service, config) =>
-        //     new Widgets.TelemetryTableWidget.TelemetryTableWidget(service, config);
-
-        // MVP 3+ widgets will be registered here as they're created
-        // _widgetFactories[WidgetType.RPMGauge] = ...
-        // etc.
+        // Future widgets: TelemetryTable, RPMGauge, Temperature, LapTimes, Gear, Inputs, Tires
+        // Register additional widget factories here as new widgets are implemented
     }
 
     /// <summary>
@@ -124,7 +118,10 @@ public class WidgetManager
                 if (_raceStrategyWidget == null)
                 {
                     _logger.LogInformation("Creating new RaceStrategyWidget...");
-                    _raceStrategyWidget = new RaceStrategyWidget(_fuelCalculatorService, _tireStrategyService, _telemetryService);
+                    // Get logger from service provider
+                    var raceStrategyLogger = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions
+                        .GetRequiredService<ILogger<RaceStrategyWidget>>(_serviceProvider);
+                    _raceStrategyWidget = new RaceStrategyWidget(_fuelCalculatorService, _tireStrategyService, raceStrategyLogger, _telemetryService);
                     _raceStrategyWidget.Closed += (s, e) =>
                     {
                         _logger.LogInformation("RaceStrategyWidget closed");

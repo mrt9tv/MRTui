@@ -53,6 +53,10 @@ public class FuelCalculatorService
     // Dynamic buffer calculator (Phase 6: Service Splitting)
     private readonly DynamicBufferCalculator _bufferCalculator;
     
+    // Phase 6: Live fuel calculations and pit stop tracking
+    private readonly PitStopTracker _pitStopTracker;
+    private readonly LiveFuelCalculator _liveFuelCalculator;
+    
     // EMA (Exponential Moving Average) tracking - REMOVED: No longer used, replaced by DeltaTrackingService
     // private float _emaValue = 0f;  // Current EMA value
     // private bool _emaInitialized = false;  // Whether EMA has been initialized with first lap
@@ -63,27 +67,14 @@ public class FuelCalculatorService
     
     // Delta tracking for convergence analysis (delegated to DeltaTrackingService)
     
-    // Pit stop tracking state machine
+    // Pit stop tracking (Phase 6: Extracted to PitStopTracker service)
     private readonly SessionPersistenceService _persistenceService;
-    private PitStopData? _currentPitStop = null;
     private SessionStatistics? _sessionStats = null;
     
-    // Pit stop state tracking
-    private enum PitStopState
-    {
-        NotOnPitRoad,
-        Entering,       // Crossed pit entry line, heading to pit box
-        InPitBox,       // Stopped in pit box, service starting
-        Servicing,      // Refueling/tires
-        Departing,      // Service complete, leaving pit box
-        Exiting         // Leaving pit lane
-    }
-    private PitStopState _pitState = PitStopState.NotOnPitRoad;
-    
-    // Sputtering threshold tracking (Enhanced Phase 2.1)
-    private bool _baselineFuelPressureEstablished = false;
-    private readonly List<float> _fuelPressureHistory = new();  // Track pressure for baseline calculation
-    private const int BASELINE_LAPS_NEEDED = 3;  // Laps needed to establish baseline pressure
+    // REMOVED: Fuel pressure tracking (not available in iRacing SDK)
+    // private bool _baselineFuelPressureEstablished = false;
+    // private readonly List<float> _fuelPressureHistory = new();
+    // private const int BASELINE_LAPS_NEEDED = 3;
     
     // Dynamic buffer configuration
     private float _bufferLaps = 1.0f;  // User-configured base buffer
@@ -119,6 +110,10 @@ public class FuelCalculatorService
         _lapDeltaTracker = new LapDeltaTracker();
         _deltaTrackingService = new DeltaTrackingService();
         _bufferCalculator = new DynamicBufferCalculator();
+        
+        // Phase 6: Extract complex methods to services
+        _pitStopTracker = new PitStopTracker();
+        _liveFuelCalculator = new LiveFuelCalculator();
         
         // Phase 9: Initialize history service (load async in background)
         _historyService = new History.TelemetryHistoryService();
@@ -202,7 +197,8 @@ public class FuelCalculatorService
         );
         
         // Track fuel pressure and establish baseline (Enhanced Phase 2.1)
-        UpdateFuelPressureTracking(telemetry);
+        // REMOVED: Fuel pressure tracking (not available in iRacing SDK)
+        // UpdateFuelPressureTracking(telemetry);
         
         // FIX #3: Update lap completion context (race position awareness)
         UpdateLapCompletionContext(telemetry);
@@ -520,7 +516,7 @@ public class FuelCalculatorService
             ApplyTemperatureCorrection(telemetry);  // ENHANCEMENT: Temperature correction for fuel consumption
             ApplyRealTimeFuelFlow(telemetry);      // ENHANCEMENT: Real-time fuel flow integration
 
-            // Calculate dynamic buffer using service (Phase 6)
+            // Calculate dynamic buffer using service (Phase 6) - FIX: Pass user settings
             var bufferData = _bufferCalculator.Calculate(
                 CurrentData.FuelConsistencyVariance,  // Use existing property
                 CurrentData.RacePosition,  // Fixed: Use RacePosition instead of Position
@@ -529,7 +525,9 @@ public class FuelCalculatorService
                 0,  // yellowFlagCount - can add to FuelData if needed
                 telemetry.LapsCompleted + 1,
                 telemetry.SessionLaps,
-                CurrentData.IsTimedSession
+                CurrentData.IsTimedSession,
+                _bufferLaps,          // FIX: Pass user-configured buffer setting
+                _enableDynamicBuffer  // FIX: Pass dynamic buffer toggle
             );
             CurrentData.FuelBufferLaps = bufferData.TotalBuffer;
             // BufferReason can be added to FuelData if needed
@@ -599,8 +597,27 @@ public class FuelCalculatorService
             CurrentData.PredictedDelta = lapDelta.PredictedDelta;
             CurrentData.LapProgress = lapDelta.LapProgress;
 
-            // Track pit stops for session persistence
-            UpdatePitStopTracking(telemetry);
+            // Track pit stops for session persistence (Phase 6: Use PitStopTracker service)
+            var completedPitStop = _pitStopTracker.Update(telemetry);
+            if (completedPitStop != null)
+            {
+                // Update session statistics with completed pit stop
+                if (_sessionStats == null)
+                {
+                    _sessionStats = new SessionStatistics
+                    {
+                        TrackName = completedPitStop.TrackName,
+                        CarClassId = completedPitStop.CarClassId,
+                        TrackLength = telemetry.TrackLength,
+                        PitSpeedLimit = telemetry.TrackPitSpeedLimit
+                    };
+                }
+                
+                _persistenceService.UpdatePitStopStatistics(_sessionStats, completedPitStop);
+                _persistenceService.SaveStatistics(_sessionStats);
+                
+                LogDebug($"UPDATED SESSION STATS: {_sessionStats.PitStopsRecorded} stops, Avg total={_sessionStats.AverageTotalPitTime:F1}s");
+            }
 
             // Mark this as a full strategic update (not live)
             CurrentData.IsLiveUpdate = false;
@@ -610,9 +627,29 @@ public class FuelCalculatorService
         }
         else if (telemetry.LapDistPct > 0.05f && !telemetry.OnPitRoad)
         {
-            // LIGHTWEIGHT LIVE UPDATE PATH (mid-lap projections)
+            // LIGHTWEIGHT LIVE UPDATE PATH (mid-lap projections) - Phase 6: Use LiveFuelCalculator
             // Only update if at least 5% into lap and not on pit road
-            UpdateLiveValues(telemetry);
+            if (_liveFuelCalculator.UpdateLiveValues(telemetry, CurrentData, out var liveData))
+            {
+                // Apply live calculation results
+                CurrentData.CurrentLapFuelRate = liveData.CurrentLapFuelRate;
+                CurrentData.LapsRemaining = liveData.LapsRemaining;
+                CurrentData.FuelNeededToFinish = liveData.FuelNeededToFinish;
+                CurrentData.FuelDeltaToFinish = liveData.FuelDeltaToFinish;
+                CurrentData.CanFinishWithoutStop = liveData.CanFinishWithoutStop;
+                CurrentData.FuelCriticalityScore = liveData.FuelCriticalityScore;
+                CurrentData.EarliestPitLap = liveData.EarliestPitLap;
+                CurrentData.LatestPitLap = liveData.LatestPitLap;
+                CurrentData.OptimalPitLap = liveData.OptimalPitLap;
+                
+                // Apply real-time fuel flow (Phase 6: Use LiveFuelCalculator)
+                _liveFuelCalculator.ApplyRealTimeFuelFlow(telemetry, CurrentData, 
+                    out float projectedLapFuel, out float currentLapFuelRate);
+                CurrentData.InstantaneousFuelFlow = telemetry.FuelUsePerHour;
+                CurrentData.ProjectedLapFuel = projectedLapFuel;
+                if (currentLapFuelRate > 0)
+                    CurrentData.CurrentLapFuelRate = currentLapFuelRate;
+            }
 
             // Throttle event firing (every 10th frame = 6 Hz instead of 60 Hz)
             if (++_liveUpdateCounter >= LIVE_UPDATE_THROTTLE)
@@ -625,105 +662,6 @@ public class FuelCalculatorService
                 // Fire throttled update event
                 FuelDataUpdated?.Invoke(this, CurrentData);
             }
-        }
-    }
-
-    /// <summary>
-    /// Update live values mid-lap (Progressive Calculation - Option 3)
-    /// FIX #3: Enhanced with LIVE PIT WINDOW CALCULATIONS for real-time strategy updates
-    /// </summary>
-    private void UpdateLiveValues(TelemetryData telemetry)
-    {
-        // Project current lap fuel usage to full lap
-        float lapProgress = telemetry.LapDistPct;
-        if (lapProgress <= 0.05f)
-            return; // Too early in lap for reliable projection
-
-        // Calculate projected lap fuel usage based on current progress
-        float fuelUsedSoFar = CurrentData.FuelUsedThisLap;
-        float projectedLapUsage = fuelUsedSoFar / lapProgress;
-
-        // Update current lap fuel rate (live projection)
-        CurrentData.CurrentLapFuelRate = projectedLapUsage;
-
-        // Calculate live laps remaining using projected usage
-        // Uses current fuel and projected usage (more responsive than historical average)
-        if (projectedLapUsage > 0)
-        {
-            CurrentData.LapsRemaining = telemetry.FuelLevel / projectedLapUsage;
-        }
-
-        // Update live fuel needed to finish (uses existing strategy average, not projected)
-        // This balances live feel with strategic accuracy
-        if (CurrentData.AvgFuelPerLap > 0)
-        {
-            CurrentData.FuelNeededToFinish = CurrentData.RaceLapsRemaining * CurrentData.AvgFuelPerLap;
-            CurrentData.FuelDeltaToFinish = telemetry.FuelLevel - CurrentData.FuelNeededToFinish;
-            CurrentData.CanFinishWithoutStop = CurrentData.FuelDeltaToFinish >= 0;
-        }
-
-        // ===== FIX #3: LIVE PIT WINDOW CALCULATIONS =====
-        // Update pit window in real-time as player progresses through current lap
-        // This makes strategy truly "live" instead of frozen until lap completion
-        if (CurrentData.RaceLapsRemaining > 0 && CurrentData.AvgFuelPerLap_L5 > 0)
-        {
-            float avgFuel = CurrentData.AvgFuelPerLap_L5;
-            float lapsOnCurrentFuel = CurrentData.LapsRemaining;
-
-            // Current lap position (fractional lap number)
-            // Example: Lap 10 at 50% = 10.5, Lap 15 at 75% = 15.75
-            float currentLapFractional = telemetry.LapsCompleted + lapProgress;
-
-            // LIVE FUEL CRITICALITY (updates every frame)
-            if (lapsOnCurrentFuel < 1.0f)
-                CurrentData.FuelCriticalityScore = 100f; // CRITICAL
-            else if (lapsOnCurrentFuel < 2.0f)
-                CurrentData.FuelCriticalityScore = 80f + (2.0f - lapsOnCurrentFuel) * 20f; // URGENT (80-100)
-            else if (lapsOnCurrentFuel < 5.0f)
-                CurrentData.FuelCriticalityScore = 50f + (5.0f - lapsOnCurrentFuel) * 10f; // MODERATE (50-80)
-            else if (lapsOnCurrentFuel < 10.0f)
-                CurrentData.FuelCriticalityScore = 20f + (10.0f - lapsOnCurrentFuel) * 6f; // COMFORTABLE (20-50)
-            else
-                CurrentData.FuelCriticalityScore = Math.Max(0f, 20f - (lapsOnCurrentFuel - 10.0f) * 2f); // PLENTY (0-20)
-
-            // LIVE PIT WINDOW (earliest, optimal, latest)
-            // Earliest: When enough fuel has been used to add race-ending fuel
-            float fuelNeededToFinish = (CurrentData.RaceLapsRemaining + CurrentData.FuelBufferLaps) * avgFuel + CurrentData.FuelSputteringThreshold;
-            float fuelAvailableToAdd = CurrentData.TankCapacity - CurrentData.CurrentFuel;
-            float fuelNeedsToBurn = Math.Max(0, fuelNeededToFinish - fuelAvailableToAdd);
-            float lapsToEarliestPit = fuelNeedsToBurn / avgFuel;
-            CurrentData.EarliestPitLap = (int)Math.Ceiling(currentLapFractional + lapsToEarliestPit);
-
-            // Latest: Just before running out (with buffer)
-            float lapsToLatestPit = lapsOnCurrentFuel - CurrentData.FuelBufferLaps;
-            CurrentData.LatestPitLap = (int)Math.Floor(currentLapFractional + Math.Max(0, lapsToLatestPit));
-
-            // Optimal: Mid-window (3-5 lap green zone)
-            CurrentData.OptimalPitLap = (CurrentData.EarliestPitLap + CurrentData.LatestPitLap) / 2;
-
-            // Pit window range
-            CurrentData.PitWindowStart = CurrentData.EarliestPitLap;
-            CurrentData.PitWindowEnd = CurrentData.LatestPitLap;
-
-            // Update optimal pit reason based on criticality
-            if (CurrentData.FuelCriticalityScore >= 95)
-                CurrentData.OptimalPitReason = "⚠️ CRITICAL FUEL - PIT NOW";
-            else if (CurrentData.FuelCriticalityScore >= 80)
-                CurrentData.OptimalPitReason = "⚠️ Urgent - Pit soon";
-            else if (CurrentData.FuelCriticalityScore >= 50)
-                CurrentData.OptimalPitReason = "🔵 In pit window";
-            else
-                CurrentData.OptimalPitReason = "✓ Fuel comfortable";
-        }
-
-        // Log live update for debugging (first few laps only)
-        if (telemetry.Lap <= 3 && _liveUpdateCounter == 0)
-        {
-            LogDebug($"[LIVE_UPDATE] Lap {telemetry.Lap} @ {lapProgress:P0} | " +
-                    $"Projected: {projectedLapUsage:F2}L/lap | " +
-                    $"Live Laps Remaining: {CurrentData.LapsRemaining:F1} | " +
-                    $"Pit Window: L{CurrentData.PitWindowStart}-L{CurrentData.PitWindowEnd} (Optimal: L{CurrentData.OptimalPitLap}) | " +
-                    $"Criticality: {CurrentData.FuelCriticalityScore:F0}");
         }
     }
 
@@ -1102,8 +1040,9 @@ public class FuelCalculatorService
     // Phase 5: GenerateStrategicAlerts (86 lines, never called - FuelSavingCalculator has its own version)
 
     /// <summary>
-    /// Update fuel pressure tracking and establish baseline (Enhanced Phase 2.1)
+    /// REMOVED: Fuel pressure tracking (not available in iRacing SDK)
     /// </summary>
+    /*
     private void UpdateFuelPressureTracking(TelemetryData telemetry)
     {
         float currentPressure = telemetry.FuelPress;
@@ -1148,6 +1087,7 @@ public class FuelCalculatorService
             }
         }
     }
+    */
     
     /// <summary>
     /// Update lap completion context for enhanced race position awareness (FIX #3)
@@ -1310,147 +1250,6 @@ public class FuelCalculatorService
     }
     
     /// <summary>
-    /// Pit stop state machine: Track entry, service, and exit timing
-    /// Updates session statistics with completed pit stops for historical learning
-    /// </summary>
-    private void UpdatePitStopTracking(TelemetryData telemetry)
-    {
-        bool onPitRoad = telemetry.OnPitRoad;
-        float speed = telemetry.Speed; // m/s
-        float fuelLevel = telemetry.FuelLevel;
-        
-        // State machine transitions
-        switch (_pitState)
-        {
-            case PitStopState.NotOnPitRoad:
-                if (onPitRoad)
-                {
-                    // Entered pit lane - start new pit stop
-                    _currentPitStop = new PitStopData
-                    {
-                        PitEntryTime = DateTime.UtcNow,
-                        LapNumber = telemetry.LapsCompleted + 1,
-                        TrackName = telemetry.TrackName,
-                        CarClassId = telemetry.PlayerCarClass,
-                        SessionType = telemetry.SessionType,
-                        TrackTemp = telemetry.TrackTemp,
-                        AirTemp = telemetry.AirTemp,
-                        WeatherType = telemetry.WeatherType,
-                        TrackWetness = 0, // TODO: Add track wetness to TelemetryData if available
-                        FuelBefore = fuelLevel
-                    };
-                    _pitState = PitStopState.Entering;
-                    LogDebug($"PIT STOP: Entry detected (Lap {_currentPitStop.LapNumber}, Session={_currentPitStop.SessionType}, Track={_currentPitStop.TrackTemp:F1}°C, Air={_currentPitStop.AirTemp:F1}°C)");
-                }
-                break;
-                
-            case PitStopState.Entering:
-                if (speed < 0.5f) // Stopped in pit box (< 0.5 m/s = ~1 mph)
-                {
-                    if (_currentPitStop != null)
-                    {
-                        _currentPitStop.PitBoxArrivalTime = DateTime.UtcNow;
-                        _currentPitStop.ServiceStartTime = DateTime.UtcNow;
-                        _pitState = PitStopState.InPitBox;
-                        LogDebug($"PIT STOP: Arrived in pit box (Entry duration: {_currentPitStop.PitEntryDuration:F1}s)");
-                    }
-                }
-                else if (!onPitRoad)
-                {
-                    // Aborted pit entry - reset
-                    LogDebug("PIT STOP: Entry aborted (left pit road before stopping)");
-                    _currentPitStop = null;
-                    _pitState = PitStopState.NotOnPitRoad;
-                }
-                break;
-                
-            case PitStopState.InPitBox:
-                // Wait for fuel to stop increasing (service complete)
-                if (_currentPitStop != null && fuelLevel > _currentPitStop.FuelBefore + 0.1f)
-                {
-                    // Fuel is increasing - service in progress
-                    _pitState = PitStopState.Servicing;
-                }
-                else if (speed > 0.5f)
-                {
-                    // Started moving without refuel - likely damage repair or quick stop
-                    if (_currentPitStop != null)
-                    {
-                        _currentPitStop.ServiceEndTime = DateTime.UtcNow;
-                        _currentPitStop.PitBoxDepartureTime = DateTime.UtcNow;
-                        _pitState = PitStopState.Departing;
-                        LogDebug("PIT STOP: Departing pit box (no refuel detected)");
-                    }
-                }
-                break;
-                
-            case PitStopState.Servicing:
-                if (_currentPitStop != null)
-                {
-                    float fuelDelta = fuelLevel - _currentPitStop.FuelBefore;
-                    
-                    // Detect service end: Fuel stopped increasing (delta < 0.05L over last update)
-                    if (Math.Abs(fuelLevel - _lastFuelLevel) < 0.05f && fuelDelta > 0.5f)
-                    {
-                        _currentPitStop.ServiceEndTime = DateTime.UtcNow;
-                        LogDebug($"PIT STOP: Service complete (Duration: {_currentPitStop.ServiceDuration:F1}s, Fuel added: {fuelDelta:F1}L)");
-                    }
-                    
-                    // Detect departure: Car started moving again
-                    if (speed > 0.5f && _currentPitStop.ServiceEndTime > _currentPitStop.ServiceStartTime)
-                    {
-                        _currentPitStop.PitBoxDepartureTime = DateTime.UtcNow;
-                        _pitState = PitStopState.Departing;
-                        LogDebug($"PIT STOP: Departing pit box");
-                    }
-                }
-                break;
-                
-            case PitStopState.Departing:
-                if (!onPitRoad)
-                {
-                    // Exited pit lane - complete pit stop
-                    if (_currentPitStop != null)
-                    {
-                        _currentPitStop.PitExitTime = DateTime.UtcNow;
-                        _currentPitStop.FuelAfter = fuelLevel;
-                        
-                        if (_currentPitStop.IsComplete)
-                        {
-                            LogDebug($"PIT STOP COMPLETE: Total={_currentPitStop.TotalPitStopTime:F1}s (Entry={_currentPitStop.PitEntryDuration:F1}s, Service={_currentPitStop.ServiceDuration:F1}s, Exit={_currentPitStop.PitExitDuration:F1}s, Active={_currentPitStop.ActivePitStopTime:F1}s)");
-                            LogDebug($"  Fuel: Before={_currentPitStop.FuelBefore:F1}L, After={_currentPitStop.FuelAfter:F1}L, Added={_currentPitStop.FuelAdded:F1}L");
-                            
-                            // Update session statistics with this pit stop
-                            if (_sessionStats == null)
-                            {
-                                _sessionStats = new SessionStatistics
-                                {
-                                    TrackName = _currentPitStop.TrackName,
-                                    CarClassId = _currentPitStop.CarClassId,
-                                    TrackLength = telemetry.TrackLength,
-                                    PitSpeedLimit = telemetry.TrackPitSpeedLimit
-                                };
-                            }
-                            
-                            _persistenceService.UpdatePitStopStatistics(_sessionStats, _currentPitStop);
-                            _persistenceService.SaveStatistics(_sessionStats);
-                            
-                            LogDebug($"UPDATED SESSION STATS: {_sessionStats.PitStopsRecorded} stops, Avg total={_sessionStats.AverageTotalPitTime:F1}s");
-                        }
-                        else
-                        {
-                            LogDebug("PIT STOP: Incomplete data (missing timestamps or fuel data)");
-                        }
-                    }
-                    
-                    _currentPitStop = null;
-                    _pitState = PitStopState.NotOnPitRoad;
-                }
-                break;
-        }
-    }
-    
-    /// <summary>
     /// Calculate Median Absolute Deviation (MAD) for robust outlier detection
     /// MAD is more robust than standard deviation for small datasets with outliers
     /// </summary>
@@ -1472,18 +1271,21 @@ public class FuelCalculatorService
         _wasOnPitRoadLastUpdate = false;
         _justLeftPits = false;
         _justProcessedLap = false;
-        _baselineFuelPressureEstablished = false;
-        _fuelPressureHistory.Clear();
+        // REMOVED: Fuel pressure tracking reset
+        // _baselineFuelPressureEstablished = false;
+        // _fuelPressureHistory.Clear();
         _lapsCompletedWhenProcessed = -1;
         _lastIncidentCount = 0;  // Reset incident tracking
         _lapDistPctAtLapStart = 0f;  // Reset grid start lap tracking
         
-        // Reset pit stop tracking
-        _currentPitStop = null;
-        _pitState = PitStopState.NotOnPitRoad;
+        // FIX: Reset historical data flag to allow re-application on new session
+        _historicalDataApplied = false;
         
         // Phase 1: Reset FuelAveragingService EMA state
         _fuelAveragingService.Reset();
+        
+        // Phase 6: Reset extracted services
+        _pitStopTracker.Reset();
         
         // Phase 7: Reset lap delta tracker
         _lapDeltaTracker.Reset();
@@ -1715,10 +1517,11 @@ public class FuelCalculatorService
 
     /// <summary>
     /// Write debug message to log file
-    /// ENABLED: Debug logging for diagnostics
+    /// Only enabled in DEBUG builds to reduce file I/O overhead in production
     /// </summary>
     private void LogDebug(string message)
     {
+#if DEBUG
         try
         {
             var logPath = System.IO.Path.Combine(
@@ -1741,5 +1544,6 @@ public class FuelCalculatorService
         {
             // Ignore logging errors
         }
+#endif
     }
 }
