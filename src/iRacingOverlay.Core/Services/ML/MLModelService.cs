@@ -173,12 +173,12 @@ public class MLModelService
     /// Copy models from application bundle to %APPDATA% on first run
     /// Called by application startup
     /// </summary>
-    public async Task CopyBundledModelsAsync(string bundledModelsPath)
+    public Task CopyBundledModelsAsync(string bundledModelsPath)
     {
         if (!Directory.Exists(bundledModelsPath))
         {
             Console.WriteLine($"[MLModelService] ⚠️ Bundled models not found: {bundledModelsPath}");
-            return;
+            return Task.CompletedTask;
         }
         
         try
@@ -202,6 +202,8 @@ public class MLModelService
         {
             Console.WriteLine($"[MLModelService] ⚠️ Failed to copy bundled models: {ex.Message}");
         }
+        
+        return Task.CompletedTask;
     }
 }
 
