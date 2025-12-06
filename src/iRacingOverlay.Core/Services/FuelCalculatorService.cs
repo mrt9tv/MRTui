@@ -75,11 +75,6 @@ public class FuelCalculatorService
     private readonly SessionPersistenceService _persistenceService;
     private SessionStatistics? _sessionStats = null;
     
-    // REMOVED: Fuel pressure tracking (not available in iRacing SDK)
-    // private bool _baselineFuelPressureEstablished = false;
-    // private readonly List<float> _fuelPressureHistory = new();
-    // private const int BASELINE_LAPS_NEEDED = 3;
-    
     // Dynamic buffer configuration
     private float _bufferLaps = 1.0f;  // User-configured base buffer
     private bool _enableDynamicBuffer = true;  // Whether dynamic buffer is enabled
@@ -203,10 +198,6 @@ public class FuelCalculatorService
             telemetry.PlayerCarClass, 
             telemetry.FuelLevelMax
         );
-        
-        // Track fuel pressure and establish baseline (Enhanced Phase 2.1)
-        // REMOVED: Fuel pressure tracking (not available in iRacing SDK)
-        // UpdateFuelPressureTracking(telemetry);
         
         // FIX #3: Update lap completion context (race position awareness)
         UpdateLapCompletionContext(telemetry);
@@ -970,55 +961,6 @@ public class FuelCalculatorService
     // Phase 5: GenerateStrategicAlerts (86 lines, never called - FuelSavingCalculator has its own version)
 
     /// <summary>
-    /// REMOVED: Fuel pressure tracking (not available in iRacing SDK)
-    /// </summary>
-    /*
-    private void UpdateFuelPressureTracking(TelemetryData telemetry)
-    {
-        float currentPressure = telemetry.FuelPress;
-        
-        // Establish baseline pressure from first few laps (when fuel tank is full)
-        if (!_baselineFuelPressureEstablished && _lapHistory.Count < BASELINE_LAPS_NEEDED)
-        {
-            // Only track pressure when fuel is above 80% (ensures fuel pump is fully submerged)
-            if (telemetry.FuelLevelPct > 0.8f && currentPressure > 0)
-            {
-                _fuelPressureHistory.Add(currentPressure);
-            }
-            
-            // Once we have enough samples, calculate baseline
-            if (_fuelPressureHistory.Count >= 5)
-            {
-                // Use median to avoid outliers from sensor noise
-                var sortedPressures = _fuelPressureHistory.OrderBy(p => p).ToList();
-                CurrentData.BaselineFuelPressure = sortedPressures[sortedPressures.Count / 2];
-                _baselineFuelPressureEstablished = true;
-                LogDebug($"BASELINE FUEL PRESSURE ESTABLISHED: {CurrentData.BaselineFuelPressure:F2} bar");
-            }
-        }
-        
-        // Calculate pressure drop if baseline established
-        if (_baselineFuelPressureEstablished && CurrentData.BaselineFuelPressure > 0)
-        {
-            float pressureDrop = CurrentData.BaselineFuelPressure - currentPressure;
-            CurrentData.FuelPressureDropPct = (pressureDrop / CurrentData.BaselineFuelPressure) * 100f;
-            
-            // Warning threshold: >10% drop from baseline indicates low fuel risk
-            CurrentData.FuelPressureLow = CurrentData.FuelPressureDropPct > 10f;
-            
-            // Additional critical threshold: >20% drop = imminent sputtering
-            if (CurrentData.FuelPressureDropPct > 20f)
-            {
-                LogDebug($"CRITICAL: Fuel pressure dropped {CurrentData.FuelPressureDropPct:F1}% from baseline ({currentPressure:F2} bar vs {CurrentData.BaselineFuelPressure:F2} bar)");
-            }
-            else if (CurrentData.FuelPressureLow)
-            {
-                LogDebug($"WARNING: Fuel pressure dropped {CurrentData.FuelPressureDropPct:F1}% from baseline ({currentPressure:F2} bar vs {CurrentData.BaselineFuelPressure:F2} bar)");
-            }
-        }
-    }
-    */
-    
     /// <summary>
     /// Update lap completion context for enhanced race position awareness (FIX #3)
     /// Accounts for: track position, leader's laps, being lapped, lap time projection
