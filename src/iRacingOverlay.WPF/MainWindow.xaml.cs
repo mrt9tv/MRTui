@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private GlobalHotkey? _toggleLockHotkey;
     private GlobalHotkey? _toggleVisibilityHotkey;
     private PitStrategyWindow? _pitStrategyWindow;
+    private Windows.SetupEngineering.SetupEngineeringWindow? _setupEngineeringWindow;
 
     public MainWindow(IServiceProvider services)
     {
@@ -144,8 +145,27 @@ public partial class MainWindow : Window
     {
         try
         {
-            var setupWindow = new Windows.SetupEngineering.SetupEngineeringWindow();
-            setupWindow.Show();
+            // Duplicate window protection - activate existing window if open
+            if (_setupEngineeringWindow != null)
+            {
+                if (_setupEngineeringWindow.IsVisible)
+                {
+                    _setupEngineeringWindow.Activate();
+                    _setupEngineeringWindow.Focus();
+                    _logger.LogInformation("Setup Engineering window already open - activated existing window");
+                    return;
+                }
+                else
+                {
+                    // Window was closed, clear reference
+                    _setupEngineeringWindow = null;
+                }
+            }
+            
+            // Create new window
+            _setupEngineeringWindow = new Windows.SetupEngineering.SetupEngineeringWindow();
+            _setupEngineeringWindow.Closed += (s, e) => _setupEngineeringWindow = null;
+            _setupEngineeringWindow.Show();
             _logger.LogInformation("Setup Engineering Mode opened");
         }
         catch (Exception ex)

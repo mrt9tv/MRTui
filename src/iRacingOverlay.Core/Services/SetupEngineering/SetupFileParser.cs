@@ -39,6 +39,8 @@ public class SetupFileParser
 {
     /// <summary>
     /// Parse iRacing .sto file into structured setup data
+    /// NOTE: .sto files are BINARY format, not XML text
+    /// This is a placeholder - real implementation requires binary parsing or iRacing SDK
     /// </summary>
     public async Task<SetupData?> ParseSetupFileAsync(string filePath)
     {
@@ -49,8 +51,29 @@ public class SetupFileParser
         
         try
         {
+            // Check if file is binary (first byte is 0x03 for .sto files)
+            var firstBytes = new byte[4];
+            using (var fs = File.OpenRead(filePath))
+            {
+                await fs.ReadAsync(firstBytes, 0, 4);
+            }
+            
+            // If binary format (0x03 00 00 00), throw informative error
+            if (firstBytes[0] == 0x03 && firstBytes[1] == 0x00)
+            {
+                throw new NotSupportedException(
+                    "iRacing .sto files are in binary format. " +
+                    "Binary parsing is not yet implemented. " +
+                    "Please export setup as XML or use iRacing SDK for binary parsing.");
+            }
+            
+            // Try XML parsing (for future XML export support)
             var xmlContent = await File.ReadAllTextAsync(filePath);
             return ParseSetupXml(xmlContent);
+        }
+        catch (NotSupportedException)
+        {
+            throw; // Re-throw binary format error
         }
         catch (Exception ex)
         {
