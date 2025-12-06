@@ -126,6 +126,14 @@ public partial class SetupEngineeringWindow : Window
                         : (!string.IsNullOrEmpty(telemetry.CarNumber) ? $"Car #{telemetry.CarNumber}" : "Unknown Car");
                     TrackCarText.Text = $"{trackName} - {carName} | Laps: {_sessionLapCount}";
                     
+                    // Display current setup name from iRacing garage
+                    var setupName = telemetry.DriverSetupName;
+                    var setupModified = telemetry.DriverSetupIsModified == 1 ? " (Modified)" : "";
+                    if (!string.IsNullOrEmpty(setupName))
+                    {
+                        SessionNameText.Text = $"{setupName}{setupModified}";
+                    }
+                    
                     // Update statistics
                     UpdateLapStatistics();
                     
@@ -651,31 +659,70 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
-    /// Generate ML recommendations using live telemetry data
-    /// Works WITHOUT needing .sto file comparison!
+    /// Generate ML recommendations using live telemetry + setup comparison
+    /// Phase 3.6: Real-time physics-based predictions (ML training pending)
     /// </summary>
     private void GenerateMLButton_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            ShowStatus("Generating ML recommendations from live telemetry...", isError: false);
+            ShowStatus("🔮 Generating setup recommendations...", isError: false);
             
             MLRecommendationsPanel.Children.Clear();
             
             // Get current track/car info from live telemetry
-            var trackName = _lastTelemetryData?.TrackName ?? "Current Track";
+            var trackName = _lastTelemetryData?.TrackName ?? "Unknown Track";
             var carInfo = !string.IsNullOrEmpty(_lastTelemetryData?.CarScreenName)
                 ? _lastTelemetryData.CarScreenName
-                : (!string.IsNullOrEmpty(_lastTelemetryData?.CarNumber) 
-                    ? $"Car #{_lastTelemetryData.CarNumber}" 
-                    : "Current Car");
+                : "Current Car";
             
-            // Generate prediction using current live data (no .sto files needed!)
+            var setupName = _lastTelemetryData?.DriverSetupName ?? "Current Setup";
+            var isModified = _lastTelemetryData?.DriverSetupIsModified == 1;
+            
+            // Check if telemetry is available
+            if (_lastTelemetryData == null)
+            {
+                MLRecommendationsPanel.Children.Add(new TextBlock
+                {
+                    Text = "⚠️ No Live Telemetry",
+                    FontSize = 16,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(255, 150, 0)),
+                    Margin = new Thickness(0, 0, 0, 10)
+                });
+                
+                MLRecommendationsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Connect to iRacing to enable real-time setup predictions.",
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136))
+                });
+                
+                ShowStatus("⚠️ No telemetry connection - start iRacing session", isError: true);
+                return;
+            }
+            
+            // Extract features from live telemetry
+            var currentSetupFeatures = _mlService.ExtractSetupFeatures(_lastTelemetryData, setupName);
+            
+            // Create hypothetical improved setup (adjust parameters slightly)
+            var suggestedSetup = new SetupParameterFeatures
+            {
+                SetupName = "AI Suggested",
+                TrackName = trackName,
+                AirTemp = currentSetupFeatures.AirTemp,
+                TrackTemp = currentSetupFeatures.TrackTemp,
+                // Suggest +1 wing for low-speed tracks (placeholder logic)
+                FrontWing = currentSetupFeatures.FrontWing.HasValue ? currentSetupFeatures.FrontWing.Value + 1 : null,
+                RearWing = currentSetupFeatures.RearWing.HasValue ? currentSetupFeatures.RearWing.Value + 1 : null
+            };
+            
+            // Generate prediction
             var prediction = _mlService.PredictSetupChange(
                 carName: carInfo,
                 trackName: trackName,
-                baselineSetup: new SetupParameterFeatures { SetupName = "Current (Live)" },
-                proposedSetup: new SetupParameterFeatures { SetupName = "Suggested" }
+                baselineSetup: currentSetupFeatures,
+                proposedSetup: suggestedSetup
             );
             
             // Display recommendation
@@ -683,20 +730,16 @@ public partial class SetupEngineeringWindow : Window
             {
                 MLRecommendationsPanel.Children.Add(new TextBlock
                 {
-                    Text = "ℹ️ ML Recommendations - Phase 3.6 Feature",
+                    Text = "⚠️ ML Service Unavailable",
                     FontSize = 16,
-                    FontWeight = FontWeights.SemiBold,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(255, 150, 0)),
                     Margin = new Thickness(0, 0, 0, 10)
                 });
                 
                 MLRecommendationsPanel.Children.Add(new TextBlock
                 {
-                    Text = "ML models are not yet trained. This feature will provide AI-powered setup suggestions based on:\n\n" +
-                           "• Your driving style from telemetry\n" +
-                           "• Track characteristics\n" +
-                           "• Historical setup performance\n" +
-                           "• Predicted lap time improvements\n\n" +
-                           "Status: Coming in Phase 3.6 (ML Model Integration)",
+                    Text = "ML models are not yet trained. Load two setup files to compare them statistically.",
                     TextWrapping = TextWrapping.Wrap,
                     Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
                     Margin = new Thickness(0, 10, 0, 0)

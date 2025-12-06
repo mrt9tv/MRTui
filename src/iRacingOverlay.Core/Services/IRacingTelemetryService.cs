@@ -213,6 +213,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _driverName = "";
     private string _carNumber = "";
     private string _carScreenName = ""; // Car model name (e.g., "Ferrari 488 GT3")
+    private string _driverSetupName = ""; // Current setup name from garage
+    private int _driverSetupIsModified = 0; // 0 = unmodified, 1 = modified
     private string _trackName = "";
     private string _sessionType = "";
     private float _trackLength = 0f;
@@ -670,6 +672,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 DriverName = _driverName,
                 CarNumber = _carNumber,
                 CarScreenName = _carScreenName,
+                DriverSetupName = _driverSetupName,
+                DriverSetupIsModified = _driverSetupIsModified,
                 TrackName = _trackName,
                 SessionType = _sessionType,
                 TrackLength = _trackLength,
@@ -920,6 +924,19 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         if (int.TryParse(ExtractYamlValue(trimmed), out var idx))
                         {
                             driverCarIdx = idx;
+                        }
+                    }
+                    else if (trimmed.StartsWith("DriverSetupName:"))
+                    {
+                        _driverSetupName = ExtractYamlValue(trimmed).Trim('"', '\'');
+                        _logger.LogInformation("Parsed setup name: {SetupName}", _driverSetupName);
+                    }
+                    else if (trimmed.StartsWith("DriverSetupIsModified:"))
+                    {
+                        if (int.TryParse(ExtractYamlValue(trimmed), out var isModified))
+                        {
+                            _driverSetupIsModified = isModified;
+                            _logger.LogInformation("Setup modified: {IsModified}", _driverSetupIsModified == 1);
                         }
                     }
                     else if (trimmed.StartsWith("Drivers:"))

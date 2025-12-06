@@ -638,6 +638,20 @@ public class TelemetryData
     public string CarScreenName { get; set; } = string.Empty;
     
     /// <summary>
+    /// Current setup name loaded in iRacing garage
+    /// Parsed from YAML SessionInfo → DriverInfo → DriverSetupName
+    /// Example: "Garage 61 - MRT#9 - Spa 2025 - Race Setup V3"
+    /// </summary>
+    public string DriverSetupName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Flag indicating if driver has modified the setup from saved version
+    /// Parsed from YAML SessionInfo → DriverInfo → DriverSetupIsModified
+    /// 0 = Unmodified, 1 = Modified
+    /// </summary>
+    public int DriverSetupIsModified { get; set; }
+    
+    /// <summary>
     /// Track name
     /// </summary>
     public string TrackName { get; set; } = string.Empty;
