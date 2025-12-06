@@ -1000,6 +1000,182 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
+    /// Analyze driving behavior from last N laps (Phase 3.7)
+    /// Automatic handling detection - no user input required!
+    /// </summary>
+    private async void AnalyzeDrivingButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ShowStatus("🧠 Analyzing driving behavior...", isError: false);
+            AnalyzeDrivingButton.IsEnabled = false;
+            
+            LiveBehaviorPanel.Children.Clear();
+            
+            // Get last 10 laps from database
+            if (_currentSetupId == null)
+            {
+                ShowStatus("⚠️ No active setup session", isError: true);
+                AnalyzeDrivingButton.IsEnabled = true;
+                return;
+            }
+            
+            var laps = await _database.GetLapsAsync(_currentSetupId);
+            if (laps.Count < 3)
+            {
+                ShowStatus($"⚠️ Need at least 3 laps for analysis (got {laps.Count})", isError: true);
+                AnalyzeDrivingButton.IsEnabled = true;
+                
+                LiveBehaviorPanel.Children.Add(new TextBlock
+                {
+                    Text = $"Run at least 3 more laps to enable behavior analysis (current: {laps.Count})",
+                    Foreground = new SolidColorBrush(Color.FromRgb(255, 150, 0)),
+                    TextAlignment = TextAlignment.Center,
+                    Margin = new Thickness(0, 20, 0, 0),
+                    FontSize = 14
+                });
+                
+                return;
+            }
+            
+            // TODO: Extract telemetry data for each lap from database
+            // For now, show placeholder message
+            ShowStatus($"⚠️ Telemetry data storage not yet implemented (need full 60Hz data, not just lap summaries)", isError: true);
+            AnalyzeDrivingButton.IsEnabled = true;
+            
+            LiveBehaviorPanel.Children.Add(new TextBlock
+            {
+                Text = "🚧 Phase 3.7 Implementation In Progress",
+                FontSize = 16,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0, 212, 255)),
+                Margin = new Thickness(0, 0, 0, 15),
+                TextAlignment = TextAlignment.Center
+            });
+            
+            LiveBehaviorPanel.Children.Add(new TextBlock
+            {
+                Text = $"✅ Lap tracking working ({laps.Count} laps recorded)",
+                FontSize = 14,
+                Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+            
+            LiveBehaviorPanel.Children.Add(new TextBlock
+            {
+                Text = "⏳ Next Step: Store full telemetry data (60Hz) for behavior analysis",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                Margin = new Thickness(0, 0, 0, 5),
+                TextWrapping = TextWrapping.Wrap
+            });
+            
+            LiveBehaviorPanel.Children.Add(new TextBlock
+            {
+                Text = "⏳ Then: CornerSegmenter + HandlingDetector + DrivingBehaviorAnalyzer",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                Margin = new Thickness(0, 0, 0, 20),
+                TextWrapping = TextWrapping.Wrap
+            });
+            
+            // Show demo of what will be displayed
+            var demoPanel = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
+                CornerRadius = new CornerRadius(5),
+                Padding = new Thickness(15),
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            
+            var demoStack = new StackPanel();
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "📊 Preview: What You'll See",
+                FontSize = 14,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 193, 7)),
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "• Oversteer Severity: 7.5/10 (detected in Turn 7)",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 107, 107)),
+                Margin = new Thickness(0, 0, 0, 5)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "• Understeer Severity: 3.2/10 (minimal)",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+                Margin = new Thickness(0, 0, 0, 5)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "• Brake Lockups: 2 detected (Turn 1, Turn 4)",
+                FontSize = 13,
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 152, 0)),
+                Margin = new Thickness(0, 0, 0, 15)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "🔧 Recommended Changes:",
+                FontSize = 13,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0, 212, 255)),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "1. Rear ARB: +2 clicks (reduce oversteer)",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(204, 204, 204)),
+                Margin = new Thickness(0, 0, 0, 3)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "   Expected improvement: -0.08s",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "2. Brake Bias: +0.5% rearward (reduce lockups)",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(204, 204, 204)),
+                Margin = new Thickness(0, 0, 0, 3)
+            });
+            
+            demoStack.Children.Add(new TextBlock
+            {
+                Text = "   Expected improvement: -0.03s",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(136, 136, 136))
+            });
+            
+            demoPanel.Child = demoStack;
+            LiveBehaviorPanel.Children.Add(demoPanel);
+            
+            ShowStatus($"🚧 Phase 3.7 in progress - behavior analysis UI ready ({laps.Count} laps tracked)", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"❌ Error analyzing behavior: {ex.Message}", isError: true);
+            AnalyzeDrivingButton.IsEnabled = true;
+        }
+    }
+    
+    /// <summary>
     /// Show status message
     /// </summary>
     private void ShowStatus(string message, bool isError)

@@ -1,5 +1,6 @@
 using iRacingOverlay.Core.Models;
 using System.Text.Json;
+using iRacingOverlay.Core.Services.SetupEngineering;
 
 namespace iRacingOverlay.Core.Services.ML;
 
@@ -11,9 +12,15 @@ namespace iRacingOverlay.Core.Services.ML;
 /// - formulair04_alltracks_v1.0.cbm: Formula IR-04 lap time predictor
 /// - predictor_model.cbm: General lap time predictor
 /// 
+/// Phase 3.7 Enhancements:
+/// - DrivingBehaviorAnalyzer: Automatic handling detection
+/// - Neural Network feature extraction (50+ features)
+/// - Proactive setup recommendations based on driving behavior
+/// 
 /// Usage:
 /// - Setup Engineering: Predict lap time delta from setup changes
 /// - Strategy Scouting: Predict fuel consumption from track/weather
+/// - Live Analysis: Analyze driving behavior and suggest improvements
 /// </summary>
 public class MLModelService
 {
@@ -24,6 +31,10 @@ public class MLModelService
     // Model cache
     private byte[]? _formulaIR04Model = null;
     private byte[]? _predictorModel = null;
+    
+    // Behavior analysis
+    private readonly DrivingBehaviorAnalyzer _behaviorAnalyzer;
+    private readonly List<List<TelemetryData>> _lapBuffer = new();
     
     public MLModelService(string? modelsDirectory = null)
     {
@@ -36,7 +47,11 @@ public class MLModelService
         _modelsDirectory = modelsDirectory;
         Directory.CreateDirectory(_modelsDirectory);
         
+        // Initialize behavior analyzer for Phase 3.7
+        _behaviorAnalyzer = new DrivingBehaviorAnalyzer();
+        
         Console.WriteLine($"[MLModelService] Initialized with models directory: {_modelsDirectory}");
+        Console.WriteLine($"[MLModelService] ✅ Driving behavior analyzer ready");
     }
     
     /// <summary>
@@ -360,6 +375,270 @@ public class MLModelService
         
         return Task.CompletedTask;
     }
+    
+    /// <summary>
+    /// Analyze current setup and driving behavior, generate proactive recommendations
+    /// Phase 3.7: Neural Network Setup Advisor
+    /// </summary>
+    /// <param name="laps">5-10 laps of telemetry data for analysis</param>
+    /// <param name="currentSetup">Current setup parameters (optional)</param>
+    /// <returns>Setup recommendation with automatic handling detection</returns>
+    public SetupRecommendation? AnalyzeCurrentSetup(
+        List<List<TelemetryData>> laps,
+        SetupParameterFeatures? currentSetup = null)
+    {
+        if (laps.Count < 3)
+        {
+            Console.WriteLine($"[MLModelService] ⚠️ Need at least 3 laps for analysis (got {laps.Count})");
+            return null;
+        }
+        
+        Console.WriteLine($"[MLModelService] 🔍 Analyzing {laps.Count} laps for setup recommendations...");
+        
+        // Analyze driving behavior (automatic detection, no user input!)
+        var behaviorFeatures = _behaviorAnalyzer.Analyze(laps);
+        
+        // Extract 50+ features for Neural Network input
+        var nnFeatures = ExtractNNFeatures(behaviorFeatures, currentSetup, laps);
+        
+        // Generate recommendations based on detected issues
+        var recommendations = GenerateRecommendationsFromBehavior(behaviorFeatures, nnFeatures);
+        
+        Console.WriteLine($"[MLModelService] ✅ Generated {recommendations.Count} recommendations");
+        Console.WriteLine($"[MLModelService]    Primary Issue: {behaviorFeatures.PrimaryIssue}");
+        Console.WriteLine($"[MLModelService]    Summary: {behaviorFeatures.Summary}");
+        
+        return new SetupRecommendation
+        {
+            BehaviorFeatures = behaviorFeatures,
+            Recommendations = recommendations,
+            AnalyzedLaps = laps.Count,
+            Confidence = CalculateConfidence(behaviorFeatures)
+        };
+    }
+    
+    /// <summary>
+    /// Extract 50+ features for Neural Network input
+    /// Combines setup parameters + driving behavior + track conditions
+    /// </summary>
+    private float[] ExtractNNFeatures(
+        DrivingBehaviorFeatures behaviorFeatures,
+        SetupParameterFeatures? setup,
+        List<List<TelemetryData>> laps)
+    {
+        var features = new List<float>();
+        
+        // Setup parameters (15 features)
+        features.Add(setup?.FrontWing ?? 0f);
+        features.Add(setup?.RearWing ?? 0f);
+        features.Add(setup?.FrontARB ?? 0f);
+        features.Add(setup?.RearARB ?? 0f);
+        features.Add(setup?.FrontRideHeight ?? 0f);
+        features.Add(setup?.RearRideHeight ?? 0f);
+        features.Add(setup?.LFTirePressure ?? 0f);
+        features.Add(setup?.RFTirePressure ?? 0f);
+        features.Add(setup?.LRTirePressure ?? 0f);
+        features.Add(setup?.RRTirePressure ?? 0f);
+        features.Add(setup?.AirTemp ?? 20f);
+        features.Add(setup?.TrackTemp ?? 25f);
+        features.Add(0f); // Brake bias (TODO)
+        features.Add(0f); // Diff preload (TODO)
+        features.Add(0f); // Camber front (TODO)
+        
+        // Driving behavior (10 features)
+        features.Add(behaviorFeatures.OversteerSeverity);
+        features.Add(behaviorFeatures.UndersteerSeverity);
+        features.Add(behaviorFeatures.BrakeStability);
+        features.Add(behaviorFeatures.CornerEntryInstability);
+        features.Add(behaviorFeatures.CornerExitTraction);
+        features.Add(behaviorFeatures.ThrottleSmoothnessScore);
+        features.Add(behaviorFeatures.BrakeModulationScore);
+        features.Add(behaviorFeatures.SteeringConsistency);
+        features.Add(behaviorFeatures.TotalLockups);
+        features.Add(behaviorFeatures.CornerProblems.Count); // Number of problematic corners
+        
+        // Tires (12 features)
+        features.Add(behaviorFeatures.FrontTireDegRate);
+        features.Add(behaviorFeatures.RearTireDegRate);
+        features.Add(behaviorFeatures.TireImbalance);
+        
+        // Average tire temps (from last lap)
+        if (laps.Count > 0)
+        {
+            var lastLap = laps[^1];
+            var avgData = lastLap.Skip(lastLap.Count / 2).Take(lastLap.Count / 4).ToList(); // Mid-lap data
+            
+            features.Add(avgData.Average(d => d.LFtempCL)); // LF center
+            features.Add(avgData.Average(d => d.LFtempCM)); // LF middle
+            features.Add(avgData.Average(d => d.LFtempCR)); // LF right
+            features.Add(avgData.Average(d => d.RFtempCL)); // RF left
+            features.Add(avgData.Average(d => d.RFtempCM)); // RF middle
+            features.Add(avgData.Average(d => d.RFtempCR)); // RF right
+            features.Add(avgData.Average(d => d.LRtempCL)); // LR center
+            features.Add(avgData.Average(d => d.LRtempCM)); // LR middle
+            features.Add(avgData.Average(d => d.LRtempCR)); // LR right
+        }
+        else
+        {
+            features.AddRange(Enumerable.Repeat(0f, 9)); // Placeholder tire temps
+        }
+        
+        // Track conditions (5 features)
+        if (laps.Count > 0 && laps[0].Count > 0)
+        {
+            var firstLapData = laps[0][0];
+            features.Add(firstLapData.TrackTemp);
+            features.Add(firstLapData.AirTemp);
+            features.Add(firstLapData.TrackTempCrew > 0 ? firstLapData.TrackTempCrew : firstLapData.TrackTemp); // Crew chief track temp
+            features.Add(firstLapData.RelativeHumidity);
+            features.Add(firstLapData.WindVel); // Wind speed
+        }
+        else
+        {
+            features.AddRange(Enumerable.Repeat(0f, 5));
+        }
+        
+        // Performance metrics (8 features)
+        features.Add(behaviorFeatures.AverageLapTime);           // Average lap time
+        features.Add(behaviorFeatures.LapTimeConsistency);       // Lap consistency (std dev)
+        features.Add(behaviorFeatures.LapsAnalyzed);             // Number of laps
+        features.Add(behaviorFeatures.AverageOversteerSeverity); // Average oversteer
+        features.Add(behaviorFeatures.AverageUndersteerSeverity);// Average understeer
+        features.Add(behaviorFeatures.TotalLockups);             // Total lockups
+        features.Add(behaviorFeatures.PrimaryIssueSeverity);     // Primary issue severity
+        features.Add(0f); // Placeholder for future metric
+        
+        Console.WriteLine($"[MLModelService] 📊 Extracted {features.Count} features for NN input");
+        return features.ToArray();
+    }
+    
+    /// <summary>
+    /// Generate setup recommendations from detected behavior issues
+    /// Phase 3.7: Physics-based heuristics until NN model trained
+    /// </summary>
+    private List<SetupAdjustment> GenerateRecommendationsFromBehavior(
+        DrivingBehaviorFeatures behavior,
+        float[] nnFeatures)
+    {
+        var recommendations = new List<SetupAdjustment>();
+        
+        // Oversteer detection (severity > 5/10)
+        if (behavior.OversteerSeverity > 5.0f)
+        {
+            recommendations.Add(new SetupAdjustment
+            {
+                Parameter = "Rear ARB",
+                Change = "+2 clicks",
+                Reason = $"Oversteer detected (severity {behavior.OversteerSeverity:F1}/10)",
+                PredictedDelta = -0.08f, // Expected improvement
+                Confidence = 0.75f
+            });
+            
+            // Check for corner-specific oversteer
+            var worstCorner = behavior.CornerProblems
+                .Where(kv => kv.Value.IssueType == "Oversteer")
+                .OrderByDescending(kv => kv.Value.Severity)
+                .FirstOrDefault();
+            
+            if (worstCorner.Value != null)
+            {
+                recommendations.Add(new SetupAdjustment
+                {
+                    Parameter = "Rear Wing",
+                    Change = "+1 click",
+                    Reason = $"Severe oversteer in Turn {worstCorner.Key} (severity {worstCorner.Value.Severity:F1}/10)",
+                    PredictedDelta = -0.05f,
+                    Confidence = 0.70f
+                });
+            }
+        }
+        
+        // Understeer detection (severity > 5/10)
+        if (behavior.UndersteerSeverity > 5.0f)
+        {
+            recommendations.Add(new SetupAdjustment
+            {
+                Parameter = "Front ARB",
+                Change = "-1 click",
+                Reason = $"Understeer detected (severity {behavior.UndersteerSeverity:F1}/10)",
+                PredictedDelta = -0.06f,
+                Confidence = 0.75f
+            });
+            
+            recommendations.Add(new SetupAdjustment
+            {
+                Parameter = "Front Wing",
+                Change = "+1 click",
+                Reason = "Increase front downforce for better turn-in",
+                PredictedDelta = -0.04f,
+                Confidence = 0.65f
+            });
+        }
+        
+        // Brake lockup detection
+        if (behavior.TotalLockups > 2)
+        {
+            recommendations.Add(new SetupAdjustment
+            {
+                Parameter = "Brake Bias",
+                Change = "+0.5% rearward",
+                Reason = $"Brake lockups detected ({behavior.TotalLockups} instances)",
+                PredictedDelta = -0.03f,
+                Confidence = 0.80f
+            });
+        }
+        
+        // Tire temperature imbalance
+        if (Math.Abs(behavior.TireImbalance) > 5.0f)
+        {
+            var side = behavior.TireImbalance > 0 ? "left" : "right";
+            recommendations.Add(new SetupAdjustment
+            {
+                Parameter = "Front Tire Pressure",
+                Change = $"{(behavior.TireImbalance > 0 ? "-0.5" : "+0.5")} kPa on {side}",
+                Reason = $"Tire temperature imbalance ({Math.Abs(behavior.TireImbalance):F1}°C difference)",
+                PredictedDelta = -0.02f,
+                Confidence = 0.60f
+            });
+        }
+        
+        // Sort by predicted improvement (most impactful first)
+        return recommendations.OrderByDescending(r => Math.Abs(r.PredictedDelta)).ToList();
+    }
+    
+    /// <summary>
+    /// Calculate confidence score for recommendations
+    /// Based on lap count, issue severity, and consistency
+    /// </summary>
+    private float CalculateConfidence(DrivingBehaviorFeatures behavior)
+    {
+        float confidence = 0.5f; // Base confidence
+        
+        // More laps = higher confidence (up to +0.3)
+        if (behavior.LapsAnalyzed >= 10) confidence += 0.3f;
+        else if (behavior.LapsAnalyzed >= 5) confidence += 0.2f;
+        else confidence += 0.1f;
+        
+        // Clear primary issue = higher confidence (+0.2)
+        if (!string.IsNullOrEmpty(behavior.PrimaryIssue) && behavior.PrimaryIssue != "Balanced")
+        {
+            confidence += 0.2f;
+        }
+        
+        return Math.Min(1.0f, confidence);
+    }
+    
+    /// <summary>
+    /// Calculate standard deviation for lap consistency
+    /// </summary>
+    private float CalculateStdDev(List<float> values)
+    {
+        if (values.Count == 0) return 0f;
+        
+        var avg = values.Average();
+        var sumSquares = values.Sum(v => (v - avg) * (v - avg));
+        return (float)Math.Sqrt(sumSquares / values.Count);
+    }
 }
 
 /// <summary>
@@ -444,4 +723,67 @@ public class SetupPrediction
     /// Whether this prediction is reliable enough to show to user
     /// </summary>
     public bool IsHighConfidence => Confidence >= 0.8f;
+}
+
+/// <summary>
+/// Setup recommendation from driving behavior analysis (Phase 3.7)
+/// Proactive recommendations based on automatic handling detection
+/// </summary>
+public class SetupRecommendation
+{
+    /// <summary>
+    /// Detected driving behavior features (auto-detected, no user input!)
+    /// </summary>
+    public DrivingBehaviorFeatures BehaviorFeatures { get; set; } = new();
+    
+    /// <summary>
+    /// List of recommended setup adjustments (ranked by impact)
+    /// </summary>
+    public List<SetupAdjustment> Recommendations { get; set; } = new();
+    
+    /// <summary>
+    /// Number of laps analyzed
+    /// </summary>
+    public int AnalyzedLaps { get; set; }
+    
+    /// <summary>
+    /// Overall confidence in recommendations (0.0 - 1.0)
+    /// </summary>
+    public float Confidence { get; set; }
+    
+    /// <summary>
+    /// Whether recommendations are reliable (confidence >= 70%)
+    /// </summary>
+    public bool IsReliable => Confidence >= 0.7f;
+}
+
+/// <summary>
+/// Individual setup adjustment recommendation
+/// </summary>
+public class SetupAdjustment
+{
+    /// <summary>
+    /// Setup parameter to adjust (e.g., "Rear ARB", "Front Wing")
+    /// </summary>
+    public string Parameter { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Recommended change (e.g., "+2 clicks", "-0.5% forward")
+    /// </summary>
+    public string Change { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reason for recommendation (e.g., "Oversteer detected in Turn 7")
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Predicted lap time delta in seconds (negative = faster)
+    /// </summary>
+    public float PredictedDelta { get; set; }
+    
+    /// <summary>
+    /// Confidence in this specific recommendation (0.0 - 1.0)
+    /// </summary>
+    public float Confidence { get; set; }
 }
