@@ -106,7 +106,8 @@ public class ModeController
                 EnableComparison = true,
                 EnableProjection = false,
                 EnableOverlays = false,
-                CompressionLevel = CompressionLevel.Medium  // Balance storage/performance
+                CompressionLevel = CompressionLevel.Medium,  // Balance storage/performance
+                RequiredChannels = TelemetryChannels.SetupEngineering.All  // 48 channels
             },
             
             OperationalMode.StrategyScouting => new TelemetryProfile
@@ -117,7 +118,8 @@ public class ModeController
                 EnableComparison = false,
                 EnableProjection = true,
                 EnableOverlays = false,
-                CompressionLevel = CompressionLevel.None  // Aggregates are small
+                CompressionLevel = CompressionLevel.None,  // Aggregates are small
+                RequiredChannels = TelemetryChannels.StrategyScouting.All  // 25 channels
             },
             
             OperationalMode.Driving => new TelemetryProfile
@@ -128,7 +130,8 @@ public class ModeController
                 EnableComparison = false,
                 EnableProjection = false,
                 EnableOverlays = true,
-                CompressionLevel = CompressionLevel.None  // In-memory only
+                CompressionLevel = CompressionLevel.None,  // In-memory only
+                RequiredChannels = null  // Use existing IRacingTelemetryService channels
             },
             
             _ => throw new ArgumentException($"Unknown mode: {mode}")

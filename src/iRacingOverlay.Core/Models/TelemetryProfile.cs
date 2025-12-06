@@ -52,6 +52,12 @@ public class TelemetryProfile
     /// Setup Engineering uses medium compression to balance storage/performance
     /// </summary>
     public CompressionLevel CompressionLevel { get; set; } = CompressionLevel.None;
+    
+    /// <summary>
+    /// Specific telemetry channels to record (mode-specific)
+    /// Null = record all available channels for the RecordFields setting
+    /// </summary>
+    public string[]? RequiredChannels { get; set; } = null;
 }
 
 /// <summary>

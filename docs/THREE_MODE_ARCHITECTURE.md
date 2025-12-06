@@ -965,6 +965,143 @@ Strategy Scouting during race:              ⚠️ "Switch to Driving Mode for r
 **Driving Mode** (current):
 - **No changes to existing performance** (keep current 60 Hz responsive)
 
+### Telemetry Channel Definitions
+
+#### Setup Engineering Mode Channels (48 total, 60Hz)
+
+**Priority 1: Car Balance & Suspension (16 channels)**
+```csharp
+// Shock deflection/velocity (suspension travel analysis)
+"LFshockDefl", "RFshockDefl", "LRshockDefl", "RRshockDefl"  // Meters
+"LFshockVel", "RFshockVel", "LRshockVel", "RRshockVel"      // m/s
+
+// Ride height (aero platform stability)
+"LFrideHeight", "RFrideHeight", "LRrideHeight", "RRrideHeight" // Meters
+
+// Roll/Pitch/Yaw (chassis dynamics)
+"Roll", "RollRate"     // Banking angle + rate (radians, rad/s)
+"Pitch", "PitchRate"   // Nose up/down + rate
+"Yaw", "YawRate"       // Heading + rotation rate
+```
+
+**Priority 2: Tire Analysis (24 channels)**
+```csharp
+// Tire wear (% remaining across tire surface)
+"LFwearL", "LFwearM", "LFwearR"  // Left/Middle/Right wear %
+"RFwearL", "RFwearM", "RFwearR"
+"LRwearL", "LRwearM", "LRwearR"
+"RRwearL", "RRwearM", "RRwearR"
+
+// Surface temps (3 points, immediate response to conditions)
+"LFtempL", "LFtempM", "LFtempR"  // °C
+"RFtempL", "RFtempM", "RFtempR"
+"LRtempL", "LRtempM", "LRtempR"
+"RRtempL", "RRtempM", "RRtempR"
+
+// Tire pressure (current vs cold baseline)
+"LFpressure", "LFcoldPressure"
+"RFpressure", "RFcoldPressure"
+"LRpressure", "LRcoldPressure"
+"RRpressure", "RRcoldPressure"
+```
+
+**Priority 3: Forces & Dynamics (8 channels)**
+```csharp
+// G-forces (driver feel simulation)
+"LongAccel"   // m/s² - Longitudinal (braking/accel, negative = braking)
+"LatAccel"    // m/s² - Lateral (cornering)
+"VertAccel"   // m/s² - Vertical (bumps/kerbs)
+
+// Velocity components (for speed trace overlays)
+"VelocityX", "VelocityY", "VelocityZ"  // m/s (3D velocity vector)
+
+// Core telemetry
+"Speed"       // m/s
+"Throttle"    // 0.0-1.0 (normalized input)
+```
+
+**Sector Timing** (from SessionInfo YAML):
+```yaml
+# Parsed once at session start from SessionInfo YAML
+SplitTimeInfo:
+  Sectors:
+   - SectorNum: 0
+     SectorStartPct: 0.000000   # Start/Finish
+   - SectorNum: 1
+     SectorStartPct: 0.333333   # ~33% through lap
+   - SectorNum: 2
+     SectorStartPct: 0.666667   # ~66% through lap
+```
+
+#### Strategy Scouting Mode Channels (25 total, 10Hz)
+
+**Priority 1: Fuel & Pit Strategy (11 channels)**
+```csharp
+// Fuel state
+"FuelLevel"        // Liters remaining
+"FuelLevelPct"     // % remaining (0.0-1.0)
+"FuelUsePerHour"   // kg/h consumption rate
+
+// Pit road detection
+"OnPitRoad"        // bool - Player on pit road
+
+// Pit service state (what's being serviced in pit box)
+"PitSvFlags"       // uint - Pit service flags (tires, fuel, repairs)
+"PitSvFuel"        // float - Fuel to add (L)
+"PitSvLFP", "PitSvRFP", "PitSvLRP", "PitSvRRP"  // Tire pressure adjustments
+
+// Pit repair times
+"PitOptRepairLeft"  // float - Seconds remaining for optional repairs
+"PitRepairLeft"     // float - Seconds remaining for mandatory repairs
+```
+
+**Priority 2: Tire Degradation (8 channels)**
+```csharp
+// Tire wear (for degradation modeling - middle point is average)
+"LFwearM", "RFwearM", "LRwearM", "RRwearM"  // Middle wear % (0-100)
+
+// Carcass temps (affects wear rate, more stable than surface temps)
+"LFtempCM", "RFtempCM", "LRtempCM", "RRtempCM"  // °C (middle carcass)
+```
+
+**Priority 3: Lap Times & Position (6 channels)**
+```csharp
+// Timing
+"LapCurrentLapTime"      // Current lap elapsed time (seconds)
+"LapLastLapTime"         // Last completed lap time
+"LapBestLapTime"         // Best lap time this session
+"SessionTimeRemain"      // Session time remaining (seconds)
+
+// Position (for traffic analysis during pit windows)
+"LapDistPct"             // Track position (0.0-1.0)
+"Lap"                    // Current lap number
+```
+
+**Competitor Arrays** (for pit strategy intelligence):
+```csharp
+"CarIdxLapDistPct"       // float[64] - All cars' track positions
+"CarIdxOnPitRoad"        // bool[64] - Which cars are currently pitting
+```
+
+#### Storage Impact Analysis
+
+**Setup Engineering** (60Hz × 48 channels × 5 min session):
+- Data points: 60 Hz × 300s × 48 = 864,000 points
+- Raw size: ~3.5 MB per 4-byte float
+- Compressed: ~1.8 MB (gzip level 6)
+- **5-lap comparison**: 1.8 MB × 2 setups = 3.6 MB total
+
+**Strategy Scouting** (10Hz × 25 channels × 30 min session):
+- Data points: 10 Hz × 1800s × 25 = 450,000 points
+- Raw size: ~1.8 MB
+- **Aggregates only**: 120 bytes/lap × 30 laps = 3.6 KB (**500× reduction!**)
+
+**Why Aggregates Work for Strategy**:
+- Don't need 60Hz tire temps, just average/min/max per lap
+- Don't need 60Hz fuel level, just start/end per lap
+- Don't need 60Hz speed, just average lap time
+- Result: 2000 points/lap → 12 values/lap (tire temps avg×4, wear delta×4, fuel used, lap time, sector times×3)
+
 ### .exe Deployment Checklist
 
 ✅ **SQLite embedded** (zero external dependencies)  
