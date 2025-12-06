@@ -43,7 +43,7 @@ public static class TelemetryDataMapper
             // Fuel - Current State
             TelemetryField.FuelLevel => data.FuelLevel,
             TelemetryField.FuelPercent => data.FuelLevelPct, // SDK provides as 0-100 percentage already
-            TelemetryField.FuelUsedLastLap => 0f, // TODO: Calculate from lap history
+            TelemetryField.FuelUsedLastLap => 0f, // Requires lap history tracking (use FuelCalculatorService for accurate values)
             TelemetryField.FuelRemaining => data.FuelLevel, // Alias for FuelLevel
             
             // Fuel - Averages (Phase 2) - NOTE: Requires telemetryService parameter

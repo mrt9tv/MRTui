@@ -16,11 +16,6 @@ public enum WidgetType
     TelemetryTable,
 
     /// <summary>
-    /// 2x3 grid of customizable telemetry data cells
-    /// </summary>
-    Data,
-
-    /// <summary>
     /// RPM gauge (circular dial) - Future MVP 3
     /// </summary>
     RPMGauge,
@@ -74,7 +69,6 @@ public static class WidgetTypeExtensions
         return type switch
         {
             WidgetType.MRTOne => "MRT One",
-            WidgetType.Data => "Data Widget",
             WidgetType.Fuel => "Fuel Calculator",
             WidgetType.RaceStrategy => "Race Strategy",
             WidgetType.TelemetryTable => "Telemetry Table",

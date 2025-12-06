@@ -60,7 +60,8 @@ public static class ShiftPointCalculator
             return _carRedlineRPM;
         }
         
-        // TODO: Improve estimation algorithm - consider throttle position, gear ratios, and historical data
+        // Future enhancement: ML-based shift point prediction using throttle position, gear ratios,
+        // track position, and historical optimal shift points per track/car combination
         
         // If we haven't observed high RPMs yet, use a more conservative approach
         if (_maxObservedRPM < 1000f)

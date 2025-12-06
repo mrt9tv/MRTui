@@ -66,9 +66,21 @@ public class FuelLapHistory
     /// <summary>Whether this lap is a pace/parade lap (SessionState == 3)</summary>
     public bool IsPaceLap => SessionState == 3;
     
+    /// <summary>
+    /// Grid start partial lap - when race starts behind S/F line, lap 1 is just grid-to-line distance.
+    /// These laps use very little fuel (e.g., 0.09L instead of 1.0L) and corrupt averages.
+    /// </summary>
+    public bool IsGridStartLap { get; set; }
+    
+    /// <summary>Track distance percentage covered during this lap (0.0-1.0). Used to detect partial laps.</summary>
+    public float LapDistanceCovered { get; set; } = 1.0f;
+    
     /// <summary>Whether this lap should be included in average calculations</summary>
-    /// <remarks>Out-laps are excluded because they typically use less fuel (cool tires, careful driving)</remarks>
-    public bool IsValidForAveraging => !WasPitLap && !IsFormationLap && !IsIncompleteLap && !IsPaceLap && !IsOutLap && FuelUsed > 0;
+    /// <remarks>
+    /// Excludes: Pit laps, formation laps, incomplete laps, pace laps, out-laps, grid start laps, zero fuel laps.
+    /// Grid start laps are partial laps from grid to S/F line at race start - they corrupt averages.
+    /// </remarks>
+    public bool IsValidForAveraging => !WasPitLap && !IsFormationLap && !IsIncompleteLap && !IsPaceLap && !IsOutLap && !IsGridStartLap && FuelUsed > 0;
     
     /// <summary>Whether this lap is a green flag lap for green-only averaging</summary>
     public bool IsGreenFlagLap => FlagStatus == LapFlagStatus.Green && IsValidForAveraging;

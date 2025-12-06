@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.Core.Services.Tire;
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     private readonly WidgetManager _widgetManager;
     private readonly ITelemetryService _telemetryService;
     private readonly IServiceProvider _services;
+    private readonly ILogger<MainWindow> _logger;
     private readonly DispatcherTimer _uptimeTimer;
     private readonly DispatcherTimer _updateRateTimer;
     private GlobalHotkey? _toggleLockHotkey;
@@ -35,6 +37,7 @@ public partial class MainWindow : Window
         _services = services;
         _widgetManager = services.GetRequiredService<WidgetManager>();
         _telemetryService = services.GetRequiredService<ITelemetryService>();
+        _logger = services.GetRequiredService<ILogger<MainWindow>>();
 
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
         KeyDown += MainWindow_KeyDown;
@@ -82,9 +85,9 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         // Register global hotkeys after window is loaded
-        System.Diagnostics.Debug.WriteLine("=== MainWindow_Loaded - About to register hotkeys ===");
+        _logger.LogDebug("MainWindow loaded, registering hotkeys");
         RegisterGlobalHotkeys();
-        System.Diagnostics.Debug.WriteLine("=== MainWindow_Loaded - Hotkey registration complete ===");
+        _logger.LogDebug("Hotkey registration complete");
     }
 
     private void BtnHome_Click(object sender, RoutedEventArgs e) => NavigateToHome();

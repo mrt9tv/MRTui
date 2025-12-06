@@ -478,7 +478,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // MVP 1 - Core telemetry (using GetValueOrDefault() for nullable SDK properties)
                 Speed = sdkData.Speed.GetValueOrDefault(),
                 RPM = sdkData.RPM.GetValueOrDefault(),
-                // TODO: Check SDK for actual redline field (DriverCarRedLine, EngineMaxRPM, ShiftRPM, etc.)
+                // SDK exposes DriverCarSLBlinkRPM (shift light) - consider using for more accurate shift point
                 // For now, leave at 0 and let ShiftPointCalculator learn it
                 EngineRedlineRPM = 0, // Will be populated if SDK provides it
                 

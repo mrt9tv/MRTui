@@ -14,6 +14,7 @@ using iRacingOverlay.Core.Telemetry;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
+using Microsoft.Extensions.Logging;
 using ConnectionStatus = iRacingOverlay.Core.Models.ConnectionStatus;
 
 namespace iRacingOverlay.WPF.Widgets.MRTOneWidget;
@@ -634,7 +635,7 @@ public class MRTOneWidget : WidgetBase
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MRTOne] Failed to load settings: {ex.Message}");
-            // Return defaults on error
+            // Return defaults on error (Note: ILogger not available in WidgetBase, use Debug for now)
         }
 
         return MRTOneSettings.Default;
@@ -655,6 +656,7 @@ public class MRTOneWidget : WidgetBase
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
+            // Note: ILogger not available in WidgetBase, use Debug for now
         }
     }
     
@@ -1396,7 +1398,8 @@ public class MRTOneWidget : WidgetBase
         }
         catch (Exception ex)
         {
-            // Log exception for debugging instead of silently swallowing errors
+            // Log exception instead of silently swallowing errors
+            // Note: ILogger not available in WidgetBase, use Debug for now
             System.Diagnostics.Debug.WriteLine($"[MRTOne] Fuel display update error: {ex.Message}");
             System.Diagnostics.Debug.WriteLine($"[MRTOne] Stack trace: {ex.StackTrace}");
 

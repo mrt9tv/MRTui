@@ -8,12 +8,15 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Services;
+using iRacingOverlay.WPF.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace iRacingOverlay.WPF.ViewModels;
 
 public class OverlayViewModel : INotifyPropertyChanged
 {
     private readonly WidgetManager _widgetManager;
+    private readonly ILogger<OverlayViewModel>? _logger;
     private readonly DispatcherTimer _updateTimer;
     private WidgetItemViewModel? _selectedWidget;
 
@@ -36,9 +39,10 @@ public class OverlayViewModel : INotifyPropertyChanged
         }
     }
 
-    public OverlayViewModel(WidgetManager widgetManager)
+    public OverlayViewModel(WidgetManager widgetManager, ILogger<OverlayViewModel>? logger = null)
     {
-        _widgetManager = widgetManager;
+        _widgetManager = widgetManager ?? throw new ArgumentNullException(nameof(widgetManager));
+        _logger = logger;
 
         // Initialize commands
         SelectWidgetCommand = new RelayCommand<WidgetItemViewModel>(OnSelectWidget);
@@ -47,7 +51,6 @@ public class OverlayViewModel : INotifyPropertyChanged
         Widgets = new ObservableCollection<WidgetItemViewModel>
         {
             new WidgetItemViewModel("MRT One", WidgetType.MRTOne, "🥇", _widgetManager),
-            new WidgetItemViewModel("Data Widget", WidgetType.Data, "📊", _widgetManager),
             new WidgetItemViewModel("Fuel Assist", WidgetType.Fuel, "⛽", _widgetManager),
             new WidgetItemViewModel("Race Strategy", WidgetType.RaceStrategy, "🏁", _widgetManager)
         };
@@ -169,6 +172,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                     }
                     catch (Exception ex)
                     {
+                        // Note: WidgetItemViewModel is a nested class without access to ILogger
                         System.Diagnostics.Debug.WriteLine($"Error toggling RaceStrategy: {ex}");
                         System.Windows.MessageBox.Show($"Failed to open Race Strategy Widget: {ex.Message}", 
                             "Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
@@ -186,7 +190,7 @@ public class WidgetItemViewModel : INotifyPropertyChanged
                     // Check if widget already exists
                     var existingWidgets = _widgetManager.GetWidgetsByType(Type).ToList();
                     
-                    var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
+                    var logPath = Utils.LoggingPaths.GetLogPath("debug.log");
                     
                     if (existingWidgets.Any())
                     {
