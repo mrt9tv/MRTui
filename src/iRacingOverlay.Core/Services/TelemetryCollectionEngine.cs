@@ -20,6 +20,7 @@ public class TelemetryCollectionEngine
 {
     private readonly ModeController _modeController;
     private readonly TelemetryPersistenceService _persistenceService;
+    private readonly SectorTelemetryAnalyzer _sectorAnalyzer;
     private readonly object _collectionLock = new object();
     
     // Current lap telemetry buffer (60Hz samples)
@@ -42,10 +43,12 @@ public class TelemetryCollectionEngine
     
     public TelemetryCollectionEngine(
         ModeController modeController,
-        TelemetryPersistenceService persistenceService)
+        TelemetryPersistenceService persistenceService,
+        SectorTelemetryAnalyzer sectorAnalyzer)
     {
         _modeController = modeController;
         _persistenceService = persistenceService;
+        _sectorAnalyzer = sectorAnalyzer;
         
         // Default to 60Hz (16.67ms interval)
         _minSampleInterval = TimeSpan.FromMilliseconds(1000.0 / _sampleRateHz);
@@ -361,6 +364,9 @@ public class TelemetryCollectionEngine
         _lapsRecorded++;
         
         LogInfo($"Lap {lapNumber} recorded: {_currentLapBuffer.Count} samples, {lapSnapshot.LapTime:F2}s");
+        
+        // TODO: Analyze sector telemetry (needs TrackSectors parameter)
+        // var sectorAnalysis = _sectorAnalyzer.AnalyzeLap(trackName, carName, lapNumber, _currentLapBuffer, trackSectors);
     }
     
     /// <summary>

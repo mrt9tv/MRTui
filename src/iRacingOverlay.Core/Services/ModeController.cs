@@ -141,7 +141,7 @@ public class ModeController
     /// <summary>
     /// Get human-readable reason why transition is blocked (if blocked)
     /// </summary>
-    private string GetTransitionBlockReason(OperationalMode from, OperationalMode to)
+    public string GetTransitionBlockReason(OperationalMode from, OperationalMode to)
     {
         // Future: Add specific blocking reasons
         // Example: "Cannot switch during active setup comparison - finish current test first"

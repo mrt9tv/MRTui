@@ -53,7 +53,12 @@ public enum WidgetType
     /// <summary>
     /// Race Strategy Widget - Phase 10 (Multi-stint planning, what-if scenarios)
     /// </summary>
-    RaceStrategy
+    RaceStrategy,
+
+    /// <summary>
+    /// Mode Control Widget - Master control panel for switching operational modes
+    /// </summary>
+    ModeControl
 }
 
 /// <summary>
@@ -78,6 +83,7 @@ public static class WidgetTypeExtensions
             WidgetType.Gear => "Gear Indicator",
             WidgetType.Inputs => "Input Bars",
             WidgetType.Tires => "Tire Monitor",
+            WidgetType.ModeControl => "Mode Control",
             _ => type.ToString()
         };
     }
