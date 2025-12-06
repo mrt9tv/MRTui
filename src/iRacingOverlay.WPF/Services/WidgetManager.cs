@@ -139,9 +139,14 @@ public class WidgetManager
             
             WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
         }
-        catch (Exception ex)
+        catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Failed to show Race Strategy Widget");
+            _logger.LogError(ex, "Race Strategy Widget in invalid state: {Message}", ex.Message);
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogError(ex, "Invalid configuration for Race Strategy Widget: {Message}", ex.Message);
             throw;
         }
     }
@@ -326,12 +331,26 @@ public class WidgetManager
                 
                 CreateWidget(widgetConfig.Type, widgetConfig);
             }
-            catch (Exception ex)
+            catch (JsonException ex)
             {
                 var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
-                var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ Failed: {ex.Message}";
+                var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ JSON Error: {ex.Message}";
                 File.AppendAllText(logPath, log);
-                _logger.LogError(ex, "Failed to create widget: {Type}", widgetConfig.Type);
+                _logger.LogError(ex, "Failed to create widget - invalid JSON settings: {Type}", widgetConfig.Type);
+            }
+            catch (ArgumentException ex)
+            {
+                var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
+                var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ Argument Error: {ex.Message}";
+                File.AppendAllText(logPath, log);
+                _logger.LogError(ex, "Failed to create widget - invalid arguments: {Type}", widgetConfig.Type);
+            }
+            catch (InvalidOperationException ex)
+            {
+                var logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "MRT-UI", "debug.log");
+                var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ State Error: {ex.Message}";
+                File.AppendAllText(logPath, log);
+                _logger.LogError(ex, "Failed to create widget - invalid state: {Type}", widgetConfig.Type);
             }
         }
 
@@ -423,10 +442,20 @@ public class WidgetManager
             
             _logger.LogInformation("Layout saved to: {Path}", LayoutFilePath);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
-            _logger.LogError(ex, "Failed to save layout");
-            Debug.WriteLine($"Failed to save layout: {ex.Message}");
+            _logger.LogError(ex, "Failed to save layout (I/O error): {Message}", ex.Message);
+            Debug.WriteLine($"Failed to save layout (I/O error): {ex.Message}");
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to save layout (JSON serialization error): {Message}", ex.Message);
+            Debug.WriteLine($"Failed to save layout (JSON error): {ex.Message}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogError(ex, "Failed to save layout (access denied): {Path}", LayoutFilePath);
+            Debug.WriteLine($"Failed to save layout (access denied): {ex.Message}");
         }
     }
 
@@ -486,12 +515,25 @@ public class WidgetManager
             _logger.LogInformation("Layout loaded successfully");
             return true;
         }
-        catch (Exception ex)
+        catch (FileNotFoundException ex)
         {
-            var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ Exception: {ex.Message}\n{ex.StackTrace}";
+            var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ File not found (first run): {ex.Message}";
             File.AppendAllText(logPath, log);
-            _logger.LogError(ex, "Failed to load layout");
-            Debug.WriteLine($"Failed to load layout: {ex.Message}");
+            _logger.LogInformation("Layout file not found (first run), starting fresh");
+            return false;
+        }
+        catch (JsonException ex)
+        {
+            var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ JSON Error: {ex.Message}\n{ex.StackTrace}";
+            File.AppendAllText(logPath, log);
+            _logger.LogError(ex, "Failed to load layout (corrupt JSON): {Message}", ex.Message);
+            return false;
+        }
+        catch (IOException ex)
+        {
+            var log = $"\n[{DateTime.Now:HH:mm:ss}] [WidgetManager] ✗ I/O Error: {ex.Message}";
+            File.AppendAllText(logPath, log);
+            _logger.LogError(ex, "Failed to load layout (I/O error): {Message}", ex.Message);
             return false;
         }
     }

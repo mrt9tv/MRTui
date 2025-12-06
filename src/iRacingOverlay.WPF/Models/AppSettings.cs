@@ -444,10 +444,20 @@ public class AppSettings : INotifyPropertyChanged
             // Notify listeners after successful save
             NotifyChanged();
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
-            // Log error but don't crash the app - AppSettings is singleton, cannot inject ILogger
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings: {ex.Message}");
+            // File I/O error (disk full, permissions, locked file)
+            System.Diagnostics.Debug.WriteLine($"Failed to save settings (I/O error): {ex.Message}");
+        }
+        catch (JsonException ex)
+        {
+            // JSON serialization error (should not happen with valid model)
+            System.Diagnostics.Debug.WriteLine($"Failed to save settings (JSON error): {ex.Message}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // Insufficient permissions to write file
+            System.Diagnostics.Debug.WriteLine($"Failed to save settings (access denied): {ex.Message}");
         }
     }
     
@@ -478,10 +488,20 @@ public class AppSettings : INotifyPropertyChanged
                 }
             }
         }
-        catch (Exception ex)
+        catch (FileNotFoundException ex)
         {
-            // Log error but return default settings - AppSettings is singleton, cannot inject ILogger
-            System.Diagnostics.Debug.WriteLine($"Failed to load settings: {ex.Message}");
+            // Settings file doesn't exist yet (first run) - return defaults
+            System.Diagnostics.Debug.WriteLine($"Settings file not found (first run): {ex.Message}");
+        }
+        catch (JsonException ex)
+        {
+            // JSON deserialization error (corrupted settings file) - return defaults
+            System.Diagnostics.Debug.WriteLine($"Failed to load settings (corrupt JSON): {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            // File I/O error - return defaults
+            System.Diagnostics.Debug.WriteLine($"Failed to load settings (I/O error): {ex.Message}");
         }
         
         // Return default settings if load failed
