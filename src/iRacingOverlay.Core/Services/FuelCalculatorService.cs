@@ -864,7 +864,11 @@ public class FuelCalculatorService
         
         if (avgFuel <= 0)
         {
-            CurrentData.LapsRemaining = 0;
+            // FIX: Don't overwrite LapsRemaining if using historical predictions (preserves estimate until real data)
+            if (!CurrentData.UsingHistoricalPredictions)
+            {
+                CurrentData.LapsRemaining = 0;
+            }
             CurrentData.CanFinishWithoutStop = false;
             return;
         }
@@ -876,7 +880,16 @@ public class FuelCalculatorService
         
         // Laps remaining based on selected averaging method (using usable fuel only)
         CurrentData.LapsRemaining = usableFuel / avgFuel;
-        LogDebug($"LapsRemaining = {CurrentData.LapsRemaining:F4} (Usable fuel: {usableFuel:F4}L / Avg: {avgFuel:F4}L, Sputtering threshold: {sputteringThreshold:F2}L [{FuelSputteringDatabase.GetCarCategory(CurrentData.CarClassId)}])");
+        
+        // FIX: Once we calculate with real data, clear historical predictions flag
+        if (CurrentData.UsingHistoricalPredictions && _lapHistory.Count >= 1)
+        {
+            CurrentData.UsingHistoricalPredictions = false;
+            Console.WriteLine($"[FuelCalculator] ✅ Switched from historical estimate to real data (1st lap complete)");
+        }
+        
+        string dataSource = CurrentData.UsingHistoricalPredictions ? "[HISTORICAL EST]" : "[ACTUAL DATA]";
+        LogDebug($"LapsRemaining = {CurrentData.LapsRemaining:F4} {dataSource} (Usable fuel: {usableFuel:F4}L / Avg: {avgFuel:F4}L, Sputtering threshold: {sputteringThreshold:F2}L [{FuelSputteringDatabase.GetCarCategory(CurrentData.CarClassId)}])");
         
         // Compare with iRacing's estimate
         CurrentData.LapsDifference = CurrentData.LapsRemaining - CurrentData.IRacingLapsRemaining;
@@ -1169,6 +1182,7 @@ public class FuelCalculatorService
     /// <summary>
     /// Phase 9: Apply historical predictions at session start
     /// Provides instant fuel/tire predictions instead of 3-lap warmup
+    /// FIX: Pre-calculate LapsRemaining so it shows immediately on mid-session app start
     /// </summary>
     private void ApplyHistoricalPredictions(TelemetryData telemetry)
     {
@@ -1180,7 +1194,10 @@ public class FuelCalculatorService
             telemetry.PlayerCarClass);
         
         if (prediction == null || !prediction.IsHighConfidence)
+        {
+            Console.WriteLine($"[FuelCalculator] No high-confidence historical data for {telemetry.TrackName} / Class {telemetry.PlayerCarClass}");
             return;
+        }
         
         // Apply historical fuel prediction
         CurrentData.AvgFuelPerLap_Session = prediction.AvgFuelPerLap;
@@ -1195,6 +1212,13 @@ public class FuelCalculatorService
         CurrentData.MaxTireWearRate = prediction.AvgTireWearRate;
         CurrentData.TireLapsRemaining = prediction.TireLapsAverage;
         
+        // FIX: Pre-calculate LapsRemaining using historical avg (prevents showing 0 laps on app start mid-session)
+        float sputteringThreshold = FuelSputteringDatabase.GetSputteringThreshold(
+            telemetry.PlayerCarClass, 
+            telemetry.FuelLevelMax);
+        float usableFuel = Math.Max(0, telemetry.FuelLevel - sputteringThreshold);
+        CurrentData.LapsRemaining = usableFuel / prediction.AvgFuelPerLap;
+        
         // Mark as applied and show confidence
         _historicalDataApplied = true;
         CurrentData.HasSufficientData = true;
@@ -1202,8 +1226,9 @@ public class FuelCalculatorService
         CurrentData.HistoricalConfidence = prediction.ConfidenceScore;
         CurrentData.HistoricalSessionCount = prediction.SessionCount;
         
-        Console.WriteLine($"[FuelCalculator] Applied historical prediction: {prediction.AvgFuelPerLap:F2}L/lap " +
-                         $"(confidence: {prediction.ConfidenceScore:F0}%, sessions: {prediction.SessionCount})");
+        Console.WriteLine($"[FuelCalculator] ✅ Applied historical prediction: {prediction.AvgFuelPerLap:F2}L/lap → {CurrentData.LapsRemaining:F1} laps remaining " +
+                         $"(confidence: {prediction.ConfidenceScore:F0}%, {prediction.SessionCount} sessions)");
+        LogDebug($"Historical prediction: Usable fuel: {usableFuel:F2}L, Avg: {prediction.AvgFuelPerLap:F2}L/lap, Sputtering: {sputteringThreshold:F2}L");
     }
     
     /// <summary>
