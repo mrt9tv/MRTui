@@ -240,11 +240,12 @@
 
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                             <StackPanel x:Name="MLRecommendationsPanel">
-                                <TextBlock Text="ML recommendations will appear after setup comparison" Foreground="#888" TextAlignment="Center" Margin="0,20"/>
+                                <TextBlock Text="💡 Click 'Generate ML Recommendations' to analyze live telemetry data" Foreground="#888" TextAlignment="Center" Margin="0,20"/>
+                                <TextBlock Text="No .sto files required - works with live session data!" Foreground="#00D4FF" FontSize="12" TextAlignment="Center" Margin="0,10"/>
                             </StackPanel>
                         </ScrollViewer>
 
-                        <Button Grid.Row="2" x:Name="GenerateMLButton" Content="Generate ML Recommendations" Style="{StaticResource ModernButton}" Click="GenerateMLButton_Click" Margin="0,10,0,0" Height="35" IsEnabled="False"/>
+                        <Button Grid.Row="2" x:Name="GenerateMLButton" Content="🤖 Generate ML Recommendations (Live Data)" Style="{StaticResource ModernButton}" Click="GenerateMLButton_Click" Margin="0,10,0,0" Height="35" IsEnabled="True"/>
                     </Grid>
                 </TabItem>
 

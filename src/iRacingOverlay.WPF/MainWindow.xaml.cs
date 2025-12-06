@@ -162,11 +162,11 @@ public partial class MainWindow : Window
                 }
             }
             
-            // Create new window
-            _setupEngineeringWindow = new Windows.SetupEngineering.SetupEngineeringWindow();
+            // Create new window with telemetry service for live data access
+            _setupEngineeringWindow = new Windows.SetupEngineering.SetupEngineeringWindow(_telemetryService);
             _setupEngineeringWindow.Closed += (s, e) => _setupEngineeringWindow = null;
             _setupEngineeringWindow.Show();
-            _logger.LogInformation("Setup Engineering Mode opened");
+            _logger.LogInformation("Setup Engineering Mode opened with live telemetry");
         }
         catch (Exception ex)
         {

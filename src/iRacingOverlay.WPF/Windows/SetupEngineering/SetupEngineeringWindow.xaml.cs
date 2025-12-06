@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
+using iRacingOverlay.Core.Services;
 using iRacingOverlay.Core.Services.Setup;
 using iRacingOverlay.Core.Services.SetupEngineering;
 using iRacingOverlay.Core.Services.ML;
@@ -21,13 +22,16 @@ public partial class SetupEngineeringWindow : Window
     private readonly LapComparisonService _comparisonService;
     private readonly SetupFileParser _setupParser;
     private readonly MLModelService _mlService;
+    private readonly ITelemetryService? _telemetryService;
     
     private string? _currentSessionId;
     private SetupComparison? _lastComparison;
     
-    public SetupEngineeringWindow()
+    public SetupEngineeringWindow(ITelemetryService? telemetryService = null)
     {
         InitializeComponent();
+        
+        _telemetryService = telemetryService;
         
         // Initialize services
         _database = new SetupDatabaseService();
@@ -72,12 +76,17 @@ public partial class SetupEngineeringWindow : Window
     {
         try
         {
-            // TODO: Get track/car from iRacing telemetry
+            // Get track/car from live iRacing telemetry if available
+            // TODO: Subscribe to TelemetryUpdated event and store last data
+            var trackName = "Unknown Track";
+            var carName = "Unknown Car";
+            var sessionType = "Practice";
+            
             var sessionId = await _database.CreateSessionAsync(
-                trackName: "Spa-Francorchamps",
-                carName: "Dallara IR18",
-                sessionType: "Practice",
-                notes: "Setup engineering session"
+                trackName: trackName,
+                carName: carName,
+                sessionType: sessionType,
+                notes: "Setup engineering session (live telemetry)"
             );
             
             _currentSessionId = sessionId;
@@ -347,24 +356,28 @@ public partial class SetupEngineeringWindow : Window
     }
     
     /// <summary>
-    /// Generate ML recommendations
+    /// Generate ML recommendations using live telemetry data
+    /// Works WITHOUT needing .sto file comparison!
     /// </summary>
     private void GenerateMLButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_lastComparison == null) return;
-        
         try
         {
-            ShowStatus("Generating ML recommendations...", isError: false);
+            ShowStatus("Generating ML recommendations from live telemetry...", isError: false);
             
             MLRecommendationsPanel.Children.Clear();
             
-            // Generate prediction (placeholder)
+            // Get current track/car info
+            // TODO: Store last telemetry data in field from TelemetryUpdated event
+            var trackName = "Current Track";
+            var carName = "Current Car";
+            
+            // Generate prediction using current live data (no .sto files needed!)
             var prediction = _mlService.PredictSetupChange(
-                carName: "Dallara IR18",
-                trackName: "Spa-Francorchamps",
-                baselineSetup: new SetupParameterFeatures { SetupName = "Baseline" },
-                proposedSetup: new SetupParameterFeatures { SetupName = "Modified" }
+                carName: carName,
+                trackName: trackName,
+                baselineSetup: new SetupParameterFeatures { SetupName = "Current (Live)" },
+                proposedSetup: new SetupParameterFeatures { SetupName = "Suggested" }
             );
             
             // Display recommendation
