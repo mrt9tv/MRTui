@@ -57,6 +57,9 @@ public class FuelCalculatorService
     private readonly PitStopTracker _pitStopTracker;
     private readonly LiveFuelCalculator _liveFuelCalculator;
     
+    // Optional Fine-Tuning: Lap validation extraction
+    private readonly LapValidator _lapValidator;
+    
     // EMA (Exponential Moving Average) tracking - REMOVED: No longer used, replaced by DeltaTrackingService
     // private float _emaValue = 0f;  // Current EMA value
     // private bool _emaInitialized = false;  // Whether EMA has been initialized with first lap
@@ -114,6 +117,9 @@ public class FuelCalculatorService
         // Phase 6: Extract complex methods to services
         _pitStopTracker = new PitStopTracker();
         _liveFuelCalculator = new LiveFuelCalculator();
+        
+        // Optional Fine-Tuning: Lap validation service
+        _lapValidator = new LapValidator();
         
         // Phase 9: Initialize history service (load async in background)
         _historyService = new History.TelemetryHistoryService();
@@ -675,89 +681,21 @@ public class FuelCalculatorService
     /// <param name="fuelBeforePit">Fuel level saved before entering pits (0 if didn't pit)</param>
     private void OnLapCompleted(TelemetryData telemetry, bool wasRefueled, bool pittedThisLap, float fuelBeforePit)
     {
-        // FIX: Use saved fuel level from before pit entry to calculate fuel used
-        // This prevents refueling from contaminating the lap fuel calculation
-        float fuelAtLapEnd = pittedThisLap && fuelBeforePit > 0 ? fuelBeforePit : telemetry.FuelLevel;
-        float fuelUsed = _fuelAtLapStart - fuelAtLapEnd;
-
-        LogDebug($"LAP {telemetry.LapsCompleted} fuel calculation: Start={_fuelAtLapStart:F2}L, End={fuelAtLapEnd:F2}L, Used={fuelUsed:F3}L, Pitted={pittedThisLap}");
-
-        // ===== USER INSIGHT: TOW DETECTION USING SDK DATA ONLY =====
-        // REMOVED: Heuristic "low fuel = tow" detection (caused false positives on lap 1)
-        // NEW: Use ONLY SDK refueling flag - if fuel increased, SDK tells us directly
-        //
-        // EXAMPLE OF THE PROBLEM:
-        //   OLD: Lap 1 uses 0.044L (formation lap) → marked as "tow" → excluded from averages ❌
-        //   NEW: Lap 1 uses 0.044L → only marked invalid if it's truly a refuel event ✅
-        //
-        // BENEFITS:
-        //   - Uses actual SDK data (fuel delta > 0.3L = refuel) instead of guessing
-        //   - No false positives on legitimate low-fuel laps (formation, slow starts)
-        //   - Cleaner logic, fewer invalid lap exclusions
-        //
-        // NOTE: wasRefueled parameter already contains the SDK refueling indicator
-        //       No need for separate tow detection - refuel IS the tow indicator
-
-        // Detect out-lap: first lap after leaving pits (previous lap was pit lap OR just left pits flag)
-        bool isOutLap = _justLeftPits || (_lapHistory.Count > 0 && _lapHistory.Last().WasPitLap);
-
-        // FIX: Formation lap (lap 0) is skipped BEFORE calling this function
-        // No need to check for formation lap here
-        bool isFormationLap = false;
-
-        // FIX: Check if this is a pace lap using SessionState from lap START (not lap END)
-        // PROBLEM: If lap 1 starts during parade (SessionState=3) but green flag drops mid-lap,
-        //          SessionState will be 4 (Racing) when lap completes, incorrectly marking it as non-pace
-        // SOLUTION: Use _sessionStateAtLapStart which was saved when the lap began
-        bool isPaceLap = _sessionStateAtLapStart == 3;
-
-        // FIX: WasPitLap should ONLY be true if we actually REFUELED (not low fuel or tow)
-        // Only actual refueling should mark a lap as a pit lap
-        // Tow is handled separately and should not exclude lap from averages
-        bool wasPitLap = wasRefueled;
-        
-        // FIX: Detect grid start partial laps - when grid is behind S/F line
-        // At race start, lap 1 may only cover a small portion of the track (grid to S/F)
-        // This uses very little fuel (e.g., 0.09L instead of 1.0L) and corrupts averages
-        // Detection: Lap 1 with less than 50% track distance covered
-        float lapDistanceCovered = 1.0f - _lapDistPctAtLapStart; // How much of track we actually covered
-        if (lapDistanceCovered < 0) lapDistanceCovered += 1.0f; // Handle wrap-around
-        bool isGridStartLap = telemetry.LapsCompleted == 1 && lapDistanceCovered < 0.5f;
-        
-        if (isGridStartLap)
-        {
-            LogDebug($"🏁 GRID START LAP DETECTED: Lap 1 only covered {lapDistanceCovered:P0} of track (started at {_lapDistPctAtLapStart:P0})");
-            LogDebug($"   Fuel used: {fuelUsed:F3}L - This lap will be EXCLUDED from averages");
-        }
-
-        // DEBUG: Log lap completion details with ALL validity flags
-        LogDebug($"Lap {telemetry.LapsCompleted} completed: FuelAtStart={_fuelAtLapStart:F3}L, FuelAtEnd={fuelAtLapEnd:F3}L, FuelUsed={fuelUsed:F3}L");
-        LogDebug($"  Flags: PitLap={wasPitLap}, OutLap={isOutLap}, Formation={isFormationLap}, PaceLap={isPaceLap}, GridStart={isGridStartLap} (SessionState@Start={_sessionStateAtLapStart}, @End={telemetry.SessionState}), EnteredPitRoad={pittedThisLap}");
-
-        // Create lap history record
-        var lapRecord = new FuelLapHistory
-        {
-            LapNumber = telemetry.LapsCompleted,
-            FuelUsed = Math.Max(0, fuelUsed), // Don't record negative fuel
-            LapTime = telemetry.LapLastLapTime,
-            FuelAtStart = _fuelAtLapStart,
-            FuelAtEnd = fuelAtLapEnd, // Use saved fuel if pitted, current fuel otherwise
-            FlagStatus = _currentFlagStatus,
-            WasPitLap = wasPitLap, // True if refueled (or towed with refuel)
-            RefuelAmount = wasRefueled ? CurrentData.LastRefuelAmount : 0, // Only record refuel if SDK detected fuel increase
-            IsFormationLap = isFormationLap,
-            IsOutLap = isOutLap, // Flag out-laps for exclusion from averages (cool tires, careful driving)
-            IsIncompleteLap = false, // If OnLapCompleted fires, the lap WAS completed (LapDistPct resets to 0)
-            IsGridStartLap = isGridStartLap, // FIX: Grid start partial lap (grid behind S/F line)
-            LapDistanceCovered = lapDistanceCovered, // Track percentage of lap covered
-            Timestamp = DateTime.UtcNow,
-            IncidentCountAtStart = _lastIncidentCount,  // Incident count at lap start
-            IncidentCountAtEnd = telemetry.PlayerCarMyIncidentCount,  // Incident count at lap end
-            SessionState = _sessionStateAtLapStart  // FIX: Use SessionState from lap START for accurate pace lap detection
-        };
-        
-        // DEBUG: Log validation result
-        LogDebug($"  IsValidForAveraging={lapRecord.IsValidForAveraging} (needs: !PitLap && !Formation && !Incomplete && !PaceLap && !OutLap && !GridStart && FuelUsed>0)");
+        // Optional Fine-Tuning: Use LapValidator for all lap validation logic
+        var previousLapWasPitLap = _lapHistory.Count > 0 && _lapHistory.Last().WasPitLap;
+        var lapRecord = _lapValidator.ValidateAndCreateLapRecord(
+            telemetry,
+            _fuelAtLapStart,
+            wasRefueled,
+            pittedThisLap,
+            fuelBeforePit,
+            _justLeftPits,
+            _sessionStateAtLapStart,
+            _lapDistPctAtLapStart,
+            previousLapWasPitLap,
+            _currentFlagStatus,
+            _lastIncidentCount
+        );
         
         // Update incident tracking for next lap
         _lastIncidentCount = telemetry.PlayerCarMyIncidentCount;
@@ -765,21 +703,11 @@ public class FuelCalculatorService
         _lapHistory.Add(lapRecord);
         CurrentData.LapsCompleted = telemetry.LapsCompleted;
         
-        // Update last lap fuel usage
+        // Update last lap fuel usage and lap-to-lap delta
         if (lapRecord.IsValidForAveraging)
         {
             CurrentData.FuelUsedLastLap = lapRecord.FuelUsed;
-            
-            // Calculate lap-to-lap delta
-            var previousValidLap = _lapHistory
-                .Where(l => l.IsValidForAveraging && l.LapNumber < lapRecord.LapNumber)
-                .OrderByDescending(l => l.LapNumber)
-                .FirstOrDefault();
-            
-            if (previousValidLap != null)
-            {
-                CurrentData.LapToLapDelta = lapRecord.FuelUsed - previousValidLap.FuelUsed;
-            }
+            CurrentData.LapToLapDelta = _lapValidator.CalculateLapToLapDelta(_lapHistory, lapRecord);
         }
         
         // Reset for next lap
