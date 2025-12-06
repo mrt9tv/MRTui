@@ -57,8 +57,9 @@ public class FuelCalculatorService
     private readonly PitStopTracker _pitStopTracker;
     private readonly LiveFuelCalculator _liveFuelCalculator;
     
-    // Optional Fine-Tuning: Lap validation extraction
+    // Optional Fine-Tuning: Extracted service fields
     private readonly LapValidator _lapValidator;
+    private readonly TemperatureCompensationService _temperatureCompensation;
     
     // EMA (Exponential Moving Average) tracking - REMOVED: No longer used, replaced by DeltaTrackingService
     // private float _emaValue = 0f;  // Current EMA value
@@ -118,8 +119,9 @@ public class FuelCalculatorService
         _pitStopTracker = new PitStopTracker();
         _liveFuelCalculator = new LiveFuelCalculator();
         
-        // Optional Fine-Tuning: Lap validation service
+        // Optional Fine-Tuning: Extracted services
         _lapValidator = new LapValidator();
+        _temperatureCompensation = new TemperatureCompensationService();
         
         // Phase 9: Initialize history service (load async in background)
         _historyService = new History.TelemetryHistoryService();
@@ -1300,59 +1302,13 @@ public class FuelCalculatorService
     public IReadOnlyList<FuelLapHistory> GetLapHistory() => _lapHistory.AsReadOnly();
     
     /// <summary>
+    /// <summary>
     /// Apply temperature correction to fuel consumption averages (ENHANCEMENT)
-    /// Adjusts fuel consumption based on air temperature differences from historical baseline
-    /// Scientific basis: Hotter air = less dense = less power = richer mixture = more fuel
-    /// Rule of thumb: +10°C = +2-3% fuel consumption
+    /// Optional Fine-Tuning: Delegated to TemperatureCompensationService
     /// </summary>
     private void ApplyTemperatureCorrection(TelemetryData telemetry)
     {
-        // Skip if no historical data available
-        if (_sessionStats == null || !_sessionStats.HasSufficientData)
-        {
-            CurrentData.TemperatureCorrectionFactor = 1.0f;
-            CurrentData.TemperatureCorrectionReason = "";
-            return;
-        }
-
-        float currentAirTemp = telemetry.AirTemp;
-        float historicalAirTemp = _sessionStats.AvgAirTemp;
-        float tempDelta = currentAirTemp - historicalAirTemp;
-
-        // Apply correction: +10°C = +2.5% fuel consumption
-        // Formula: 1.0 + (tempDelta * 0.0025)
-        // Example: +12°C → 1.0 + (12 * 0.0025) = 1.03 (3% more fuel)
-        float correctionFactor = 1.0f + (tempDelta * 0.0025f);
-
-        // Limit correction to ±10% to avoid extreme values from sensor errors
-        correctionFactor = Math.Clamp(correctionFactor, 0.9f, 1.1f);
-
-        CurrentData.TemperatureCorrectionFactor = correctionFactor;
-
-        if (Math.Abs(tempDelta) > 5f)
-        {
-            float correctionPct = (correctionFactor - 1.0f) * 100f;
-            CurrentData.TemperatureCorrectionReason =
-                $"Air temp {tempDelta:+0.0;-0.0}°C vs historical avg ({correctionPct:+0.0;-0.0}% fuel)";
-            LogDebug($"TEMP CORRECTION: {currentAirTemp:F1}°C vs {historicalAirTemp:F1}°C → {correctionFactor:F3}x factor ({correctionPct:+0.0;-0.0}%)");
-
-            // FIX #3 (CORRECTED): Apply temperature correction to stored averages ONCE per calculation cycle
-            // This is called AFTER CalculateAverages() populates the values, so we modify them once
-            // On next cycle, CalculateAverages() will recalculate from raw lap data, then this applies correction again
-            // This prevents compounding because we always start from fresh raw averages each cycle
-            if (CurrentData.AvgFuelPerLap_Last > 0)
-                CurrentData.AvgFuelPerLap_Last *= correctionFactor;
-            if (CurrentData.AvgFuelPerLap_L5 > 0)
-                CurrentData.AvgFuelPerLap_L5 *= correctionFactor;
-            if (CurrentData.AvgFuelPerLap_L10 > 0)
-                CurrentData.AvgFuelPerLap_L10 *= correctionFactor;
-            if (CurrentData.AvgFuelPerLap_Session > 0)
-                CurrentData.AvgFuelPerLap_Session *= correctionFactor;
-        }
-        else
-        {
-            CurrentData.TemperatureCorrectionReason = "";
-        }
+        _temperatureCompensation.ApplyTemperatureCorrection(telemetry, _sessionStats, CurrentData);
     }
 
     /// <summary>
