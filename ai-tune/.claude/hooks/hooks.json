@@ -1,0 +1,83 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.log('This project uses beads (bd) for persistent task tracking across sessions.\\n\\nQuick Commands:\\n- /bd-ready  Show unblocked tasks ready to work on\\n- /bd-work <id>  Claim and start a task\\n- /bd-complete <id>  Finish task and find next work\\n- /bd-plan  Create implementation plan with bd issues\\n\\nRun: bd ready --json to check for previous work.\\nCheck .claude-sessions/ for recent session files.')\"",
+            "statusMessage": "Loading bd context..."
+          }
+        ],
+        "description": "Initialize session with bd context and check for previous work"
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.error('[Hook] Context compaction starting. Save critical state: bd update <id> --notes and create session file in .claude-sessions/')\"",
+            "statusMessage": "Saving pre-compaction context..."
+          }
+        ],
+        "description": "Remind to save critical state before context compaction"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const cmd=i.tool_input&&i.tool_input.command||'';if(/(npm run dev|pnpm( run)? dev|yarn dev|bun run dev|python -m http|flask run|uvicorn)/.test(cmd)){console.error('[Hook] BLOCKED: Dev server must run in tmux for log access');console.error('[Hook] Use: tmux new-session -d -s dev \\\"<command>\\\"');console.error('[Hook] Then: tmux attach -t dev');process.exit(2)}}catch(e){}})\""
+          }
+        ],
+        "description": "Block dev servers outside tmux - ensures log access"
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const cmd=i.tool_input&&i.tool_input.command||'';if(/git push/.test(cmd)){console.error('[Hook] Review changes before push...')}}catch(e){}})\""
+          }
+        ],
+        "description": "Reminder before git push"
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const p=i.tool_input&&i.tool_input.file_path||'';if(/\\.(md|txt)$/.test(p)&&!/(README|CLAUDE|AGENTS|CONTRIBUTING)\\.md$/.test(p)&&!p.includes('.claude-sessions/')){console.error('[Hook] BLOCKED: Unnecessary documentation file: '+p);console.error('[Hook] Use README.md or .claude-sessions/ for docs');process.exit(2)}}catch(e){}})\""
+          }
+        ],
+        "description": "Block random .md files except README and session files"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const i=JSON.parse(d);const cmd=i.tool_input&&i.tool_input.command||'';if(/bd close/.test(cmd)){console.error('[Hook] Task closed! Run /bd-ready to see newly unblocked tasks')}else if(/bd create.*--parent/.test(cmd)){console.error('[Hook] Task created under epic. Set dependencies with bd dep add if needed')}else if(/(npm test|pnpm test|yarn test|pytest|go test|cargo test)/.test(cmd)){console.error('[Hook] Tests complete. Update bd task with results: bd update <id> --notes')}else if(/gh pr create/.test(cmd)){console.error('[Hook] PR created! Close related bd tasks: bd close <id> -m Merged')}}catch(e){}})\""
+          }
+        ],
+        "description": "Context tips after bd operations, tests, and PRs"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"console.error('[Hook] Session ending. Checklist: 1) Update bd tasks with notes 2) Close completed tasks 3) Save session to .claude-sessions/ 4) Run bd sync and git push')\""
+          }
+        ],
+        "description": "Session end checklist for memory persistence"
+      }
+    ]
+  }
+}

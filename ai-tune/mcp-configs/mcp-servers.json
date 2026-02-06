@@ -1,0 +1,71 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "<your-github-pat>"
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {}
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "env": {}
+    },
+    "supabase": {
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server"],
+      "env": {
+        "SUPABASE_URL": "<your-supabase-url>",
+        "SUPABASE_SERVICE_ROLE_KEY": "<your-service-role-key>"
+      }
+    },
+    "vercel": {
+      "command": "npx",
+      "args": ["-y", "vercel-mcp-server"],
+      "env": {
+        "VERCEL_TOKEN": "<your-vercel-token>"
+      }
+    },
+    "railway": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-railway"],
+      "env": {
+        "RAILWAY_TOKEN": "<your-railway-token>"
+      }
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "firecrawl-mcp"],
+      "env": {
+        "FIRECRAWL_API_KEY": "<your-firecrawl-key>"
+      }
+    },
+    "cloudflare": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-cloudflare"],
+      "env": {
+        "CLOUDFLARE_API_TOKEN": "<your-cloudflare-token>"
+      }
+    },
+    "clickhouse": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-clickhouse"],
+      "env": {
+        "CLICKHOUSE_HOST": "<your-clickhouse-host>",
+        "CLICKHOUSE_USER": "default",
+        "CLICKHOUSE_PASSWORD": "<your-password>"
+      }
+    }
+  },
+  "_comments": {
+    "guidance": "Don't enable all MCPs at once. Context window can shrink from 200k to 70k tokens.",
+    "rule_of_thumb": "20-30 configured, <10 enabled per project, <80 tools active",
+    "instructions": "Replace <placeholder> values with your actual API keys. Remove servers you don't need."
+  }
+}

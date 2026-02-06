@@ -1,0 +1,189 @@
+AI-TUNE - Complete Directory Structure
+======================================
+
+ai-tune/
+├── install.ps1                          # Windows installation script
+├── install.sh                           # Mac/Linux installation script
+├── README.md                            # Main documentation
+├── QUICKSTART.md                        # Detailed quick start guide
+├── QUICKSTART_SHORT.md                  # Ultra-short quick start
+├── INTEGRATION_CHECKLIST.md             # Setup verification checklist
+├── INTEGRATION_COMPLETE.md              # Integration completion notes
+├── STRUCTURE.txt                        # This file
+│
+├── examples/                            # Example configuration files
+│   ├── CLAUDE.md                        # Project-level CLAUDE.md template
+│   └── user-CLAUDE.md                   # User-level CLAUDE.md template
+│
+├── mcp-configs/                         # MCP server configurations
+│   └── mcp-servers.json                 # GitHub, Supabase, Vercel, etc.
+│
+├── .claude-sessions/                    # Session memory persistence
+│   └── template.md                      # Session summary template
+│
+└── .claude/                             # Claude Code configuration root
+    │
+    ├── agents/ (15 files)               # Specialized subagents
+    │   ├── architect.md                 # System design decisions
+    │   ├── bd-planner.md                # Plan + create bd issues
+    │   ├── bd-task-agent.md             # Beads task execution
+    │   ├── build-error-resolver.md      # Fix build errors
+    │   ├── code-reviewer.md             # Quality & security review
+    │   ├── database-reviewer.md         # Database schema review
+    │   ├── doc-updater.md               # Documentation sync
+    │   ├── e2e-runner.md                # Playwright E2E testing
+    │   ├── go-build-resolver.md         # Go build error resolution
+    │   ├── go-reviewer.md               # Go code review
+    │   ├── planner.md                   # Feature implementation planning
+    │   ├── python-reviewer.md           # Python code review
+    │   ├── refactor-cleaner.md          # Dead code cleanup
+    │   ├── security-reviewer.md         # Security vulnerability analysis
+    │   └── tdd-guide.md                 # Test-driven development
+    │
+    ├── commands/ (61 files)             # Slash commands
+    │   ├── audit.md                     # Security audit
+    │   ├── bd-complete.md               # Finish bd task
+    │   ├── bd-plan.md                   # Plan with bd issues
+    │   ├── bd-ready.md                  # Show ready tasks
+    │   ├── bd-work.md                   # Start bd task
+    │   ├── blocked.md                   # Show blocked issues
+    │   ├── build-fix.md                 # Fix build errors
+    │   ├── checkpoint.md                # Save verification state
+    │   ├── close.md                     # Close bd issue
+    │   ├── code-review.md               # Quality review
+    │   ├── comments.md                  # Manage issue comments
+    │   ├── compact.md                   # Manual compaction
+    │   ├── create.md                    # Create bd issue
+    │   ├── daemon.md                    # Daemon management
+    │   ├── daemons.md                   # List daemons
+    │   ├── delete.md                    # Delete bd issue
+    │   ├── dep.md                       # Dependency management
+    │   ├── e2e.md                       # E2E test generation
+    │   ├── epic.md                      # Create epic
+    │   ├── eval.md                      # Evaluation workflow
+    │   ├── evolve.md                    # Cluster instincts into skills
+    │   ├── export.md                    # Export issues
+    │   ├── go-build.md                  # Fix Go build errors
+    │   ├── go-review.md                 # Go code review
+    │   ├── go-test.md                   # Go TDD workflow
+    │   ├── import.md                    # Import issues
+    │   ├── init.md                      # Initialize bd
+    │   ├── instinct-export.md           # Export instincts
+    │   ├── instinct-import.md           # Import instincts
+    │   ├── instinct-status.md           # View instincts
+    │   ├── label.md                     # Manage labels
+    │   ├── learn.md                     # Extract patterns mid-session
+    │   ├── list.md                      # List bd issues
+    │   ├── orchestrate.md               # Agent orchestration
+    │   ├── plan-to-beads.md             # Convert plans to bd tasks
+    │   ├── plan.md                      # Implementation planning
+    │   ├── pm2.md                       # PM2 service management
+    │   ├── prime.md                     # bd prime context loader
+    │   ├── python-review.md             # Python code review
+    │   ├── quickstart.md                # Quick start helper
+    │   ├── ready.md                     # Show ready issues
+    │   ├── refactor-clean.md            # Dead code removal
+    │   ├── rename-prefix.md             # Rename prefix
+    │   ├── reopen.md                    # Reopen bd issue
+    │   ├── restore.md                   # Restore issue
+    │   ├── search.md                    # Search issues
+    │   ├── sessions.md                  # Session memory
+    │   ├── setup-pm.md                  # Package manager setup
+    │   ├── show.md                      # Show issue details
+    │   ├── skill-create.md              # Generate skill from history
+    │   ├── stats.md                     # Issue statistics
+    │   ├── sync.md                      # Sync bd data
+    │   ├── tdd.md                       # TDD workflow
+    │   ├── template.md                  # Template management
+    │   ├── test-coverage.md             # Coverage analysis
+    │   ├── update-codemaps.md           # Update code maps
+    │   ├── update-docs.md               # Update documentation
+    │   ├── update.md                    # Update bd issue
+    │   ├── verify.md                    # Verification loop
+    │   ├── version.md                   # Version info
+    │   └── workflow.md                  # Workflow management
+    │
+    ├── contexts/ (3 files)              # Workflow mode contexts
+    │   ├── dev.md                       # Development focus
+    │   ├── research.md                  # Research/exploration focus
+    │   └── review.md                    # Code review focus
+    │
+    ├── hooks/                           # Automation triggers
+    │   └── hooks.json                   # 7 hooks across 5 events
+    │
+    ├── rules/                           # Project-wide guidelines
+    │   ├── README.md                    # Rules structure guide
+    │   ├── agents.md                    # Agent orchestration rules
+    │   ├── coding-style.md              # Immutability, file organization
+    │   ├── git-workflow.md              # Commit format, PR process
+    │   ├── hooks.md                     # Hook architecture
+    │   ├── patterns.md                  # Design patterns
+    │   ├── performance.md               # Model selection, context mgmt
+    │   ├── security.md                  # Mandatory security checks
+    │   ├── testing.md                   # TDD, 80% coverage requirement
+    │   │
+    │   ├── typescript/ (5 files)        # TypeScript/JS specific
+    │   │   ├── coding-style.md          # Immutability, Zod, error handling
+    │   │   ├── hooks.md                 # Prettier, tsc, console.log
+    │   │   ├── patterns.md              # API response, hooks, repository
+    │   │   ├── security.md              # Secret management, XSS
+    │   │   └── testing.md               # Jest/Vitest, Playwright
+    │   │
+    │   ├── python/ (4 files)            # Python specific
+    │   │   ├── coding-style.md          # PEP 8, type annotations, black
+    │   │   ├── patterns.md              # Protocol, dataclasses, context mgrs
+    │   │   ├── security.md              # os.environ, bandit
+    │   │   └── testing.md               # pytest, coverage, marks
+    │   │
+    │   └── golang/ (3 files)            # Go specific
+    │       ├── coding-style.md          # gofmt, interfaces, error wrapping
+    │       ├── hooks.md                 # goimports, go vet, staticcheck
+    │       └── testing.md               # Table-driven, race detection
+    │
+    └── skills/ (30 directories)         # Workflow patterns & domain knowledge
+        ├── backend-patterns/            # API, database, caching patterns
+        ├── beads/                       # Beads integration (19 files)
+        │   ├── SKILL.md
+        │   ├── CLAUDE.md
+        │   ├── README.md
+        │   ├── adr/
+        │   │   └── 0001-bd-prime-as-source-of-truth.md
+        │   └── resources/ (15 files)
+        ├── clickhouse-io/               # ClickHouse analytics
+        ├── coding-standards/            # Language-agnostic best practices
+        ├── configure-ai-tune/           # Setup wizard
+        ├── continuous-learning/         # Auto-extract patterns
+        ├── continuous-learning-v2/      # Instinct-based learning
+        ├── django-patterns/             # Django web framework
+        ├── django-security/             # Django security
+        ├── django-tdd/                  # Django testing
+        ├── django-verification/         # Django verification
+        ├── eval-harness/                # Evaluation-driven development
+        ├── frontend-patterns/           # React, Next.js patterns
+        ├── golang-patterns/             # Idiomatic Go patterns
+        ├── golang-testing/              # Go testing, TDD, benchmarks
+        ├── iterative-retrieval/         # Progressive context refinement
+        ├── java-coding-standards/       # Java conventions
+        ├── jpa-patterns/                # JPA/Hibernate
+        ├── postgres-patterns/           # PostgreSQL patterns
+        ├── project-guidelines-example/  # Template for project skills
+        ├── python-patterns/             # Idiomatic Python
+        ├── python-testing/              # pytest, TDD, fixtures
+        ├── security-review/             # Security checklists
+        ├── springboot-patterns/         # Spring Boot
+        ├── springboot-security/         # Spring Security
+        ├── springboot-tdd/              # Spring Boot testing
+        ├── springboot-verification/     # Spring verification
+        ├── strategic-compact/           # Compaction strategies
+        ├── tdd-workflow/                # TDD methodology
+        └── verification-loop/           # Continuous verification
+
+TOTALS:
+  Agents:     15
+  Commands:   61
+  Skills:     30
+  Rules:      9 common + 5 typescript + 4 python + 3 golang = 21
+  Contexts:   3
+  Hooks:      7 (in 1 config file)
+  Examples:   2
+  MCP:        1 config template
