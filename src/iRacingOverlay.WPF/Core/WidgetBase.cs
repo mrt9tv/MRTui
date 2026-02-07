@@ -87,8 +87,8 @@ public abstract class WidgetBase : Window
         ResizeMode = ResizeMode.NoResize;
 
         // Default size (will be overridden by config)
-        Width = 240;
-        Height = 240;
+        Width = 280;
+        Height = 280;
     }
 
     #region Screen Centering

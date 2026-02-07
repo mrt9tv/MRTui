@@ -164,9 +164,15 @@ public sealed class FuelCalculatorService
         CurrentData.LapsDifference = CurrentData.LapsRemaining - CurrentData.IRacingLapsRemaining;
 
         // ── race strategy ───────────────────────────────────────────
-        CurrentData.RaceLapsRemaining = data.SessionLapsRemain;
+        // iRacing returns huge values (32767) for SessionLapsRemain in practice/qual/timed.
+        // Cap at 500 laps — anything beyond is clearly not a real lap-limited race.
+        const int MAX_SANE_LAPS = 500;
+        int rawLapsRemain = data.SessionLapsRemain;
+        bool hasValidLapCount = rawLapsRemain > 0 && rawLapsRemain <= MAX_SANE_LAPS;
+
+        CurrentData.RaceLapsRemaining = hasValidLapCount ? rawLapsRemain : 0;
         CurrentData.SessionTimeRemaining = data.SessionTimeRemain;
-        CurrentData.IsTimedSession = data.SessionLapsTotal <= 0 && data.SessionTimeRemain > 0;
+        CurrentData.IsTimedSession = !hasValidLapCount && data.SessionTimeRemain > 0;
 
         // For timed sessions, estimate laps remaining from time + avg lap time
         int effectiveRaceLaps = CurrentData.RaceLapsRemaining;

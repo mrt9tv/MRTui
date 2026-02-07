@@ -130,7 +130,7 @@ public class MRTOneWidget : WidgetBase
         /// <summary>Front/back base sweep angle (degrees)</summary>
         public const double ARC_FB_BASE_SWEEP = 57; // 60 - 3 gap
         /// <summary>Left/right base sweep angle (degrees)</summary>
-        public const double ARC_LR_BASE_SWEEP = 100; // 120 - 20 smaller sides
+        public const double ARC_LR_BASE_SWEEP = 87; // smaller side coverage
         /// <summary>Per-ring angular taper (degrees removed from each side per ring)</summary>
         public const double ARC_TAPER_PER_RING = 2;
 
@@ -1494,6 +1494,7 @@ public class MRTOneWidget : WidgetBase
     private static readonly SolidColorBrush s_radarOrange = new(Color.FromRgb(255, 140, 0));
     private static readonly SolidColorBrush s_radarOrangeRed = new(Color.FromRgb(255, 80, 0));
     private static readonly SolidColorBrush s_radarRed = new(Color.FromRgb(255, 20, 20));
+    private static readonly SolidColorBrush s_radarSideOrange = new(Color.FromRgb(255, 128, 128)); // #FF8080 — side arc
     private static readonly SolidColorBrush s_radarTransparent = new(Colors.Transparent);
 
     static MRTOneWidget()
@@ -1505,6 +1506,7 @@ public class MRTOneWidget : WidgetBase
         s_radarOrange.Freeze();
         s_radarOrangeRed.Freeze();
         s_radarRed.Freeze();
+        s_radarSideOrange.Freeze();
         s_radarTransparent.Freeze();
     }
 
@@ -1601,7 +1603,8 @@ public class MRTOneWidget : WidgetBase
 
     /// <summary>
     /// Map ProximityZone to how many rings (counting from outermost) should be active.
-    /// VeryClose = all 6, Close = 5, Near = 4, Careful = 3, Far = 2, Clear = 0.
+    /// VeryClose = all 6, Close = 5, Near = 4, Careful = 3, Far = 0 (safe), Clear = 0.
+    /// Far is >16m — too far for visual warning, keep arcs clean.
     /// </summary>
     private static int GetActiveRingCount(ProximityZone zone) => zone switch
     {
@@ -1609,13 +1612,12 @@ public class MRTOneWidget : WidgetBase
         ProximityZone.Close => 5,
         ProximityZone.Near => 4,
         ProximityZone.Careful => 3,
-        ProximityZone.Far => 2,
-        _ => 0
+        _ => 0  // Far + Clear = no rings
     };
 
     /// <summary>
     /// Map ProximityZone to the fill colour for active rings.
-    /// Closer → warmer colours.
+    /// Closer → warmer colours. Far returns transparent (no rings active).
     /// </summary>
     private static Brush GetRingColor(ProximityZone zone) => zone switch
     {
@@ -1623,7 +1625,6 @@ public class MRTOneWidget : WidgetBase
         ProximityZone.Close => s_radarOrangeRed,
         ProximityZone.Near => s_radarOrange,
         ProximityZone.Careful => s_radarYellow,
-        ProximityZone.Far => s_radarYellowGreen,
         _ => s_radarTransparent
     };
 
@@ -1658,18 +1659,19 @@ public class MRTOneWidget : WidgetBase
     }
 
     /// <summary>
-    /// Update a single side arc (left/right). Binary: fades in when present.
+    /// Update a single side arc (left/right). Always #FF8080 orange.
+    /// Binary presence: fades in when car present, two cars = higher opacity.
     /// </summary>
     private static void UpdateSideArc(System.Windows.Shapes.Path arc, bool carPresent, bool twoCars)
     {
         if (twoCars)
         {
-            arc.Fill = s_radarRed;
-            arc.Opacity = 0.60;
+            arc.Fill = s_radarSideOrange;
+            arc.Opacity = 0.70;
         }
         else if (carPresent)
         {
-            arc.Fill = s_radarOrange;
+            arc.Fill = s_radarSideOrange;
             arc.Opacity = 0.50;
         }
         else
