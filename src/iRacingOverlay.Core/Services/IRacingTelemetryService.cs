@@ -196,8 +196,6 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     // Lap time tracking
     private int _lastLap = -1;
     private DateTime _lapStartTime = DateTime.UtcNow;
-    private float _sessionBestLapTime = float.MaxValue;
-    private float _personalBestLapTime = float.MaxValue;
     
     // Update rate tracking (60Hz telemetry)
     private int _updateCount = 0;
@@ -470,24 +468,15 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             {
                 _lastLap = sdkData.Lap.GetValueOrDefault();
                 _lapStartTime = DateTime.UtcNow;
-                
-                // Update best lap times when lap completes
-                if (sdkData.LapLastLapTime.GetValueOrDefault() > 0 && sdkData.LapLastLapTime.GetValueOrDefault() < _personalBestLapTime)
-                {
-                    _personalBestLapTime = sdkData.LapLastLapTime.GetValueOrDefault();
-                }
-                if (sdkData.LapBestLapTime.GetValueOrDefault() > 0 && sdkData.LapBestLapTime.GetValueOrDefault() < _sessionBestLapTime)
-                {
-                    _sessionBestLapTime = sdkData.LapBestLapTime.GetValueOrDefault();
-                }
             }
             
             // Calculate current lap time
             float currentLapTime = (float)(DateTime.UtcNow - _lapStartTime).TotalSeconds;
             
-            // Calculate deltas (negative = current lap is faster)
-            float deltaToBest = _personalBestLapTime < float.MaxValue ? currentLapTime - _personalBestLapTime : 0f;
-            float deltaToSession = _sessionBestLapTime < float.MaxValue ? currentLapTime - _sessionBestLapTime : 0f;
+            // Deltas: Use SDK-provided values (accurate, already calculated by iRacing)
+            // SDK provides deltas to player's personal best AND overall session best
+            float deltaToBest = sdkData.LapDeltaToBestLap.GetValueOrDefault();
+            float deltaToSession = sdkData.LapDeltaToSessionBestLap.GetValueOrDefault();
             
             // Convert SDK TelemetryData to our Models.TelemetryData
             var data = new Models.TelemetryData

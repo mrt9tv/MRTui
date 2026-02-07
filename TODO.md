@@ -7,14 +7,14 @@
 
 ## Widgets — Planned
 
+### 1. Contextual Center Field Enhancement (MRT One)
+Auto-swap the center display based on situation: show gap-to-car-ahead during racing, fuel remaining under caution, lap delta on out-laps, and "PIT NOW" countdown when fuel is critical. One smart field replaces needing to manually toggle.
+
 ### 2. Relative / Timing Board Widget
 A compact leaderboard showing cars around you (3 ahead, 3 behind) with intervals, driver names, and pit status — essential for race strategy.
 
 ### 11. Delta Bar Widget
 A dedicated horizontal widget showing live lap delta (ahead/behind best/optimal) with colour-coded gradient, similar to SimHub delta bars.
-
-### 12. Tyre Wear Heatmap Widget
-4-tyre visual with per-corner temperature and wear shown as colour-coded quadrants (inner/middle/outer), like real tyre engineering dashboards.
 
 ### 13. Track Map Widget
 A minimap of the current circuit with coloured dots for all cars, highlighting your position, cars within proximity, and pit lane entries.
@@ -40,6 +40,9 @@ Live sector splits comparing current lap to personal best, session best, and ove
 ---
 
 ## Systems — Planned
+### 20. Turn Number + Name Widget
+A small widget displaying the current turn number and turn name (e.g., "T3: Casino Square"), updating dynamically as you navigate the track. Useful for referencing setup notes, coaching instructions, or track guide videos.
+
 
 ### 3. Pit Strategy Calculator
 Auto-calculate mandatory pit windows, optimal pit lap based on remaining fuel laps, tyre degradation rate, and undercut/overcut gap analysis.
