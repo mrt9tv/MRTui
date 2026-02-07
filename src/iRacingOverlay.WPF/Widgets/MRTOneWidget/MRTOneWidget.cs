@@ -116,9 +116,9 @@ public class MRTOneWidget : WidgetBase
         /// <summary>RPM bead animation timer interval (~30 FPS for smooth animation)</summary>
         public const int RPM_ANIMATION_INTERVAL_MS = 33;
 
-        // === Enhanced Radar Arc Overlay (5-ring system outside circle) ===
+        // === Enhanced Radar Arc Overlay (6-ring system outside circle) ===
         /// <summary>Number of concentric arc rings per quadrant (front/back)</summary>
-        public const int ARC_RING_COUNT = 5;
+        public const int ARC_RING_COUNT = 6;
         /// <summary>Gap (px) between circle outer edge and first arc ring</summary>
         public const double ARC_GAP_FROM_CIRCLE = 7;
         /// <summary>Spacing between adjacent arc rings (px)</summary>
@@ -130,14 +130,21 @@ public class MRTOneWidget : WidgetBase
         /// <summary>Front/back base sweep angle (degrees)</summary>
         public const double ARC_FB_BASE_SWEEP = 57; // 60 - 3 gap
         /// <summary>Left/right base sweep angle (degrees)</summary>
-        public const double ARC_LR_BASE_SWEEP = 117; // 120 - 3 gap
+        public const double ARC_LR_BASE_SWEEP = 100; // 120 - 20 smaller sides
         /// <summary>Per-ring angular taper (degrees removed from each side per ring)</summary>
         public const double ARC_TAPER_PER_RING = 2;
 
         // Ring thickness per layer (innermost → outermost)
-        public static readonly double[] ARC_RING_THICKNESS = { 4.5, 3.5, 3.0, 2.5, 2.0 };
-        // Ring max opacity per layer (innermost → outermost)
-        public static readonly double[] ARC_RING_MAX_OPACITY = { 0.55, 0.42, 0.32, 0.22, 0.13 };
+        public static readonly double[] ARC_RING_THICKNESS = { 4.5, 4.0, 3.5, 3.0, 2.5, 2.0 };
+        // Ring max opacity per layer: 0.85 (innermost) stepping down to 0.25 (outermost)
+        public static readonly double[] ARC_RING_MAX_OPACITY = { 0.85, 0.73, 0.61, 0.49, 0.37, 0.25 };
+
+        /// <summary>Slow blink interval for Close zone (ms)</summary>
+        public const int ARC_SLOW_BLINK_INTERVAL_MS = 400;
+        /// <summary>Fast blink interval for VeryClose (ms) — normal</summary>
+        public const int ARC_FAST_BLINK_INTERVAL_MS = 125;
+        /// <summary>Multiplier for last-lap blink speed (2× faster)</summary>
+        public const double ARC_LAST_LAP_BLINK_MULTIPLIER = 0.5;
 
         // === Visual Effects ===
         /// <summary>Glow effect blur radius for center text</summary>
@@ -208,9 +215,12 @@ public class MRTOneWidget : WidgetBase
     
     // Blinking timers for critical warnings
     private readonly DispatcherTimer _blinkTimer;           // 250ms for fuel (slow blink)
-    private readonly DispatcherTimer _radarBlinkTimer;      // 125ms for radar (fast blink)
+    private readonly DispatcherTimer _radarBlinkTimer;      // 125ms for radar VeryClose (fast blink)
+    private readonly DispatcherTimer _arcSlowBlinkTimer;    // 400ms for Close zone (slow pulse)
     private bool _blinkState = false;
     private bool _radarBlinkState = false;
+    private bool _arcSlowBlinkState = false;
+    private bool _isLastLap = false;                        // Doubles blink speed on final lap
     
     // Brake bias overlay UI state (not in StateManager - widget-specific)
     private DispatcherTimer? _brakeBiasHideTimer;       // Auto-hide timer
@@ -632,13 +642,21 @@ public class MRTOneWidget : WidgetBase
         _blinkTimer.Tick += OnBlinkTimerTick;
         _blinkTimer.Start();
 
-        // Setup radar blinking timer for front/back critical proximity (fast blink)
+        // Setup radar blinking timer for front/back VeryClose proximity (fast blink)
         _radarBlinkTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.RADAR_BLINK_INTERVAL_MS)
+            Interval = TimeSpan.FromMilliseconds(LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS)
         };
         _radarBlinkTimer.Tick += OnRadarBlinkTimerTick;
         _radarBlinkTimer.Start();
+
+        // Setup slow blink timer for Close zone (second-to-last severity)
+        _arcSlowBlinkTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(LayoutConstants.ARC_SLOW_BLINK_INTERVAL_MS)
+        };
+        _arcSlowBlinkTimer.Tick += OnArcSlowBlinkTimerTick;
+        _arcSlowBlinkTimer.Start();
 
         // Setup pit limiter blinking timer (fast blink) - PHASE 2: Enhancement #4
         _pitLimiterBlinkTimer = new DispatcherTimer
@@ -837,14 +855,14 @@ public class MRTOneWidget : WidgetBase
     
     private void OnRadarBlinkTimerTick(object? sender, EventArgs e)
     {
-        // Null guard: Ensure radar elements are initialized before accessing
         if (_radarFront == null || _radarBack == null)
             return;
 
         _radarBlinkState = !_radarBlinkState;
 
-        // Apply FAST blink effect to FRONT radar square if VeryClose (<4m)
-        var (frontZone, rearZone) = _stateManager.GetCurrentZones(); if (frontZone == ProximityZone.VeryClose)
+        // FAST blink: VeryClose only — just before contact
+        var (frontZone, rearZone) = _stateManager.GetCurrentZones();
+        if (frontZone == ProximityZone.VeryClose)
         {
             _radarFront.Opacity = _radarBlinkState ? 1.0 : 0.3;
             BlinkArcRings(_arcFrontRings, _radarBlinkState);
@@ -854,7 +872,6 @@ public class MRTOneWidget : WidgetBase
             _radarFront.Opacity = 1.0;
         }
 
-        // Apply FAST blink effect to REAR radar square if VeryClose (<4m)
         if (rearZone == ProximityZone.VeryClose)
         {
             _radarBack.Opacity = _radarBlinkState ? 1.0 : 0.3;
@@ -864,6 +881,21 @@ public class MRTOneWidget : WidgetBase
         {
             _radarBack.Opacity = 1.0;
         }
+    }
+
+    private void OnArcSlowBlinkTimerTick(object? sender, EventArgs e)
+    {
+        if (_arcFrontRings == null || _arcBackRings == null)
+            return;
+
+        _arcSlowBlinkState = !_arcSlowBlinkState;
+
+        // SLOW blink: Close zone — pulse the innermost active ring as a warning
+        var (frontZone, rearZone) = _stateManager.GetCurrentZones();
+        if (frontZone == ProximityZone.Close)
+            SlowBlinkInnermostRing(_arcFrontRings, _arcSlowBlinkState);
+        if (rearZone == ProximityZone.Close)
+            SlowBlinkInnermostRing(_arcBackRings, _arcSlowBlinkState);
     }
     
     private void OnPitLimiterBlinkTimerTick(object? sender, EventArgs e)
@@ -1414,7 +1446,7 @@ public class MRTOneWidget : WidgetBase
         {
             _radarFront.Fill = GetEnhancedZoneBrush(frontZone);
             _radarBack.Fill = GetEnhancedZoneBrush(rearZone);
-            // Drive the 5-ring arcs based on proximity zone
+            // Drive the 6-ring arcs based on proximity zone
             UpdateArcRings(_arcFrontRings, frontZone);
             UpdateArcRings(_arcBackRings, rearZone);
         }
@@ -1422,6 +1454,18 @@ public class MRTOneWidget : WidgetBase
         {
             _radarFront.Fill = GetZoneColor(frontZone);
             _radarBack.Fill = GetZoneColor(rearZone);
+        }
+
+        // Last-lap detection: double all blink speeds on final lap
+        bool lastLap = data.SessionLapsRemain <= 1 && data.SessionLapsRemain >= 0;
+        if (lastLap != _isLastLap)
+        {
+            _isLastLap = lastLap;
+            double mult = lastLap ? LayoutConstants.ARC_LAST_LAP_BLINK_MULTIPLIER : 1.0;
+            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
+                LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS * mult);
+            _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(
+                LayoutConstants.ARC_SLOW_BLINK_INTERVAL_MS * mult);
         }
     }
     
@@ -1553,19 +1597,19 @@ public class MRTOneWidget : WidgetBase
         };
     }
 
-    // ── 5-ring arc rendering helpers ────────────────────────────────────────
+    // ── 6-ring arc rendering helpers ────────────────────────────────────────
 
     /// <summary>
     /// Map ProximityZone to how many rings (counting from outermost) should be active.
-    /// Clear/Far = 0, Careful = 1, Near = 2, Close = 3–4, VeryClose = 5.
+    /// VeryClose = all 6, Close = 5, Near = 4, Careful = 3, Far = 2, Clear = 0.
     /// </summary>
     private static int GetActiveRingCount(ProximityZone zone) => zone switch
     {
-        ProximityZone.VeryClose => 5,
-        ProximityZone.Close => 4,
-        ProximityZone.Near => 3,
-        ProximityZone.Careful => 2,
-        ProximityZone.Far => 1,
+        ProximityZone.VeryClose => 6,
+        ProximityZone.Close => 5,
+        ProximityZone.Near => 4,
+        ProximityZone.Careful => 3,
+        ProximityZone.Far => 2,
         _ => 0
     };
 
@@ -1584,9 +1628,9 @@ public class MRTOneWidget : WidgetBase
     };
 
     /// <summary>
-    /// Update a set of 5 concentric arc rings for a front/back quadrant.
+    /// Update a set of 6 concentric arc rings for a front/back quadrant.
     /// Rings activate from outside→inside as zone increases.
-    /// Each ring gets the zone colour with per-layer max opacity.
+    /// Each ring gets the zone colour with per-layer max opacity (0.25→0.85).
     /// </summary>
     private static void UpdateArcRings(System.Windows.Shapes.Path[] rings, ProximityZone zone)
     {
@@ -1595,9 +1639,9 @@ public class MRTOneWidget : WidgetBase
 
         for (int i = 0; i < rings.Length; i++)
         {
-            // Rings are ordered innermost(0) to outermost(4)
+            // Rings are ordered innermost(0) to outermost(5)
             // Active rings fill from outermost inward
-            int fromOuter = rings.Length - 1 - i; // ring 4 = outermost
+            int fromOuter = rings.Length - 1 - i;
             bool isActive = fromOuter < activeCount;
 
             if (isActive)
@@ -1636,7 +1680,7 @@ public class MRTOneWidget : WidgetBase
     }
 
     /// <summary>
-    /// Blink all active rings in a front/back ring set (VeryClose animation).
+    /// Fast blink all active rings in a front/back ring set (VeryClose animation).
     /// </summary>
     private static void BlinkArcRings(System.Windows.Shapes.Path[] rings, bool blinkState)
     {
@@ -1646,6 +1690,24 @@ public class MRTOneWidget : WidgetBase
             {
                 double maxOp = LayoutConstants.ARC_RING_MAX_OPACITY[i];
                 rings[i].Opacity = blinkState ? maxOp : maxOp * 0.25;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Slow pulse the innermost active ring in a Close-zone ring set.
+    /// Provides a gentle warning pulse as a "heads up" before VeryClose.
+    /// </summary>
+    private static void SlowBlinkInnermostRing(System.Windows.Shapes.Path[] rings, bool blinkState)
+    {
+        // Find the innermost active ring (lowest index with a non-transparent fill)
+        for (int i = 0; i < rings.Length; i++)
+        {
+            if (rings[i].Fill != s_radarTransparent)
+            {
+                double maxOp = LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                rings[i].Opacity = blinkState ? maxOp : maxOp * 0.4;
+                break; // only the innermost
             }
         }
     }
@@ -1991,6 +2053,7 @@ public class MRTOneWidget : WidgetBase
         // Clean up timers
         _blinkTimer?.Stop();
         _radarBlinkTimer?.Stop();
+        _arcSlowBlinkTimer?.Stop();
         _pitLimiterBlinkTimer?.Stop();
 
         AppSettings.Instance.SettingsChanged -= OnSettingsChanged;
