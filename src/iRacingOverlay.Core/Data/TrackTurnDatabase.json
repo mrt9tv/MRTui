@@ -1,0 +1,111 @@
+{
+  "$schema": "./TrackTurnDatabase.schema.json",
+  "version": "1.0",
+  "lastUpdated": "2026-02-07",
+  "tracks": {
+    "imola": {
+      "displayName": "Autodromo Enzo e Dino Ferrari",
+      "shortName": "Imola",
+      "country": "Italy",
+      "totalTurns": 17,
+      "trackLength": 4.909,
+      "turns": [
+        { "number": 1, "name": "Tamburello", "startPct": 0.025, "endPct": 0.065, "type": "chicane_left" },
+        { "number": 2, "name": "Villeneuve", "startPct": 0.120, "endPct": 0.160, "type": "chicane_right" },
+        { "number": 3, "name": "Tosa", "startPct": 0.180, "endPct": 0.220, "type": "hairpin_right" },
+        { "number": 4, "name": "Piratella", "startPct": 0.280, "endPct": 0.310, "type": "left" },
+        { "number": 5, "name": "Acque Minerali", "startPct": 0.340, "endPct": 0.380, "type": "left" },
+        { "number": 6, "name": "Variante Alta", "startPct": 0.415, "endPct": 0.455, "type": "chicane_right" },
+        { "number": 7, "name": "Rivazza 1", "startPct": 0.500, "endPct": 0.535, "type": "left" },
+        { "number": 8, "name": "Rivazza 2", "startPct": 0.540, "endPct": 0.575, "type": "left" },
+        { "number": 9, "name": "Variante Bassa", "startPct": 0.660, "endPct": 0.710, "type": "chicane_left" },
+        { "number": 10, "name": "Traguardo", "startPct": 0.940, "endPct": 0.990, "type": "right" }
+      ]
+    },
+    "monza": {
+      "displayName": "Autodromo Nazionale di Monza",
+      "shortName": "Monza",
+      "country": "Italy",
+      "totalTurns": 11,
+      "trackLength": 5.793,
+      "turns": [
+        { "number": 1, "name": "Rettifilo", "startPct": 0.030, "endPct": 0.070, "type": "chicane_right" },
+        { "number": 2, "name": "Curva Grande", "startPct": 0.175, "endPct": 0.210, "type": "right" },
+        { "number": 3, "name": "Variante della Roggia", "startPct": 0.260, "endPct": 0.305, "type": "chicane_left" },
+        { "number": 4, "name": "Lesmo 1", "startPct": 0.370, "endPct": 0.405, "type": "right" },
+        { "number": 5, "name": "Lesmo 2", "startPct": 0.435, "endPct": 0.470, "type": "right" },
+        { "number": 6, "name": "Serraglio", "startPct": 0.515, "endPct": 0.545, "type": "left" },
+        { "number": 7, "name": "Ascari", "startPct": 0.605, "endPct": 0.670, "type": "chicane_left" },
+        { "number": 8, "name": "Parabolica", "startPct": 0.735, "endPct": 0.805, "type": "hairpin_right" },
+        { "number": 9, "name": "Curva di Vedano", "startPct": 0.920, "endPct": 0.970, "type": "kink_right" }
+      ]
+    },
+    "longbeach": {
+      "displayName": "Streets of Long Beach",
+      "shortName": "Long Beach",
+      "country": "USA",
+      "totalTurns": 11,
+      "trackLength": 3.167,
+      "turns": [
+        { "number": 1, "name": "Turn 1", "startPct": 0.040, "endPct": 0.075, "type": "right" },
+        { "number": 2, "name": "Turn 2", "startPct": 0.100, "endPct": 0.135, "type": "left" },
+        { "number": 3, "name": "Turn 3", "startPct": 0.160, "endPct": 0.195, "type": "right" },
+        { "number": 4, "name": "Turn 4", "startPct": 0.220, "endPct": 0.255, "type": "left" },
+        { "number": 5, "name": "Turn 5", "startPct": 0.305, "endPct": 0.340, "type": "right" },
+        { "number": 6, "name": "Turn 6", "startPct": 0.385, "endPct": 0.420, "type": "left" },
+        { "number": 7, "name": "Turn 7", "startPct": 0.465, "endPct": 0.500, "type": "right" },
+        { "number": 8, "name": "Turn 8 (Hairpin)", "startPct": 0.545, "endPct": 0.595, "type": "hairpin_left" },
+        { "number": 9, "name": "Turn 9", "startPct": 0.665, "endPct": 0.700, "type": "right" },
+        { "number": 10, "name": "Turn 10", "startPct": 0.760, "endPct": 0.795, "type": "left" },
+        { "number": 11, "name": "Turn 11 (Fountain)", "startPct": 0.890, "endPct": 0.940, "type": "hairpin_right" }
+      ]
+    },
+    "bathurst": {
+      "displayName": "Mount Panorama Circuit",
+      "shortName": "Bathurst",
+      "country": "Australia",
+      "totalTurns": 23,
+      "trackLength": 6.213,
+      "turns": [
+        { "number": 1, "name": "Hell Corner", "startPct": 0.030, "endPct": 0.060, "type": "right" },
+        { "number": 2, "name": "Mountain Straight", "startPct": 0.100, "endPct": 0.125, "type": "kink_left" },
+        { "number": 3, "name": "Griffin's Bend", "startPct": 0.145, "endPct": 0.175, "type": "left" },
+        { "number": 4, "name": "The Cutting", "startPct": 0.195, "endPct": 0.225, "type": "right" },
+        { "number": 5, "name": "Reid Park", "startPct": 0.250, "endPct": 0.280, "type": "left" },
+        { "number": 6, "name": "Sulman Park", "startPct": 0.305, "endPct": 0.340, "type": "right" },
+        { "number": 7, "name": "McPhillamy Park", "startPct": 0.365, "endPct": 0.400, "type": "left" },
+        { "number": 8, "name": "Skyline", "startPct": 0.425, "endPct": 0.460, "type": "kink_right" },
+        { "number": 9, "name": "The Esses", "startPct": 0.485, "endPct": 0.520, "type": "esses" },
+        { "number": 10, "name": "The Dipper", "startPct": 0.545, "endPct": 0.575, "type": "left" },
+        { "number": 11, "name": "Forrest's Elbow", "startPct": 0.600, "endPct": 0.640, "type": "right" },
+        { "number": 12, "name": "Conrod Straight Entry", "startPct": 0.665, "endPct": 0.690, "type": "kink_left" },
+        { "number": 13, "name": "The Chase", "startPct": 0.775, "endPct": 0.810, "type": "right" },
+        { "number": 14, "name": "Turn 14", "startPct": 0.830, "endPct": 0.860, "type": "left" },
+        { "number": 15, "name": "Murray's Corner", "startPct": 0.880, "endPct": 0.915, "type": "right" }
+      ]
+    },
+    "spa": {
+      "displayName": "Circuit de Spa-Francorchamps",
+      "shortName": "Spa",
+      "country": "Belgium",
+      "totalTurns": 19,
+      "trackLength": 7.004,
+      "turns": [
+        { "number": 1, "name": "La Source", "startPct": 0.015, "endPct": 0.045, "type": "hairpin_right" },
+        { "number": 2, "name": "Eau Rouge", "startPct": 0.090, "endPct": 0.120, "type": "left" },
+        { "number": 3, "name": "Raidillon", "startPct": 0.120, "endPct": 0.145, "type": "right" },
+        { "number": 4, "name": "Les Combes", "startPct": 0.245, "endPct": 0.285, "type": "chicane_right" },
+        { "number": 5, "name": "Malmedy", "startPct": 0.310, "endPct": 0.340, "type": "right" },
+        { "number": 6, "name": "Bruxelles", "startPct": 0.355, "endPct": 0.385, "type": "left" },
+        { "number": 7, "name": "Turn 7", "startPct": 0.405, "endPct": 0.430, "type": "right" },
+        { "number": 8, "name": "Pouhon", "startPct": 0.450, "endPct": 0.485, "type": "left" },
+        { "number": 9, "name": "Les Fagnes", "startPct": 0.505, "endPct": 0.535, "type": "right" },
+        { "number": 10, "name": "Campus", "startPct": 0.555, "endPct": 0.585, "type": "chicane_left" },
+        { "number": 11, "name": "Stavelot", "startPct": 0.655, "endPct": 0.690, "type": "right" },
+        { "number": 12, "name": "Blanchimont", "startPct": 0.715, "endPct": 0.745, "type": "left" },
+        { "number": 13, "name": "Bus Stop Chicane", "startPct": 0.835, "endPct": 0.880, "type": "chicane_right" },
+        { "number": 14, "name": "La Source Entry", "startPct": 0.965, "endPct": 0.995, "type": "kink_right" }
+      ]
+    }
+  }
+}

@@ -105,6 +105,11 @@ public enum TelemetryField
     CarNumber,
     TrackName,
     
+    // Turn Tracking
+    TurnNumber,          // Current turn number (1-based), or 0 if not in a turn
+    TurnName,            // Current turn name (e.g., "Eau Rouge"), or empty if not in a turn
+    TurnInfo,            // Combined turn display (e.g., "T3: Casino Square" or "T5")
+    
     // Steering
     SteeringAngle,
     

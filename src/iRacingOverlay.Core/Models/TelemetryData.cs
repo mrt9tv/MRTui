@@ -667,6 +667,30 @@ public class TelemetryData
     /// </summary>
     public float TrackPitSpeedLimit { get; set; }
     
+    // ===== TURN TRACKING =====
+    
+    /// <summary>
+    /// Current turn number (1-based), or 0 if not in a turn
+    /// Calculated from LapDistPct using track turn database
+    /// </summary>
+    public int TurnNumber { get; set; }
+    
+    /// <summary>
+    /// Current turn name (e.g., "Eau Rouge", "Casino Square"), or empty if not in a turn
+    /// Loaded from track turn database
+    /// </summary>
+    public string TurnName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether player is currently in a defined turn
+    /// </summary>
+    public bool IsInTurn { get; set; }
+    
+    /// <summary>
+    /// Progress through current turn (0.0 - 1.0), or 0 if not in a turn
+    /// </summary>
+    public float TurnProgress { get; set; }
+    
     // ===== PHASE 1: 4-Way Proximity Radar =====
     
     /// <summary>

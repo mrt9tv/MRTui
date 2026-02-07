@@ -116,6 +116,11 @@ public static class TelemetryDataMapper
             TelemetryField.CarNumber => string.IsNullOrEmpty(data.CarNumber) ? "N/A" : data.CarNumber,
             TelemetryField.TrackName => string.IsNullOrEmpty(data.TrackName) ? "N/A" : data.TrackName,
             
+            // Turn Tracking
+            TelemetryField.TurnNumber => data.TurnNumber,
+            TelemetryField.TurnName => string.IsNullOrEmpty(data.TurnName) ? "-" : data.TurnName,
+            TelemetryField.TurnInfo => FormatTurnInfo(data),
+            
             // Steering
             TelemetryField.SteeringAngle => data.SteeringWheelAngle,
             
@@ -487,5 +492,22 @@ public static class TelemetryDataMapper
         if ((flags & 0x20000000) != 0) flagList.Add("SessionEnd");
         
         return flagList.Count > 0 ? string.Join(", ", flagList) : "Green";
+    }
+    
+    /// <summary>
+    /// Format turn info as compact display (e.g., "T3: Eau Rouge" or "T5" or "-")
+    /// </summary>
+    private static string FormatTurnInfo(TelemetryData data)
+    {
+        // Not in a turn
+        if (data.TurnNumber == 0)
+            return "-";
+        
+        // In a turn with name
+        if (!string.IsNullOrEmpty(data.TurnName) && data.TurnName != "-")
+            return $"T{data.TurnNumber}: {data.TurnName}";
+        
+        // In a turn without name
+        return $"T{data.TurnNumber}";
     }
 }

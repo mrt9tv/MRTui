@@ -11,4 +11,10 @@
     <PackageReference Include="SVappsLAB.iRacingTelemetrySDK" Version="1.0.0-beta.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Data\TrackTurnDatabase.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

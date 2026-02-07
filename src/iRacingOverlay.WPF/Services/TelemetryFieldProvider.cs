@@ -121,6 +121,11 @@ public static class TelemetryFieldProvider
         new(TelemetryField.DriverName, "Driver", "Info", "Driver name", true),
         new(TelemetryField.CarNumber, "Car #", "Info", "Car number", true),
         new(TelemetryField.TrackName, "Track", "Info", "Track name", true),
+        
+        // ── Turn Tracking ───────────────────────────────────────────────
+        new(TelemetryField.TurnNumber, "Turn #", "Track", "Current turn number (1-based)"),
+        new(TelemetryField.TurnName, "Turn Name", "Track", "Current turn name"),
+        new(TelemetryField.TurnInfo, "Turn", "Track", "Combined turn info (T#: Name)"),
     };
 
     /// <summary>

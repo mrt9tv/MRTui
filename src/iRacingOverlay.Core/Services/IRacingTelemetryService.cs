@@ -190,6 +190,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private ITelemetryClient<SVappsLAB.iRacingTelemetrySDK.TelemetryData>? _client;
     private readonly LivePositionCalculator _livePositionCalculator;
     private readonly FuelCalculatorService _fuelCalculatorService;
+    private readonly TurnTrackingService _turnTrackingService;
     private ConnectionStatus _status = ConnectionStatus.Disconnected;
     private bool _disposed = false;
     
@@ -210,7 +211,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _carScreenName = ""; // Car model name (e.g., "Ferrari 488 GT3")
     private string _driverSetupName = ""; // Current setup name from garage
     private int _driverSetupIsModified = 0; // 0 = unmodified, 1 = modified
-    private string _trackName = "";
+    private string _trackName = ""; // Display name (e.g., "Circuit de Spa-Francorchamps")
+    private string _trackId = ""; // Internal track ID (e.g., "spa", "monza") for turn database lookup
     private string _sessionType = "";
     private float _trackLength = 0f;
     private float _trackPitSpeedLimit = 0f; // Pit speed limit in m/s (parsed from "55.98 kph" format)
@@ -270,6 +272,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         _livePositionCalculator = new LivePositionCalculator();
         // Create FuelCalculatorService
         _fuelCalculatorService = new FuelCalculatorService();
+        // Create TurnTrackingService
+        _turnTrackingService = new TurnTrackingService(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<TurnTrackingService>.Instance);
     }
 
     public Task ConnectAsync(CancellationToken cancellationToken = default)
@@ -687,6 +692,14 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // Widgets check this before expensive Dispatcher.Invoke calls (50%+ overhead reduction)
             PopulateChangedFields(data);
             
+            // ===== TURN TRACKING =====
+            // Calculate current turn based on LapDistPct using track turn database
+            var turnInfo = _turnTrackingService.GetCurrentTurn(data.LapDistPct);
+            data.TurnNumber = turnInfo.Number;
+            data.TurnName = turnInfo.Name;
+            data.IsInTurn = turnInfo.IsInTurn;
+            data.TurnProgress = turnInfo.TurnProgress;
+            
             // ===== CRITICAL: CALCULATE ACTUAL LEADING LAP & RACE LEADER LAP =====
             // These values are ESSENTIAL for accurate race end and fuel calculations
             // ActualLeadingLapNumber = highest lap any car is on (regardless of position)
@@ -829,7 +842,16 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // Parse based on current section
                 if (currentSection == "WeekendInfo")
                 {
-                    if (trimmed.StartsWith("TrackDisplayName:"))
+                    if (trimmed.StartsWith("TrackName:"))
+                    {
+                        // TrackName is the internal ID (e.g., "spa", "imola") - use for turn database lookup
+                        _trackId = ExtractYamlValue(trimmed).Trim('"', '\'');
+                        _logger.LogInformation("Parsed track ID: {TrackId}", _trackId);
+                        
+                        // Set track for turn tracking service
+                        _turnTrackingService.SetTrack(_trackId);
+                    }
+                    else if (trimmed.StartsWith("TrackDisplayName:"))
                     {
                         _trackName = ExtractYamlValue(trimmed);
                         _logger.LogInformation("Parsed track name: {TrackName}", _trackName);
