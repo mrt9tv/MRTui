@@ -691,6 +691,30 @@ public class TelemetryData
     /// </summary>
     public float TurnProgress { get; set; }
     
+    /// <summary>
+    /// Last completed turn number (1-based), or 0 if no track data
+    /// Calculated from LapDistPct using track turn database
+    /// </summary>
+    public int LastTurnNumber { get; set; }
+    
+    /// <summary>
+    /// Last completed turn name (e.g., "Parabolica"), or empty if no track data
+    /// Loaded from track turn database
+    /// </summary>
+    public string LastTurnName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Next upcoming turn number (1-based), or 0 if no track data
+    /// Calculated from LapDistPct using track turn database
+    /// </summary>
+    public int NextTurnNumber { get; set; }
+    
+    /// <summary>
+    /// Next upcoming turn name (e.g., "Ascari"), or empty if no track data
+    /// Loaded from track turn database
+    /// </summary>
+    public string NextTurnName { get; set; } = string.Empty;
+    
     // ===== PHASE 1: 4-Way Proximity Radar =====
     
     /// <summary>

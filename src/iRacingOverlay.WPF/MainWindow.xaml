@@ -79,55 +79,57 @@
                            Margin="0,0,0,6"/>
                 
                 <!-- ═══════════════════════════════════════════════════════ -->
-                <!-- SIZE + POSITION (compact row)                          -->
+                <!-- MRT ONE WIDGET CONTROLS (conditional visibility)       -->
                 <!-- ═══════════════════════════════════════════════════════ -->
-                <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="8"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        
-                        <!-- Size -->
-                        <Grid Grid.Row="0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="42"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="48"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="SIZE" Style="{StaticResource MRT.Text.Label}" VerticalAlignment="Center"/>
-                            <Slider x:Name="SliderWidgetSize" Grid.Column="1"
-                                    Style="{StaticResource MRT.Slider}"
-                                    Minimum="120" Maximum="600" Value="240"
-                                    TickFrequency="10" IsSnapToTickEnabled="True"
-                                    ValueChanged="SliderWidgetSize_ValueChanged"/>
-                            <TextBlock x:Name="TxtSizeValue" Grid.Column="2"
-                                       Text="240px" FontSize="11"
-                                       Foreground="{StaticResource TealPrimary}"
-                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                <StackPanel x:Name="MRTOnePanel" Visibility="Collapsed">
+                    <!-- SIZE + POSITION (compact row) -->
+                    <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Size -->
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="42"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="48"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="SIZE" Style="{StaticResource MRT.Text.Label}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SliderWidgetSize" Grid.Column="1"
+                                        Style="{StaticResource MRT.Slider}"
+                                        Minimum="120" Maximum="600" Value="240"
+                                        TickFrequency="10" IsSnapToTickEnabled="True"
+                                        ValueChanged="SliderWidgetSize_ValueChanged"/>
+                                <TextBlock x:Name="TxtSizeValue" Grid.Column="2"
+                                           Text="240px" FontSize="11"
+                                           Foreground="{StaticResource TealPrimary}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                            </Grid>
+                            
+                            <!-- Position buttons -->
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="Center H" 
+                                        Style="{StaticResource MRT.Button.Secondary}"
+                                        Click="BtnCenterH_Click"
+                                        Width="100" Height="26" Margin="0,0,6,0"
+                                        FontSize="11" Padding="4,2"/>
+                                <Button Content="Center V" 
+                                        Style="{StaticResource MRT.Button.Secondary}"
+                                        Click="BtnCenterV_Click"
+                                        Width="100" Height="26" Margin="0,0,6,0"
+                                        FontSize="11" Padding="4,2"/>
+                                <Button Content="Center Both" 
+                                        Style="{StaticResource MRT.Button.Secondary}"
+                                        Click="BtnCenterBoth_Click"
+                                        Width="100" Height="26"
+                                        FontSize="11" Padding="4,2"/>
+                            </StackPanel>
                         </Grid>
-                        
-                        <!-- Position buttons -->
-                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button Content="Center H" 
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Click="BtnCenterH_Click"
-                                    Width="100" Height="26" Margin="0,0,6,0"
-                                    FontSize="11" Padding="4,2"/>
-                            <Button Content="Center V" 
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Click="BtnCenterV_Click"
-                                    Width="100" Height="26" Margin="0,0,6,0"
-                                    FontSize="11" Padding="4,2"/>
-                            <Button Content="Center Both" 
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Click="BtnCenterBoth_Click"
-                                    Width="100" Height="26"
-                                    FontSize="11" Padding="4,2"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                    </Border>
                 
                 <!-- ═══════════════════════════════════════════════════════ -->
                 <!-- DATA FIELDS (two-column layout)                        -->
@@ -368,6 +370,30 @@
                         </WrapPanel>
                     </StackPanel>
                 </Border>
+                </StackPanel>
+                <!-- END MRT ONE WIDGET CONTROLS -->
+                
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- TURN DISPLAY WIDGET CONTROLS (conditional visibility)  -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <StackPanel x:Name="TurnDisplayPanel" Visibility="Collapsed">
+                    <!-- TURN DISPLAY OPTIONS -->
+                    <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
+                        <StackPanel>
+                            <TextBlock Text="TURN DISPLAY" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Shows current turn, last completed turn, and next upcoming turn"
+                                       FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,10"
+                                       TextWrapping="Wrap"/>
+                            <WrapPanel>
+                                <CheckBox x:Name="ChkShowTurnNames" Content="Show Turn Names"
+                                          Style="{StaticResource MRT.ToggleButton}"
+                                          IsChecked="True" Margin="0,0,10,4"
+                                          Checked="TurnDisplayToggle_Changed" Unchecked="TurnDisplayToggle_Changed"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                <!-- END TURN DISPLAY WIDGET CONTROLS -->
                 
             </StackPanel>
         </ScrollViewer>

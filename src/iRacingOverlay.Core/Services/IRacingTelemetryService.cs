@@ -700,6 +700,15 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             data.IsInTurn = turnInfo.IsInTurn;
             data.TurnProgress = turnInfo.TurnProgress;
             
+            // Get last completed turn and next upcoming turn
+            var lastTurn = _turnTrackingService.GetLastTurn(data.LapDistPct);
+            data.LastTurnNumber = lastTurn.Number;
+            data.LastTurnName = lastTurn.Name;
+            
+            var nextTurn = _turnTrackingService.GetNextTurn(data.LapDistPct);
+            data.NextTurnNumber = nextTurn.Number;
+            data.NextTurnName = nextTurn.Name;
+            
             // ===== CRITICAL: CALCULATE ACTUAL LEADING LAP & RACE LEADER LAP =====
             // These values are ESSENTIAL for accurate race end and fuel calculations
             // ActualLeadingLapNumber = highest lap any car is on (regardless of position)

@@ -13,6 +13,7 @@ using iRacingOverlay.WPF.Services;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
 using MRTOne = iRacingOverlay.WPF.Widgets.MRTOneWidget.MRTOneWidget;
+using TurnDisplay = iRacingOverlay.WPF.Widgets.TurnDisplayWidget.TurnDisplayWidget;
 
 namespace iRacingOverlay.WPF;
 
@@ -147,9 +148,14 @@ public partial class MainWindow : Window
         bool widgetExists = _widgetManager.HasWidgetType(widgetType.Value);
         BtnToggleWidget.Content = widgetExists ? "Hide" : "Show";
 
+        // Show/hide widget-specific panels
+        MRTOnePanel.Visibility = widgetType == WidgetType.MRTOne ? Visibility.Visible : Visibility.Collapsed;
+        TurnDisplayPanel.Visibility = widgetType == WidgetType.TurnDisplay ? Visibility.Visible : Visibility.Collapsed;
+
         if (widgetType == WidgetType.MRTOne)
             SyncPanelToMRTOne();
-        // Future: else if (widgetType == WidgetType.FuelMonitor) SyncPanelToFuelMonitor();
+        else if (widgetType == WidgetType.TurnDisplay)
+            SyncPanelToTurnDisplay();
     }
 
     private void SyncPanelToMRTOne()
@@ -215,6 +221,30 @@ public partial class MainWindow : Window
         if (!_widgetManager.HasWidgetType(WidgetType.MRTOne)) return null;
         return _widgetManager.GetWidgetsByType(WidgetType.MRTOne)
                              .FirstOrDefault() as MRTOne;
+    }
+
+    private void SyncPanelToTurnDisplay()
+    {
+        var widget = GetActiveTurnDisplayWidget();
+        if (widget == null) return;
+
+        _suppressControlEvents = true;
+        try
+        {
+            ChkShowTurnNames.IsChecked = widget.ShowTurnName;
+        }
+        finally
+        {
+            _suppressControlEvents = false;
+        }
+    }
+
+    private TurnDisplay? GetActiveTurnDisplayWidget()
+    {
+        if (_widgetManager == null) return null;
+        if (!_widgetManager.HasWidgetType(WidgetType.TurnDisplay)) return null;
+        return _widgetManager.GetWidgetsByType(WidgetType.TurnDisplay)
+                             .FirstOrDefault() as TurnDisplay;
     }
 
     // ── Button handlers ─────────────────────────────────────────────────
@@ -362,6 +392,18 @@ public partial class MainWindow : Window
     /// Expose fuel alert settings so widgets can read them.
     /// </summary>
     public FuelAlertSettings FuelAlerts => _fuelAlertSettings;
+
+    // ── Turn Display toggles ────────────────────────────────────────────
+
+    private void TurnDisplayToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveTurnDisplayWidget();
+        if (widget == null) return;
+
+        widget.ShowTurnName = ChkShowTurnNames.IsChecked == true;
+        widget.SaveSettings();
+    }
 
     // ── Connection status ───────────────────────────────────────────────
 

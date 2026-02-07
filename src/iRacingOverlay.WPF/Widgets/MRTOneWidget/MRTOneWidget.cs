@@ -424,9 +424,6 @@ public class MRTOneWidget : WidgetBase
             _arcRightSide.Visibility = Visibility.Collapsed;
             outerCanvas.Children.Add(_arcRightSide);
         }
-
-        // PHASE 2: Apply visual enhancements based on settings
-        ApplyVisualEnhancements();
         
         // Top section: Value + Label (positioned absolutely in top portion of circle)
         _topStack = new StackPanel
@@ -479,6 +476,9 @@ public class MRTOneWidget : WidgetBase
 
         // PHASE 2: Initialize visual effects helper (after _gaugeCircle and _centerValueText created)
         _visualEffects = new MRTOneVisualEffects(_mainGrid, _gaugeCircle, _centerValueText, _secondaryColor);
+
+        // PHASE 2: Apply visual enhancements based on settings (MUST be after _visualEffects initialization)
+        ApplyVisualEnhancements();
 
         // Brake bias transient overlay (hidden by default, appears when value changes)
         // Shows only the value (no label) with transparent background to avoid visual conflicts

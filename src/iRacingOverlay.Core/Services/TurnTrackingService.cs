@@ -183,6 +183,46 @@ public class TurnTrackingService
     }
     
     /// <summary>
+    /// Get the last completed turn based on current LapDistPct
+    /// (the turn immediately behind current position)
+    /// </summary>
+    /// <param name="lapDistPct">Current lap distance percentage (0.0 - 1.0)</param>
+    /// <returns>Last turn info, or None if no track data</returns>
+    public TurnInfo GetLastTurn(float lapDistPct)
+    {
+        if (_currentTrackData == null || _currentTrackData.Turns.Count == 0)
+            return TurnInfo.None;
+        
+        // Find the last turn behind current position
+        TurnDefinition? lastTurn = null;
+        float minDistanceBehind = float.MaxValue;
+        
+        foreach (var turn in _currentTrackData.Turns)
+        {
+            float distance = lapDistPct - turn.EndPct;
+            if (distance < 0) distance += 1.0f; // Wrap around track
+            
+            if (distance < minDistanceBehind)
+            {
+                minDistanceBehind = distance;
+                lastTurn = turn;
+            }
+        }
+        
+        if (lastTurn == null)
+            return TurnInfo.None;
+        
+        return new TurnInfo
+        {
+            Number = lastTurn.Number,
+            Name = lastTurn.Name,
+            IsInTurn = false,
+            TurnProgress = 1f, // Completed
+            TurnType = lastTurn.Type
+        };
+    }
+    
+    /// <summary>
     /// Check if track is supported in the database
     /// </summary>
     public bool IsTrackSupported(string trackName)
