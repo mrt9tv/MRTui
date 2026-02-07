@@ -120,6 +120,20 @@ public class MRTOneWidget : WidgetBase
         /// <summary>RPM bead animation timer interval (~30 FPS for smooth animation)</summary>
         public const int RPM_ANIMATION_INTERVAL_MS = 33;
 
+        // === Enhanced Radar Arc Overlay (inside circle) ===
+        /// <summary>Outer radius of the arc band (just inside circle stroke inner edge)</summary>
+        public const double ARC_OUTER_RADIUS = 93;
+        /// <summary>Inner radius of the arc band</summary>
+        public const double ARC_INNER_RADIUS = 76;
+        /// <summary>Center point of the arcs within the 200x200 grid</summary>
+        public const double ARC_CENTER = 100;
+        /// <summary>Angular gap (degrees) between adjacent arc quadrants</summary>
+        public const double ARC_GAP_DEG = 3;
+        /// <summary>Sweep angle per quadrant (90 - gap)</summary>
+        public const double ARC_SWEEP_DEG = 87;
+        /// <summary>Opacity for enhanced radar arcs</summary>
+        public const double ARC_OPACITY = 0.55;
+
         // === Visual Effects ===
         /// <summary>Glow effect blur radius for center text</summary>
         public const double GLOW_BLUR_RADIUS_CENTER = 15;
@@ -136,11 +150,17 @@ public class MRTOneWidget : WidgetBase
     private readonly Grid _mainGrid;
     private readonly Ellipse _gaugeCircle;
     
-    // PHASE 1: 4-Way Radar Spotter Squares (outside circle)
+    // PHASE 1: 4-Way Radar Spotter Squares (outside circle — legacy mode)
     private readonly Rectangle _radarFront;   // Top (cars ahead)
     private readonly Rectangle _radarBack;    // Bottom (cars behind)
     private readonly Rectangle _radarLeft;    // Left (cars on left)
     private readonly Rectangle _radarRight;   // Right (cars on right)
+
+    // Enhanced Radar Arc Overlays (inside circle — enhanced mode)
+    private readonly System.Windows.Shapes.Path _arcFront;
+    private readonly System.Windows.Shapes.Path _arcBack;
+    private readonly System.Windows.Shapes.Path _arcLeft;
+    private readonly System.Windows.Shapes.Path _arcRight;
     
     // PHASE 1: Proximity detection services
     private readonly ProximityCalculator _proximityCalculator;
@@ -268,7 +288,37 @@ public class MRTOneWidget : WidgetBase
             Margin = new Thickness(LayoutConstants.GAUGE_MARGIN)
         };
         _mainGrid.Children.Add(_gaugeCircle);
-        
+
+        // Enhanced Radar Arcs — 4 donut-slice paths inside the circle (hidden by default)
+        var arcCenter = new Point(LayoutConstants.ARC_CENTER, LayoutConstants.ARC_CENTER);
+        double innerR = LayoutConstants.ARC_INNER_RADIUS;
+        double outerR = LayoutConstants.ARC_OUTER_RADIUS;
+        double sweep = LayoutConstants.ARC_SWEEP_DEG;
+
+        // Front arc: top of circle (centered at 0°/north)
+        _arcFront = CreateArcPath(arcCenter, innerR, outerR, 360 - sweep / 2, sweep);
+        _arcFront.Opacity = LayoutConstants.ARC_OPACITY;
+        _arcFront.Visibility = Visibility.Collapsed;
+        _mainGrid.Children.Add(_arcFront);
+
+        // Right arc: right side (centered at 90°)
+        _arcRight = CreateArcPath(arcCenter, innerR, outerR, 90 - sweep / 2, sweep);
+        _arcRight.Opacity = LayoutConstants.ARC_OPACITY;
+        _arcRight.Visibility = Visibility.Collapsed;
+        _mainGrid.Children.Add(_arcRight);
+
+        // Back arc: bottom (centered at 180°)
+        _arcBack = CreateArcPath(arcCenter, innerR, outerR, 180 - sweep / 2, sweep);
+        _arcBack.Opacity = LayoutConstants.ARC_OPACITY;
+        _arcBack.Visibility = Visibility.Collapsed;
+        _mainGrid.Children.Add(_arcBack);
+
+        // Left arc: left side (centered at 270°)
+        _arcLeft = CreateArcPath(arcCenter, innerR, outerR, 270 - sweep / 2, sweep);
+        _arcLeft.Opacity = LayoutConstants.ARC_OPACITY;
+        _arcLeft.Visibility = Visibility.Collapsed;
+        _mainGrid.Children.Add(_arcLeft);
+
         // PHASE 1: Create 4-way radar spotter squares (positioned OUTSIDE circle on canvas)
         // Canvas is 228x228, grid is 200x200 centered (14px offset)
         // Circle has 5px margin, so radius ~95px, center at (114, 114) in canvas coords
@@ -770,20 +820,24 @@ public class MRTOneWidget : WidgetBase
         var (frontZone, rearZone) = _stateManager.GetCurrentZones(); if (frontZone == ProximityZone.VeryClose)
         {
             _radarFront.Opacity = _radarBlinkState ? 1.0 : 0.3;
+            _arcFront.Opacity = _radarBlinkState ? LayoutConstants.ARC_OPACITY : 0.15;
         }
         else
         {
             _radarFront.Opacity = 1.0;
+            _arcFront.Opacity = LayoutConstants.ARC_OPACITY;
         }
 
         // Apply FAST blink effect to REAR radar square if VeryClose (<4m)
         if (rearZone == ProximityZone.VeryClose)
         {
             _radarBack.Opacity = _radarBlinkState ? 1.0 : 0.3;
+            _arcBack.Opacity = _radarBlinkState ? LayoutConstants.ARC_OPACITY : 0.15;
         }
         else
         {
             _radarBack.Opacity = 1.0;
+            _arcBack.Opacity = LayoutConstants.ARC_OPACITY;
         }
     }
     
@@ -1310,8 +1364,12 @@ public class MRTOneWidget : WidgetBase
         // Lateral: enhanced uses orange for single car, red for double cars; legacy stays red/green
         if (_settings.EnableEnhancedRadar)
         {
+            // Legacy squares get gradient colors too (though hidden in enhanced mode)
             _radarLeft.Fill = GetLateralGradientColor(lateralPosition, isLeft: true);
             _radarRight.Fill = GetLateralGradientColor(lateralPosition, isLeft: false);
+            // Arc overlays: static orange/red when car present, transparent otherwise
+            _arcLeft.Fill = GetArcLateralBrush(lateralPosition, isLeft: true);
+            _arcRight.Fill = GetArcLateralBrush(lateralPosition, isLeft: false);
         }
         else
         {
@@ -1326,12 +1384,19 @@ public class MRTOneWidget : WidgetBase
         // Track current zones for blinking animation
         _stateManager.UpdateProximityZones(frontZone, rearZone);
         
-        _radarFront.Fill = _settings.EnableEnhancedRadar
-            ? GetEnhancedZoneBrush(frontZone)
-            : GetZoneColor(frontZone);
-        _radarBack.Fill = _settings.EnableEnhancedRadar
-            ? GetEnhancedZoneBrush(rearZone)
-            : GetZoneColor(rearZone);
+        if (_settings.EnableEnhancedRadar)
+        {
+            _radarFront.Fill = GetEnhancedZoneBrush(frontZone);
+            _radarBack.Fill = GetEnhancedZoneBrush(rearZone);
+            // Arc overlays: gradient by proximity, transparent when clear
+            _arcFront.Fill = GetArcZoneBrush(frontZone);
+            _arcBack.Fill = GetArcZoneBrush(rearZone);
+        }
+        else
+        {
+            _radarFront.Fill = GetZoneColor(frontZone);
+            _radarBack.Fill = GetZoneColor(rearZone);
+        }
     }
     
     /// <summary>
@@ -1359,6 +1424,7 @@ public class MRTOneWidget : WidgetBase
     private static readonly SolidColorBrush s_radarOrange = new(Color.FromRgb(255, 140, 0));
     private static readonly SolidColorBrush s_radarOrangeRed = new(Color.FromRgb(255, 80, 0));
     private static readonly SolidColorBrush s_radarRed = new(Color.FromRgb(255, 20, 20));
+    private static readonly SolidColorBrush s_radarTransparent = new(Colors.Transparent);
 
     static MRTOneWidget()
     {
@@ -1369,6 +1435,7 @@ public class MRTOneWidget : WidgetBase
         s_radarOrange.Freeze();
         s_radarOrangeRed.Freeze();
         s_radarRed.Freeze();
+        s_radarTransparent.Freeze();
     }
 
     /// <summary>
@@ -1416,6 +1483,112 @@ public class MRTOneWidget : WidgetBase
         }
     }
     
+    /// <summary>
+    /// Enhanced lateral color for arc overlays: orange when car present, transparent when clear.
+    /// Two cars = red, one car = orange, clear = transparent (arc hidden).
+    /// </summary>
+    private static Brush GetArcLateralBrush(LateralPosition position, bool isLeft)
+    {
+        if (isLeft)
+        {
+            return position switch
+            {
+                LateralPosition.TwoCarsLeft => s_radarRed,
+                LateralPosition.CarLeft => s_radarOrange,
+                LateralPosition.CarBothSides => s_radarOrange,
+                _ => s_radarTransparent
+            };
+        }
+        else
+        {
+            return position switch
+            {
+                LateralPosition.TwoCarsRight => s_radarRed,
+                LateralPosition.CarRight => s_radarOrange,
+                LateralPosition.CarBothSides => s_radarOrange,
+                _ => s_radarTransparent
+            };
+        }
+    }
+
+    /// <summary>
+    /// Enhanced front/back arc brush: gradient by proximity zone, transparent when clear.
+    /// </summary>
+    private static Brush GetArcZoneBrush(ProximityZone zone)
+    {
+        return zone switch
+        {
+            ProximityZone.VeryClose => s_radarRed,
+            ProximityZone.Close => s_radarOrangeRed,
+            ProximityZone.Near => s_radarOrange,
+            ProximityZone.Careful => s_radarYellow,
+            ProximityZone.Far => s_radarYellowGreen,
+            _ => s_radarTransparent               // Clear — fully transparent arc
+        };
+    }
+
+    // ── Arc geometry helper ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Create a filled donut-slice Path for one radar arc quadrant.
+    /// Angle convention: 0° = top (north), clockwise.
+    /// </summary>
+    private static System.Windows.Shapes.Path CreateArcPath(
+        Point center, double innerRadius, double outerRadius,
+        double startAngleDeg, double sweepAngleDeg)
+    {
+        // Convert from "0=top, clockwise" to mathematical radians
+        double startRad = (startAngleDeg - 90.0) * Math.PI / 180.0;
+        double endRad = (startAngleDeg + sweepAngleDeg - 90.0) * Math.PI / 180.0;
+
+        var outerStart = new Point(
+            center.X + outerRadius * Math.Cos(startRad),
+            center.Y + outerRadius * Math.Sin(startRad));
+        var outerEnd = new Point(
+            center.X + outerRadius * Math.Cos(endRad),
+            center.Y + outerRadius * Math.Sin(endRad));
+        var innerEnd = new Point(
+            center.X + innerRadius * Math.Cos(endRad),
+            center.Y + innerRadius * Math.Sin(endRad));
+        var innerStart = new Point(
+            center.X + innerRadius * Math.Cos(startRad),
+            center.Y + innerRadius * Math.Sin(startRad));
+
+        bool isLargeArc = sweepAngleDeg > 180.0;
+
+        var figure = new PathFigure
+        {
+            StartPoint = outerStart,
+            IsClosed = true,
+            IsFilled = true
+        };
+
+        // Outer arc (clockwise)
+        figure.Segments.Add(new ArcSegment(
+            outerEnd,
+            new Size(outerRadius, outerRadius),
+            0, isLargeArc, SweepDirection.Clockwise, true));
+
+        // Line to inner arc end
+        figure.Segments.Add(new LineSegment(innerEnd, true));
+
+        // Inner arc (counter-clockwise, back to start)
+        figure.Segments.Add(new ArcSegment(
+            innerStart,
+            new Size(innerRadius, innerRadius),
+            0, isLargeArc, SweepDirection.Counterclockwise, true));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+
+        return new System.Windows.Shapes.Path
+        {
+            Data = geometry,
+            Fill = s_radarTransparent,
+            IsHitTestVisible = false
+        };
+    }
+
     protected override void OnConnectionStatusChanged(ConnectionStatus status)
     {
         // Update circle stroke color based on connection status
@@ -1451,11 +1624,19 @@ public class MRTOneWidget : WidgetBase
             (byte)(255 * _backgroundOpacity), 20, 20, 20));
         
         // PHASE 1: Update radar squares visibility based on EnableLateralSpotter setting
-        var radarVisibility = AppSettings.Instance.EnableLateralSpotter ? Visibility.Visible : Visibility.Collapsed;
-        _radarFront.Visibility = radarVisibility;
-        _radarBack.Visibility = radarVisibility;
-        _radarLeft.Visibility = radarVisibility;
-        _radarRight.Visibility = radarVisibility;
+        var radarEnabled = AppSettings.Instance.EnableLateralSpotter;
+        // Legacy squares: only visible when spotter enabled AND enhanced mode OFF
+        var squareVis = radarEnabled && !_settings.EnableEnhancedRadar ? Visibility.Visible : Visibility.Collapsed;
+        _radarFront.Visibility = squareVis;
+        _radarBack.Visibility = squareVis;
+        _radarLeft.Visibility = squareVis;
+        _radarRight.Visibility = squareVis;
+        // Arc overlays: only visible when spotter enabled AND enhanced mode ON
+        var arcVis = radarEnabled && _settings.EnableEnhancedRadar ? Visibility.Visible : Visibility.Collapsed;
+        _arcFront.Visibility = arcVis;
+        _arcBack.Visibility = arcVis;
+        _arcLeft.Visibility = arcVis;
+        _arcRight.Visibility = arcVis;
         
         // Update brake bias overlay timer interval if duration setting changed
         if (_brakeBiasHideTimer != null)
@@ -1581,50 +1762,49 @@ public class MRTOneWidget : WidgetBase
     }
 
     /// <summary>
-    /// Apply radar visibility settings - Phase 4.2
-    /// Switches between legacy mode (12px squares, 1px stroke) and enhanced mode (16px squares, 2px stroke)
+    /// Apply radar visibility settings — switches between:
+    ///   Legacy mode: small squares outside the circle
+    ///   Enhanced mode: arc overlays inside the circle
     /// </summary>
     private void ApplyRadarVisibilitySettings()
     {
-        // Determine size and stroke based on enhanced radar setting
-        double squareSize = _settings.EnableEnhancedRadar
-            ? LayoutConstants.RADAR_SQUARE_SIZE_ENHANCED
-            : LayoutConstants.RADAR_SQUARE_SIZE;
+        bool enhanced = _settings.EnableEnhancedRadar;
+        bool radarEnabled = AppSettings.Instance.EnableLateralSpotter;
 
-        double strokeThickness = _settings.EnableEnhancedRadar
-            ? LayoutConstants.RADAR_STROKE_THICKNESS_ENHANCED
-            : LayoutConstants.RADAR_STROKE_THICKNESS;
+        // Legacy squares: visible only when NOT enhanced
+        var squareVis = radarEnabled && !enhanced ? Visibility.Visible : Visibility.Collapsed;
+        _radarFront.Visibility = squareVis;
+        _radarBack.Visibility = squareVis;
+        _radarLeft.Visibility = squareVis;
+        _radarRight.Visibility = squareVis;
 
-        // Calculate position adjustments (center the larger squares)
-        double sizeDiff = LayoutConstants.RADAR_SQUARE_SIZE_ENHANCED - LayoutConstants.RADAR_SQUARE_SIZE;
-        double posOffset = sizeDiff / 2.0;  // Offset to keep squares centered
+        // Apply legacy sizing when in legacy mode
+        if (!enhanced)
+        {
+            double squareSize = LayoutConstants.RADAR_SQUARE_SIZE;
+            double strokeThickness = LayoutConstants.RADAR_STROKE_THICKNESS;
 
-        // Apply to all radar squares
-        // Front square (top)
-        _radarFront.Width = squareSize;
-        _radarFront.Height = squareSize;
-        _radarFront.StrokeThickness = strokeThickness;
-        Canvas.SetLeft(_radarFront, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+            _radarFront.Width = squareSize; _radarFront.Height = squareSize; _radarFront.StrokeThickness = strokeThickness;
+            Canvas.SetLeft(_radarFront, LayoutConstants.RADAR_CENTER_OFFSET);
 
-        // Back square (bottom)
-        _radarBack.Width = squareSize;
-        _radarBack.Height = squareSize;
-        _radarBack.StrokeThickness = strokeThickness;
-        Canvas.SetLeft(_radarBack, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
-        Canvas.SetTop(_radarBack, LayoutConstants.RADAR_BACK_TOP - (_settings.EnableEnhancedRadar ? posOffset : 0));
+            _radarBack.Width = squareSize; _radarBack.Height = squareSize; _radarBack.StrokeThickness = strokeThickness;
+            Canvas.SetLeft(_radarBack, LayoutConstants.RADAR_CENTER_OFFSET);
+            Canvas.SetTop(_radarBack, LayoutConstants.RADAR_BACK_TOP);
 
-        // Left square
-        _radarLeft.Width = squareSize;
-        _radarLeft.Height = squareSize;
-        _radarLeft.StrokeThickness = strokeThickness;
-        Canvas.SetTop(_radarLeft, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+            _radarLeft.Width = squareSize; _radarLeft.Height = squareSize; _radarLeft.StrokeThickness = strokeThickness;
+            Canvas.SetTop(_radarLeft, LayoutConstants.RADAR_CENTER_OFFSET);
 
-        // Right square
-        _radarRight.Width = squareSize;
-        _radarRight.Height = squareSize;
-        _radarRight.StrokeThickness = strokeThickness;
-        Canvas.SetLeft(_radarRight, LayoutConstants.CANVAS_WIDTH - LayoutConstants.RADAR_EDGE_OFFSET - squareSize);
-        Canvas.SetTop(_radarRight, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
+            _radarRight.Width = squareSize; _radarRight.Height = squareSize; _radarRight.StrokeThickness = strokeThickness;
+            Canvas.SetLeft(_radarRight, LayoutConstants.CANVAS_WIDTH - LayoutConstants.RADAR_EDGE_OFFSET - squareSize);
+            Canvas.SetTop(_radarRight, LayoutConstants.RADAR_CENTER_OFFSET);
+        }
+
+        // Arc overlays: visible only when enhanced
+        var arcVis = radarEnabled && enhanced ? Visibility.Visible : Visibility.Collapsed;
+        _arcFront.Visibility = arcVis;
+        _arcBack.Visibility = arcVis;
+        _arcLeft.Visibility = arcVis;
+        _arcRight.Visibility = arcVis;
     }
 
     #region Context Menu (Data Swapping & Centering)
