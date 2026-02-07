@@ -43,8 +43,10 @@ public static class TelemetryDataMapper
             // Fuel - Current State
             TelemetryField.FuelLevel => data.FuelLevel,
             TelemetryField.FuelPercent => data.FuelLevelPct, // SDK provides as 0-100 percentage already
-            TelemetryField.FuelUsedLastLap => 0f, // Requires lap history tracking (use FuelCalculatorService for accurate values)
+            TelemetryField.FuelUsedLastLap => 0f, // Requires FuelCalculatorService (use 3-param overload)
             TelemetryField.FuelRemaining => data.FuelLevel, // Alias for FuelLevel
+            TelemetryField.FuelLapsRemaining => 0f, // Requires FuelCalculatorService (use 3-param overload)
+            TelemetryField.FuelToEnd => 0f, // Requires FuelCalculatorService (use 3-param overload)
             
             // Fuel - Averages (Phase 2) - NOTE: Requires telemetryService parameter
             TelemetryField.FuelAvgLast => 0f,         // Use GetValue(field, data, telemetryService)
@@ -137,6 +139,9 @@ public static class TelemetryDataMapper
             // Check if this is a fuel calculation field
             var isFuelCalcField = field switch
             {
+                TelemetryField.FuelUsedLastLap => true,
+                TelemetryField.FuelLapsRemaining => true,
+                TelemetryField.FuelToEnd => true,
                 TelemetryField.FuelAvgLast => true,
                 TelemetryField.FuelAvgL5 => true,
                 TelemetryField.FuelAvgL10 => true,
@@ -159,6 +164,11 @@ public static class TelemetryDataMapper
             {
                 return field switch
                 {
+                    // Fuel - Basic calculated fields
+                    TelemetryField.FuelUsedLastLap => fuelData.FuelUsedLastLap,
+                    TelemetryField.FuelLapsRemaining => fuelData.LapsRemaining,
+                    TelemetryField.FuelToEnd => fuelData.FuelNeededToFinish,
+                    
                     // Fuel - Averages (Phase 2)
                     TelemetryField.FuelAvgLast => fuelData.AvgFuelPerLap_Last,
                     TelemetryField.FuelAvgL5 => fuelData.AvgFuelPerLap_L5,

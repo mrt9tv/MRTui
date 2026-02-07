@@ -84,12 +84,60 @@ public abstract class WidgetBase : Window
         Background = System.Windows.Media.Brushes.Transparent;
         Topmost = true;
         ShowInTaskbar = false;
-        ResizeMode = ResizeMode.NoResize; // Can be overridden by derived classes
+        ResizeMode = ResizeMode.NoResize;
 
         // Default size (will be overridden by config)
-        Width = 300;
-        Height = 200;
+        Width = 240;
+        Height = 240;
     }
+
+    #region Screen Centering
+
+    /// <summary>
+    /// Center the widget horizontally on the current screen
+    /// </summary>
+    public void CenterHorizontally()
+    {
+        var screen = GetCurrentScreenBounds();
+        Left = screen.Left + (screen.Width - ActualWidth) / 2;
+        Config.X = Left;
+    }
+
+    /// <summary>
+    /// Center the widget vertically on the current screen
+    /// </summary>
+    public void CenterVertically()
+    {
+        var screen = GetCurrentScreenBounds();
+        Top = screen.Top + (screen.Height - ActualHeight) / 2;
+        Config.Y = Top;
+    }
+
+    /// <summary>
+    /// Center the widget both horizontally and vertically
+    /// </summary>
+    public void CenterBoth()
+    {
+        CenterHorizontally();
+        CenterVertically();
+    }
+
+    /// <summary>
+    /// Get the working area of the screen the widget is currently on
+    /// </summary>
+    private Rect GetCurrentScreenBounds()
+    {
+        // Use WPF SystemParameters for screen dimensions (no WinForms dependency)
+        // This returns the primary screen work area (excludes taskbar)
+        double workAreaWidth = SystemParameters.WorkArea.Width;
+        double workAreaHeight = SystemParameters.WorkArea.Height;
+        double workAreaLeft = SystemParameters.WorkArea.Left;
+        double workAreaTop = SystemParameters.WorkArea.Top;
+
+        return new Rect(workAreaLeft, workAreaTop, workAreaWidth, workAreaHeight);
+    }
+
+    #endregion
 
     /// <summary>
     /// Enable window dragging via mouse with snap-to-grid support
@@ -146,6 +194,17 @@ public abstract class WidgetBase : Window
             // Disable click-through
             IsHitTestVisible = true;
         }
+    }
+
+    /// <summary>
+    /// Set widget size from the MRT UI overlay (proportional — width = height for square widgets)
+    /// </summary>
+    public virtual void SetSize(double size)
+    {
+        Width = size;
+        Height = size;
+        Config.Width = size;
+        Config.Height = size;
     }
 
     /// <summary>

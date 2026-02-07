@@ -37,8 +37,8 @@ public class MRTOneWidget : WidgetBase
         // === Canvas and Grid Dimensions ===
         /// <summary>Canvas size including radar square spacing (228px = 200px grid + 14px each side for radar)</summary>
         public const double CANVAS_WIDTH = 228;
-        /// <summary>Canvas height including fuel display space below (308px = 228px top section + 80px fuel area)</summary>
-        public const double CANVAS_HEIGHT = 308;
+        /// <summary>Canvas height — square layout (no fuel display below)</summary>
+        public const double CANVAS_HEIGHT = 228;
         /// <summary>Main grid size for circular gauge content</summary>
         public const double GRID_SIZE = 200;
         /// <summary>Offset from canvas edge to center grid (accounts for radar square space)</summary>
@@ -158,9 +158,6 @@ public class MRTOneWidget : WidgetBase
     private readonly StackPanel _bottomStack;
     private readonly TextBlock _bottomValueText;
     private readonly TextBlock _bottomLabelText;
-    
-    // PHASE 2 FUEL CALCULATOR: Simple 1-line fuel display below gauge
-    private readonly TextBlock _fuelDisplay;
     
     // Brake bias transient overlay (appears temporarily when changed)
     private readonly Border _brakeBiasOverlay;
@@ -461,27 +458,6 @@ public class MRTOneWidget : WidgetBase
 
         _mainGrid.Children.Add(_bottomStack);
 
-        // PHASE 2 FUEL CALCULATOR: Comprehensive multi-line fuel display below gauge
-        // Shows: Current Fuel, Averages, Laps Remaining, Strategy Info
-        // Position on CANVAS (not grid) to avoid clipping issues with negative margins
-        _fuelDisplay = new TextBlock
-        {
-            Text = "",
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = LayoutConstants.FUEL_DISPLAY_FONT_SIZE,
-            FontWeight = FontWeights.Normal,
-            Foreground = new SolidColorBrush(Color.FromArgb(200, 255, 255, 255)), // Semi-transparent white
-            TextAlignment = TextAlignment.Center,
-            Visibility = Visibility.Collapsed, // Hidden by default, shown when fuel data available
-            LineHeight = LayoutConstants.FUEL_DISPLAY_LINE_HEIGHT,
-            TextWrapping = TextWrapping.NoWrap,
-            Width = LayoutConstants.GRID_SIZE // Match grid width for proper centering
-        };
-        // Position fuel display on canvas below the gauge
-        Canvas.SetLeft(_fuelDisplay, LayoutConstants.RADAR_OFFSET); // Align with grid left edge
-        Canvas.SetTop(_fuelDisplay, LayoutConstants.FUEL_DISPLAY_TOP);
-        outerCanvas.Children.Add(_fuelDisplay);
-
         // Left side data box (optional)
         _leftBox = new StackPanel
         {
@@ -556,6 +532,9 @@ public class MRTOneWidget : WidgetBase
 
         // No border - just the content (outer canvas with radar squares)
         Content = outerCanvas;
+
+        // Build right-click context menu for data swapping, centering, and toggles
+        BuildContextMenu();
 
         // Subscribe to SizeChanged to update scale transform
         SizeChanged += OnWidgetSizeChanged;
@@ -723,22 +702,31 @@ public class MRTOneWidget : WidgetBase
     
     /// <summary>
     /// Handle widget resize by scaling the content via LayoutTransform.
-    /// This prevents content shift by maintaining relative positions of all elements.
+    /// Canvas is square (228x228) so uniform scale keeps everything proportional.
     /// </summary>
     private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Calculate scale factors based on original canvas dimensions (228x308 - width x height with fuel display)
-        double scaleX = ActualWidth / LayoutConstants.CANVAS_WIDTH;
-        double scaleY = ActualHeight / LayoutConstants.CANVAS_HEIGHT;
-        
-        // Use uniform scale (smallest of the two to maintain aspect ratio)
-        double scale = Math.Min(scaleX, scaleY);
+        // Uniform scale based on square canvas
+        double scale = Math.Min(ActualWidth / LayoutConstants.CANVAS_WIDTH,
+                                ActualHeight / LayoutConstants.CANVAS_HEIGHT);
+        if (scale <= 0) return;
 
         // Apply scale transform to the outer canvas
         if (Content is Canvas canvas)
         {
             canvas.LayoutTransform = new ScaleTransform(scale, scale);
         }
+    }
+
+    /// <summary>
+    /// Set widget size from MRT UI overlay. Square widget, proportional scaling.
+    /// </summary>
+    public override void SetSize(double size)
+    {
+        Width = size;
+        Height = size;
+        Config.Width = size;
+        Config.Height = size;
     }
     
     private void OnBlinkTimerTick(object? sender, EventArgs e)
@@ -973,8 +961,7 @@ public class MRTOneWidget : WidgetBase
     public void UpdateSize(double size)
     {
         Width = size;
-        // Set height to accommodate fuel display below gauge (308px canvas vs 228px width)
-        Height = size * (LayoutConstants.CANVAS_HEIGHT / LayoutConstants.CANVAS_WIDTH);
+        Height = size; // Square — proportional scaling via LayoutTransform
 
         // Calculate scale factor based on default size of 200px
         double scale = size / 200.0;
@@ -1065,9 +1052,6 @@ public class MRTOneWidget : WidgetBase
         {
             UpdateSection(_bottomValueText, _bottomLabelText, _dataBinding.TertiaryField.Value, data);
         }
-        
-        // PHASE 2 FUEL CALCULATOR: Update fuel display (simple 1-line below gauge)
-        UpdateFuelDisplay();
         
         // BRAKE BIAS OVERLAY: Show temporarily when value changes (if enabled in settings)
         // Only trigger after initialization to prevent showing on connection/getting in car
@@ -1300,6 +1284,7 @@ public class MRTOneWidget : WidgetBase
 
     /// <summary>
     /// PHASE 1: Update 4-way radar spotter squares based on proximity detection
+    /// Enhanced mode: RaceLabs-style gradient colors (green → yellow → orange → red)
     /// </summary>
     private void UpdateRadarSquares(TelemetryData data)
     {
@@ -1322,13 +1307,17 @@ public class MRTOneWidget : WidgetBase
                         lateralPosition == LateralPosition.CarBothSides ||
                         lateralPosition == LateralPosition.TwoCarsRight;
         
-        _radarLeft.Fill = hasLeft
-            ? Brushes.Red    // Car(s) present on left
-            : Brushes.Green; // Clear on left
-        
-        _radarRight.Fill = hasRight
-            ? Brushes.Red    // Car(s) present on right
-            : Brushes.Green; // Clear on right
+        // Lateral: enhanced uses orange for single car, red for double cars; legacy stays red/green
+        if (_settings.EnableEnhancedRadar)
+        {
+            _radarLeft.Fill = GetLateralGradientColor(lateralPosition, isLeft: true);
+            _radarRight.Fill = GetLateralGradientColor(lateralPosition, isLeft: false);
+        }
+        else
+        {
+            _radarLeft.Fill = hasLeft ? Brushes.Red : Brushes.Green;
+            _radarRight.Fill = hasRight ? Brushes.Red : Brushes.Green;
+        }
         
         // Update FRONT/BACK squares using ProximityCalculator
         var frontZone = _proximityCalculator.GetFrontZone(data);
@@ -1337,13 +1326,16 @@ public class MRTOneWidget : WidgetBase
         // Track current zones for blinking animation
         _stateManager.UpdateProximityZones(frontZone, rearZone);
         
-        
-        _radarFront.Fill = GetZoneColor(frontZone);
-        _radarBack.Fill = GetZoneColor(rearZone);
+        _radarFront.Fill = _settings.EnableEnhancedRadar
+            ? GetEnhancedZoneBrush(frontZone)
+            : GetZoneColor(frontZone);
+        _radarBack.Fill = _settings.EnableEnhancedRadar
+            ? GetEnhancedZoneBrush(rearZone)
+            : GetZoneColor(rearZone);
     }
     
     /// <summary>
-    /// Get color for proximity zone (RACING-TIGHT thresholds)
+    /// Get color for proximity zone (RACING-TIGHT thresholds) — legacy mode
     /// </summary>
     private Brush GetZoneColor(ProximityZone zone)
     {
@@ -1357,55 +1349,70 @@ public class MRTOneWidget : WidgetBase
             _ => Brushes.Green                           // Clear (no cars detected)
         };
     }
-    
-    /// <summary>
-    /// PHASE 2 FUEL CALCULATOR: Update comprehensive fuel display below gauge.
-    /// Shows: Current Fuel, Last/L5/L10 Averages, Laps Remaining, Min/Max, Delta to Finish
-    /// </summary>
-    private void UpdateFuelDisplay()
+
+    // ── Enhanced radar gradient brushes (RaceLabs-style) ────────────────
+
+    // Pre-allocated gradient brushes to avoid per-frame allocations
+    private static readonly SolidColorBrush s_radarGreen = new(Color.FromRgb(0, 200, 0));
+    private static readonly SolidColorBrush s_radarYellowGreen = new(Color.FromRgb(180, 220, 0));
+    private static readonly SolidColorBrush s_radarYellow = new(Color.FromRgb(255, 220, 0));
+    private static readonly SolidColorBrush s_radarOrange = new(Color.FromRgb(255, 140, 0));
+    private static readonly SolidColorBrush s_radarOrangeRed = new(Color.FromRgb(255, 80, 0));
+    private static readonly SolidColorBrush s_radarRed = new(Color.FromRgb(255, 20, 20));
+
+    static MRTOneWidget()
     {
-        try
+        // Freeze all static brushes for thread-safety and performance
+        s_radarGreen.Freeze();
+        s_radarYellowGreen.Freeze();
+        s_radarYellow.Freeze();
+        s_radarOrange.Freeze();
+        s_radarOrangeRed.Freeze();
+        s_radarRed.Freeze();
+    }
+
+    /// <summary>
+    /// Enhanced mode: smooth gradient from green → yellow-green → yellow → orange → orange-red → red
+    /// based on proximity zone. More granular than legacy mode.
+    /// </summary>
+    private static Brush GetEnhancedZoneBrush(ProximityZone zone)
+    {
+        return zone switch
         {
-            // Early exit if fuel display is disabled
-            if (!_settings.EnableFuelDisplay)
-            {
-                if (_fuelDisplay != null)
-                    _fuelDisplay.Visibility = Visibility.Collapsed;
-                return;
-            }
-            
-            // Safety check: Ensure fuel display element is initialized
-            if (_fuelDisplay == null)
-                return;
-            
-            // Get fuel data from telemetry service (with null safety)
-            var fuelData = _telemetryService?.CurrentFuelData;
+            ProximityZone.VeryClose => s_radarRed,         // <4m  — bright red
+            ProximityZone.Close => s_radarOrangeRed,       // 4-7m — orange-red
+            ProximityZone.Near => s_radarOrange,           // 7-12m — orange
+            ProximityZone.Careful => s_radarYellow,        // 12-16m — yellow
+            ProximityZone.Far => s_radarYellowGreen,       // >16m — yellow-green (instead of plain green)
+            _ => s_radarGreen                              // Clear — green
+        };
+    }
 
-            // Use MRTOneFuelDisplay to generate formatted fuel text and color
-            var displayResult = MRTOneFuelDisplay.GenerateFuelDisplay(fuelData, _settings.EnableFuelStrategy);
-
-            // Apply the result to the UI
-            if (displayResult.IsVisible)
+    /// <summary>
+    /// Enhanced lateral color: gradient based on how many cars are beside the driver.
+    /// Two cars = red (critical), one car = orange (caution), clear = green.
+    /// </summary>
+    private static Brush GetLateralGradientColor(LateralPosition position, bool isLeft)
+    {
+        if (isLeft)
+        {
+            return position switch
             {
-                _fuelDisplay.Text = displayResult.Text;
-                _fuelDisplay.Foreground = new SolidColorBrush(displayResult.ForegroundColor);
-                _fuelDisplay.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                _fuelDisplay.Visibility = Visibility.Collapsed;
-            }
+                LateralPosition.TwoCarsLeft => s_radarRed,      // Two cars on left — critical
+                LateralPosition.CarLeft => s_radarOrange,        // One car on left — caution
+                LateralPosition.CarBothSides => s_radarOrange,   // Cars on both sides (left present)
+                _ => s_radarGreen                                 // Clear on left
+            };
         }
-        catch (Exception ex)
+        else
         {
-            // Log exception instead of silently swallowing errors
-            // Note: ILogger not available in WidgetBase, use Debug for now
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] Fuel display update error: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[MRTOne] Stack trace: {ex.StackTrace}");
-
-            // Hide fuel display on error to prevent widget crash
-            if (_fuelDisplay != null)
-                _fuelDisplay.Visibility = Visibility.Collapsed;
+            return position switch
+            {
+                LateralPosition.TwoCarsRight => s_radarRed,     // Two cars on right — critical
+                LateralPosition.CarRight => s_radarOrange,       // One car on right — caution
+                LateralPosition.CarBothSides => s_radarOrange,   // Cars on both sides (right present)
+                _ => s_radarGreen                                 // Clear on right
+            };
         }
     }
     
@@ -1569,10 +1576,6 @@ public class MRTOneWidget : WidgetBase
             _visualEffects?.RemoveGlowEffects();
         }
         
-        // Enhancement 4: Fuel Display - trigger update instead of just toggling visibility
-        // Let UpdateFuelDisplay() handle visibility based on both settings AND data availability
-        UpdateFuelDisplay();
-
         // Enhancement 5: Enhanced Radar Visibility (Phase 4.2)
         ApplyRadarVisibilitySettings();
     }
@@ -1623,6 +1626,75 @@ public class MRTOneWidget : WidgetBase
         Canvas.SetLeft(_radarRight, LayoutConstants.CANVAS_WIDTH - LayoutConstants.RADAR_EDGE_OFFSET - squareSize);
         Canvas.SetTop(_radarRight, LayoutConstants.RADAR_CENTER_OFFSET - (_settings.EnableEnhancedRadar ? posOffset : 0));
     }
+
+    #region Context Menu (Data Swapping & Centering)
+
+    /// <summary>
+    /// Build the right-click context menu for data field swapping, centering, and toggles.
+    /// Rebuilds on each open to reflect current state (checked fields, active toggles).
+    /// </summary>
+    private void BuildContextMenu()
+    {
+        // On open, rebuild the menu to reflect current settings
+        ContextMenuOpening += (_, _) =>
+        {
+            ContextMenu = MRTOneContextMenu.Build(
+                _settings,
+                OnContextFieldChanged,
+                CenterHorizontally,
+                CenterVertically,
+                CenterBoth,
+                OnContextSettingsChanged);
+        };
+
+        // Set an initial menu so the event fires
+        ContextMenu = MRTOneContextMenu.Build(
+            _settings,
+            OnContextFieldChanged,
+            CenterHorizontally,
+            CenterVertically,
+            CenterBoth,
+            OnContextSettingsChanged);
+    }
+
+    /// <summary>
+    /// Handle a field change from the context menu.
+    /// Slot is "top", "center", "bottom", "left", or "right".
+    /// </summary>
+    private void OnContextFieldChanged(string slot, TelemetryField? field)
+    {
+        switch (slot)
+        {
+            case "top":
+                _settings.TopField = field?.ToString();
+                break;
+            case "center":
+                _settings.CenterField = field?.ToString() ?? "Gear";
+                break;
+            case "bottom":
+                _settings.BottomField = field?.ToString();
+                break;
+            case "left":
+                _settings.LeftField = field?.ToString();
+                break;
+            case "right":
+                _settings.RightField = field?.ToString();
+                break;
+        }
+
+        // Apply the updated settings through the existing pipeline
+        UpdateWidgetSettings(_settings);
+    }
+
+    /// <summary>
+    /// Handle settings changes from the context menu (toggles).
+    /// </summary>
+    private void OnContextSettingsChanged(MRTOneSettings newSettings)
+    {
+        UpdateWidgetSettings(newSettings);
+    }
+
+    #endregion
 
     protected override void OnClosed(EventArgs e)
     {

@@ -183,7 +183,7 @@ public static class MRTOneDataFormatter
             TelemetryField.BestLapTime when value is float time => FormatLapTime(time),
             TelemetryField.CurrentLapTime when value is float time => FormatLapTime(time),
             
-            // Delta times (with +/- sign)
+            // Delta times (with +/- sign, max 3 decimals)
             TelemetryField.DeltaToBestLap when value is float delta => 
                 delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
             TelemetryField.DeltaToSessionBest when value is float delta => 
@@ -198,6 +198,62 @@ public static class MRTOneDataFormatter
             
             // Session time remaining (format as mm:ss or hh:mm:ss)
             TelemetryField.SessionTimeRemaining when value is double seconds => FormatSessionTime(seconds),
+            TelemetryField.SessionTime when value is double seconds => FormatSessionTime(seconds),
+            
+            // Session laps
+            TelemetryField.SessionLaps when value is int laps => $"{laps}",
+            TelemetryField.SessionLapsRemaining when value is int laps => $"{laps}",
+            TelemetryField.SessionNum when value is int num => $"{num}",
+            
+            // Fuel laps remaining (1 decimal — the basic one, not L5/L10)
+            TelemetryField.FuelLapsRemaining when value is float laps =>
+                laps.ToString("F1", CultureInfo.InvariantCulture),
+            TelemetryField.FuelToEnd when value is float fuel =>
+                FormatFuelValue(fuel, useMetricUnits),
+            TelemetryField.FuelUsedLastLap when value is float fuel =>
+                FormatFuelValue(fuel, useMetricUnits),
+            TelemetryField.FuelRemaining when value is float fuel =>
+                FormatFuelValue(fuel, useMetricUnits),
+            
+            // G-Forces (max 3 decimal places)
+            TelemetryField.CorneringG when value is float g =>
+                g.ToString("F2", CultureInfo.InvariantCulture),
+            TelemetryField.AccelBrakingG when value is float g =>
+                g.ToString("F2", CultureInfo.InvariantCulture),
+            TelemetryField.SuspensionG when value is float g =>
+                g.ToString("F2", CultureInfo.InvariantCulture),
+            
+            // Tire temperatures (integer, no decimals needed for display)
+            TelemetryField.TireTempLF when value is float temp => $"{(int)temp}",
+            TelemetryField.TireTempRF when value is float temp => $"{(int)temp}",
+            TelemetryField.TireTempLR when value is float temp => $"{(int)temp}",
+            TelemetryField.TireTempRR when value is float temp => $"{(int)temp}",
+            
+            // Tire wear (1 decimal %)
+            TelemetryField.TireWearLF when value is float wear => $"{wear:F1}%",
+            TelemetryField.TireWearRF when value is float wear => $"{wear:F1}%",
+            TelemetryField.TireWearLR when value is float wear => $"{wear:F1}%",
+            TelemetryField.TireWearRR when value is float wear => $"{wear:F1}%",
+            
+            // Steering angle (1 decimal, in degrees — iRacing gives radians)
+            TelemetryField.SteeringAngle when value is float rad =>
+                $"{(rad * 57.2958f):F1}°",
+            
+            // Speed variants
+            TelemetryField.SpeedKmh when value is float speedMs =>
+                $"{(int)UnitConversions.MpsToKmh(speedMs)}",
+            TelemetryField.SpeedMph when value is float speedMs =>
+                $"{(int)UnitConversions.MpsToMph(speedMs)}",
+            
+            // Boolean / status fields
+            TelemetryField.InPitLane when value is bool inPit => inPit ? "IN PIT" : "ON TRK",
+            TelemetryField.OnTrack when value is bool onTrack => onTrack ? "ON TRK" : "OFF",
+            TelemetryField.Flags when value is string flags => flags,
+            
+            // String info fields
+            TelemetryField.DriverName when value is string name => name,
+            TelemetryField.CarNumber when value is string num => $"#{num}",
+            TelemetryField.TrackName when value is string track => track,
 
             // Default fallback
             _ => value?.ToString() ?? "-"
@@ -281,6 +337,10 @@ public static class MRTOneDataFormatter
 
             TelemetryField.FuelLevel => useMetricUnits ? "FUEL L" : "FUEL gal",
             TelemetryField.FuelPercent => "FUEL %",
+            TelemetryField.FuelUsedLastLap => useMetricUnits ? "USED L" : "USED gal",
+            TelemetryField.FuelRemaining => useMetricUnits ? "REM L" : "REM gal",
+            TelemetryField.FuelLapsRemaining => "LAPS",
+            TelemetryField.FuelToEnd => useMetricUnits ? "END L" : "END gal",
             TelemetryField.FuelAvgLast => useMetricUnits ? "AVG L" : "AVG gal",
             TelemetryField.FuelAvgL5 => useMetricUnits ? "L5 L" : "L5 gal",
             TelemetryField.FuelAvgL10 => useMetricUnits ? "L10 L" : "L10 gal",
@@ -314,6 +374,34 @@ public static class MRTOneDataFormatter
             TelemetryField.DeltaToSessionBest => "Δ SES",
             
             TelemetryField.SessionTimeRemaining => "TIME",
+            TelemetryField.SessionTime => "SESS",
+            TelemetryField.SessionLaps => "TOTAL",
+            TelemetryField.SessionLapsRemaining => "REMAIN",
+            TelemetryField.SessionNum => "SESS #",
+
+            TelemetryField.CorneringG => "LAT G",
+            TelemetryField.AccelBrakingG => "LON G",
+            TelemetryField.SuspensionG => "VER G",
+            
+            TelemetryField.TireTempLF => "LF °C",
+            TelemetryField.TireTempRF => "RF °C",
+            TelemetryField.TireTempLR => "LR °C",
+            TelemetryField.TireTempRR => "RR °C",
+            TelemetryField.TireWearLF => "LF WR",
+            TelemetryField.TireWearRF => "RF WR",
+            TelemetryField.TireWearLR => "LR WR",
+            TelemetryField.TireWearRR => "RR WR",
+            
+            TelemetryField.SteeringAngle => "STEER",
+            TelemetryField.SpeedKmh => "km/h",
+            TelemetryField.SpeedMph => "mph",
+            
+            TelemetryField.InPitLane => "PIT",
+            TelemetryField.OnTrack => "TRK",
+            TelemetryField.Flags => "FLAG",
+            TelemetryField.DriverName => "DRIVER",
+            TelemetryField.CarNumber => "CAR #",
+            TelemetryField.TrackName => "TRACK",
 
             TelemetryField.ABSActive => "",  // No label (value is "ABS")
             TelemetryField.TractionControl => "TC",
@@ -336,7 +424,13 @@ public static class MRTOneDataFormatter
     /// <param name="data">Full telemetry data (for context like gear)</param>
     /// <param name="primaryColor">Theme primary color (teal by default)</param>
     /// <param name="secondaryColor">Theme secondary color (orange by default)</param>
-    public static Color GetValueColor(TelemetryField field, object value, TelemetryData data, Color primaryColor, Color secondaryColor)
+    /// <param name="fuelAlertSettings">Optional fuel alert settings for threshold colours</param>
+    /// <param name="avgFuelPerLap">Average fuel per lap (for fuel alert calculations)</param>
+    public static Color GetValueColor(
+        TelemetryField field, object value, TelemetryData data,
+        Color primaryColor, Color secondaryColor,
+        Models.FuelAlertSettings? fuelAlertSettings = null,
+        float avgFuelPerLap = 0f)
     {
         // Handle ABS (int value: 0 or 1)
         if (field == TelemetryField.ABSActive && value is int absValue)
@@ -355,6 +449,15 @@ public static class MRTOneDataFormatter
         {
             if (tcValue < 0) return primaryColor;      // Theme color when N/A
             return tcValue == 0 ? secondaryColor : primaryColor; // Secondary when OFF, primary when active
+        }
+
+        // Handle fuel fields with FuelAlertSettings (doable laps threshold system)
+        if (fuelAlertSettings != null && IsFuelAlertField(field))
+        {
+            float currentFuel = data.FuelLevel;
+            float avg = avgFuelPerLap > 0 ? avgFuelPerLap : 0;
+            var level = fuelAlertSettings.GetAlertLevel(currentFuel, avg);
+            return FuelAlertSettings.GetAlertColor(level);
         }
 
         if (value is not float floatValue)
@@ -378,6 +481,26 @@ public static class MRTOneDataFormatter
             _ => primaryColor
         };
     }
+
+    #endregion
+
+    #region Fuel Alert Helpers
+
+    /// <summary>
+    /// Whether a field should use the fuel alert colour system.
+    /// </summary>
+    private static bool IsFuelAlertField(TelemetryField field) => field switch
+    {
+        TelemetryField.FuelLevel => true,
+        TelemetryField.FuelRemaining => true,
+        TelemetryField.FuelLapsRemaining => true,
+        TelemetryField.FuelLapsRemainingL5 => true,
+        TelemetryField.FuelLapsRemainingL10 => true,
+        TelemetryField.FuelPercent => true,
+        TelemetryField.FuelToEnd => true,
+        TelemetryField.FuelDeltaToFinish => true,
+        _ => false
+    };
 
     #endregion
 }

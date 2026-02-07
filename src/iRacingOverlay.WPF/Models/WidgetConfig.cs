@@ -32,12 +32,12 @@ public class WidgetConfig
     /// <summary>
     /// Window width
     /// </summary>
-    public double Width { get; set; } = 300;
+    public double Width { get; set; } = 240;
 
     /// <summary>
     /// Window height
     /// </summary>
-    public double Height { get; set; } = 200;
+    public double Height { get; set; } = 240;
 
     /// <summary>
     /// Window opacity (0.0 to 1.0)

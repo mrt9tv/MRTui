@@ -10,12 +10,16 @@ namespace iRacingOverlay.Core.Services;
 public sealed class FuelCalculatorService
 {
     private readonly List<float> _lapFuelUsage = new();
+    private readonly List<float> _greenLapFuelUsage = new();
+    private readonly List<float> _yellowLapFuelUsage = new();
+    private readonly List<float> _lapTimes = new();
     private float _fuelAtLapStart;
     private int _lastLap = -1;
     private bool _initialized;
     private float _previousFuel;
     private float _minFuel = float.MaxValue;
     private float _maxFuel;
+    private bool _wasUnderYellow;
 
     /// <summary>Current fuel calculation snapshot exposed to consumers.</summary>
     public FuelData CurrentData { get; } = new();
@@ -28,16 +32,21 @@ public sealed class FuelCalculatorService
         var fuel = data.FuelLevel;
         var lap = data.Lap;
 
-        // ── bootstrap on first tick ──────────────────────────────────────
+        // ── detect yellow flag (caution) from session flags ──────────
+        bool isUnderYellow = (data.SessionFlags & 0x00004000) != 0 // Caution
+                          || (data.SessionFlags & 0x00000008) != 0; // Yellow
+
+        // ── bootstrap on first tick ──────────────────────────────────
         if (!_initialized)
         {
             _fuelAtLapStart = fuel;
             _previousFuel = fuel;
             _lastLap = lap;
             _initialized = true;
+            CurrentData.StartingFuel = fuel;
         }
 
-        // ── pit stop detection (fuel increased) ─────────────────────────
+        // ── pit stop detection (fuel increased beyond noise) ─────────
         if (fuel > _previousFuel + 0.5f)
         {
             _fuelAtLapStart = fuel;
@@ -46,7 +55,7 @@ public sealed class FuelCalculatorService
             CurrentData.StintLapCount = 0;
         }
 
-        // ── lap change ──────────────────────────────────────────────────
+        // ── lap change ──────────────────────────────────────────────
         if (lap != _lastLap && lap > _lastLap)
         {
             float used = _fuelAtLapStart - fuel;
@@ -61,9 +70,25 @@ public sealed class FuelCalculatorService
                 CurrentData.FuelUsedLastLap = used;
                 CurrentData.LapsCompleted = _lapFuelUsage.Count;
 
+                // Track green vs yellow separately
+                if (_wasUnderYellow)
+                {
+                    _yellowLapFuelUsage.Add(used);
+                    CurrentData.YellowFlagLapCount = _yellowLapFuelUsage.Count;
+                }
+                else
+                {
+                    _greenLapFuelUsage.Add(used);
+                    CurrentData.GreenFlagLapCount = _greenLapFuelUsage.Count;
+                }
+
                 // Lap-to-lap delta
                 if (_lapFuelUsage.Count >= 2)
                     CurrentData.LapToLapDelta = used - _lapFuelUsage[^2];
+                
+                // Track lap times for timed session estimation
+                if (data.LapLastLapTime > 0 && data.LapLastLapTime < 600)
+                    _lapTimes.Add(data.LapLastLapTime);
             }
 
             _fuelAtLapStart = fuel;
@@ -71,7 +96,10 @@ public sealed class FuelCalculatorService
             CurrentData.StintLapCount++;
         }
 
-        // ── live mid-lap consumption estimate ───────────────────────────
+        // Remember yellow state for the lap we just completed
+        _wasUnderYellow = isUnderYellow;
+
+        // ── live mid-lap consumption estimate ───────────────────────
         CurrentData.FuelUsedThisLap = Math.Max(0, _fuelAtLapStart - fuel);
         CurrentData.CurrentLapFuelRate = data.LapDistPct > 0.05f
             ? CurrentData.FuelUsedThisLap / data.LapDistPct
@@ -79,21 +107,30 @@ public sealed class FuelCalculatorService
 
         _previousFuel = fuel;
 
-        // ── populate snapshot ───────────────────────────────────────────
+        // ── populate snapshot ───────────────────────────────────────
         CurrentData.CurrentFuel = fuel;
         CurrentData.FuelPct = data.FuelLevelPct;
         CurrentData.TankCapacity = data.FuelLevelMax;
         CurrentData.FuelPressure = data.FuelPress;
         CurrentData.CurrentLap = lap;
         CurrentData.SessionState = data.SessionState;
+        CurrentData.IsUnderYellow = isUnderYellow;
         CurrentData.LastUpdate = DateTime.UtcNow;
 
-        // Averages
+        // ── averages ────────────────────────────────────────────────
         CurrentData.AvgFuelPerLap_Last = _lapFuelUsage.Count > 0 ? _lapFuelUsage[^1] : 0;
-        CurrentData.AvgFuelPerLap_L5 = WindowAverage(5);
-        CurrentData.AvgFuelPerLap_L10 = WindowAverage(10);
+        CurrentData.AvgFuelPerLap_L5 = WindowAverage(_lapFuelUsage, 5);
+        CurrentData.AvgFuelPerLap_L10 = WindowAverage(_lapFuelUsage, 10);
         CurrentData.AvgFuelPerLap_Session = _lapFuelUsage.Count > 0
             ? _lapFuelUsage.Average()
+            : 0;
+
+        // Green/yellow averages
+        CurrentData.GreenFlagAverage = _greenLapFuelUsage.Count > 0
+            ? _greenLapFuelUsage.Average()
+            : 0;
+        CurrentData.YellowFlagAverage = _yellowLapFuelUsage.Count > 0
+            ? _yellowLapFuelUsage.Average()
             : 0;
 
         // Stint average
@@ -108,7 +145,12 @@ public sealed class FuelCalculatorService
         // HasSufficientData — need at least 2 valid laps
         CurrentData.HasSufficientData = _lapFuelUsage.Count >= 2;
 
-        // ── laps remaining ──────────────────────────────────────────────
+        // Average lap time for timed session calculations
+        CurrentData.AverageLapTime = _lapTimes.Count > 0
+            ? _lapTimes.TakeLast(5).Average()
+            : 0;
+
+        // ── laps remaining ──────────────────────────────────────────
         float avgForCalc = CurrentData.AvgFuelPerLap_L5 > 0
             ? CurrentData.AvgFuelPerLap_L5
             : CurrentData.AvgFuelPerLap_Session;
@@ -121,15 +163,24 @@ public sealed class FuelCalculatorService
         CurrentData.IRacingLapsRemaining = data.SessionLapsRemain;
         CurrentData.LapsDifference = CurrentData.LapsRemaining - CurrentData.IRacingLapsRemaining;
 
-        // ── race strategy basics ────────────────────────────────────────
+        // ── race strategy ───────────────────────────────────────────
         CurrentData.RaceLapsRemaining = data.SessionLapsRemain;
         CurrentData.SessionTimeRemaining = data.SessionTimeRemain;
         CurrentData.IsTimedSession = data.SessionLapsTotal <= 0 && data.SessionTimeRemain > 0;
 
-        if (avgForCalc > 0 && CurrentData.RaceLapsRemaining > 0)
+        // For timed sessions, estimate laps remaining from time + avg lap time
+        int effectiveRaceLaps = CurrentData.RaceLapsRemaining;
+        if (CurrentData.IsTimedSession && CurrentData.AverageLapTime > 10f)
+        {
+            float estimatedLaps = (float)(CurrentData.SessionTimeRemaining / CurrentData.AverageLapTime);
+            CurrentData.EstimatedLapsFromTime = estimatedLaps;
+            effectiveRaceLaps = (int)Math.Ceiling(estimatedLaps);
+        }
+
+        if (avgForCalc > 0 && effectiveRaceLaps > 0)
         {
             float buffer = CurrentData.FuelBufferLaps;
-            CurrentData.FuelNeededToFinish = (CurrentData.RaceLapsRemaining + buffer) * avgForCalc;
+            CurrentData.FuelNeededToFinish = (effectiveRaceLaps + buffer) * avgForCalc;
             CurrentData.FuelDeltaToFinish = fuel - CurrentData.FuelNeededToFinish;
             CurrentData.CanFinishWithoutStop = CurrentData.FuelDeltaToFinish >= 0;
             CurrentData.FuelToAddAtPit = Math.Max(0, CurrentData.FuelNeededToFinish - fuel);
@@ -137,14 +188,22 @@ public sealed class FuelCalculatorService
 
         // Total fuel used
         CurrentData.TotalFuelUsed = _lapFuelUsage.Sum();
+
+        // Fuel consistency variance (standard deviation)
+        if (_lapFuelUsage.Count >= 3)
+        {
+            float mean = _lapFuelUsage.Average();
+            float sumSqDiff = _lapFuelUsage.Sum(v => (v - mean) * (v - mean));
+            CurrentData.FuelConsistencyVariance = (float)Math.Sqrt(sumSqDiff / _lapFuelUsage.Count);
+        }
     }
 
     // ── helpers ──────────────────────────────────────────────────────────
 
-    private float WindowAverage(int window)
+    private static float WindowAverage(List<float> list, int window)
     {
-        if (_lapFuelUsage.Count == 0) return 0;
-        int count = Math.Min(window, _lapFuelUsage.Count);
-        return _lapFuelUsage.TakeLast(count).Average();
+        if (list.Count == 0) return 0;
+        int count = Math.Min(window, list.Count);
+        return list.TakeLast(count).Average();
     }
 }
