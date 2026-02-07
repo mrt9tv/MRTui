@@ -88,6 +88,7 @@ public partial class MainWindow : Window
         var items = new List<WidgetTypeItem>
         {
             new("MRT One", WidgetType.MRTOne),
+            new("Turn Display", WidgetType.TurnDisplay),
             // Future: new("Fuel Monitor", WidgetType.FuelMonitor),
             // Future: new("Timing Board", WidgetType.TimingBoard),
         };

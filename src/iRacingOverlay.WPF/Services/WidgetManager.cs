@@ -38,6 +38,9 @@ public class WidgetManager
     {
         _widgetFactories[WidgetType.MRTOne] = (service, config) =>
             new Widgets.MRTOneWidget.MRTOneWidget(service, config);
+        
+        _widgetFactories[WidgetType.TurnDisplay] = (service, config) =>
+            new Widgets.TurnDisplayWidget.TurnDisplayWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)

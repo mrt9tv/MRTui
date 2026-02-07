@@ -8,7 +8,12 @@ public enum WidgetType
     /// <summary>
     /// MRT One — circular gauge with gear, speed, RPM, 4-way radar, and fuel display.
     /// </summary>
-    MRTOne
+    MRTOne,
+    
+    /// <summary>
+    /// Turn Display — compact horizontal bar showing current turn number and name.
+    /// </summary>
+    TurnDisplay
 }
 
 /// <summary>
@@ -19,6 +24,7 @@ public static class WidgetTypeExtensions
     public static string GetDisplayName(this WidgetType type) => type switch
     {
         WidgetType.MRTOne => "MRT One",
+        WidgetType.TurnDisplay => "Turn Display",
         _ => type.ToString()
     };
 }
