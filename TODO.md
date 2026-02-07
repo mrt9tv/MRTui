@@ -39,12 +39,11 @@ Live sector splits comparing current lap to personal best, session best, and ove
 
 ---
 
-## Systems — Planned
-### 20. Turn Number + Name Widget
-A small widget displaying the current turn number and turn name (e.g., "T3: Casino Square"), updating dynamically as you navigate the track. Useful for referencing setup notes, coaching instructions, or track guide videos.
+## Systems — Completed
+### 20. ✅ Turn Number + Name Widget (v0.2.0)
+A small widget displaying the current turn number and turn name (e.g., "T3: Eau Rouge"), updating dynamically as you navigate the track. Horizontal bar design (70px compact / 200px full), MRT One color theme with animated border (teal → orange) that interpolates through turn progress. Toggleable turn name display. 5 tracks supported: Imola, Monza, Long Beach, Bathurst, Spa.
 
-
-### 3. Pit Strategy Calculator
+## Systems — Planned### 3. Pit Strategy Calculator
 Auto-calculate mandatory pit windows, optimal pit lap based on remaining fuel laps, tyre degradation rate, and undercut/overcut gap analysis.
 
 ### 7. Session Stint History
