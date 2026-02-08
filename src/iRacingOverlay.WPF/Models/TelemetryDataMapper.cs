@@ -68,6 +68,11 @@ public static class TelemetryDataMapper
             TelemetryField.FuelGreenLapsRemain => 0f,  // Use GetValue(field, data, telemetryService)
             TelemetryField.FuelYellowLapsRemain => 0f, // Use GetValue(field, data, telemetryService)
             
+            // Fuel - Saving / Lift & Coast (Phase 3) - NOTE: Requires telemetryService parameter
+            TelemetryField.FuelSavingTarget => 0f,     // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelProjectedDelta => 0f,   // Use GetValue(field, data, telemetryService)
+            TelemetryField.FuelIsPittingFaster => 0f,   // Use GetValue(field, data, telemetryService)
+            
             // Lap & Timing
             TelemetryField.LapNumber => data.Lap,
             TelemetryField.Position => data.LivePosition,         // Live overall position (race/qual mode-aware, frozen on checkered)
@@ -161,6 +166,9 @@ public static class TelemetryDataMapper
                 TelemetryField.FuelYellowAvg => true,
                 TelemetryField.FuelGreenLapsRemain => true,
                 TelemetryField.FuelYellowLapsRemain => true,
+                TelemetryField.FuelSavingTarget => true,
+                TelemetryField.FuelProjectedDelta => true,
+                TelemetryField.FuelIsPittingFaster => true,
                 _ => false
             };
             
@@ -197,6 +205,11 @@ public static class TelemetryDataMapper
                     TelemetryField.FuelYellowLapsRemain => fuelData.YellowFlagAverage > 0 
                         ? fuelData.CurrentFuel / fuelData.YellowFlagAverage 
                         : 0f,
+                    
+                    // Fuel - Saving / Lift & Coast (Phase 3)
+                    TelemetryField.FuelSavingTarget => fuelData.FuelSavingTarget,
+                    TelemetryField.FuelProjectedDelta => fuelData.ProjectedFuelDelta,
+                    TelemetryField.FuelIsPittingFaster => fuelData.IsPittingFaster ? 1f : 0f,
                     
                     _ => 0f // Should never reach here
                 };

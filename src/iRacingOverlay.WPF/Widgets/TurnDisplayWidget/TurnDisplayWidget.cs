@@ -12,9 +12,8 @@ using iRacingOverlay.WPF.Models;
 namespace iRacingOverlay.WPF.Widgets.TurnDisplayWidget;
 
 /// <summary>
-/// Turn Display Widget - Shows last completed turn, current turn, and next upcoming turn
-/// Fixed-width horizontal bar design with MRT One color theme (teal + orange)
-/// Format: "T14: Parabolica | T1: Rettifilo | T2: Roggia"
+/// Turn Display Widget - Vertical layout showing next and last turn.
+/// Compact vertical bar: NEXT (teal) → LAST (orange)
 /// </summary>
 public class TurnDisplayWidget : WidgetBase
 {
@@ -23,23 +22,15 @@ public class TurnDisplayWidget : WidgetBase
     private Canvas _mainCanvas = null!;
     private Grid _contentGrid = null!;
     
-    // Last turn (completed)
-    private StackPanel _lastTurnPanel = null!;
-    private TextBlock _lastTurnLabel = null!;
-    private TextBlock _lastTurnNumber = null!;
-    private TextBlock _lastTurnName = null!;
-    
-    // Current turn (in progress)
-    private StackPanel _currentTurnPanel = null!;
-    private TextBlock _currentTurnLabel = null!;
-    private TextBlock _currentTurnNumber = null!;
-    private TextBlock _currentTurnName = null!;
-    
-    // Next turn (upcoming)
-    private StackPanel _nextTurnPanel = null!;
-    private TextBlock _nextTurnLabel = null!;
+    // Next turn (top, teal)
+    private Border _nextRow = null!;
     private TextBlock _nextTurnNumber = null!;
     private TextBlock _nextTurnName = null!;
+    
+    // Last turn (bottom, orange)
+    private Border _lastRow = null!;
+    private TextBlock _lastTurnNumber = null!;
+    private TextBlock _lastTurnName = null!;
     
     private Border _backgroundBorder = null!;
 
@@ -47,10 +38,9 @@ public class TurnDisplayWidget : WidgetBase
 
     #region Colors (MRT One Theme)
 
-    // Primary colors from MRT One widget
     private static readonly Color COLOR_TEAL = Color.FromRgb(0, 128, 128);         // #008080
     private static readonly Color COLOR_ORANGE = Color.FromRgb(255, 128, 0);       // #FF8000
-    private static readonly Color COLOR_DARK_BG = Color.FromArgb(230, 18, 18, 18); // #121212E6 (90% opacity)
+    private static readonly Color COLOR_DARK_BG = Color.FromArgb(250, 18, 18, 18); // #121212FA — higher opacity
     private static readonly Color COLOR_TEXT = Color.FromRgb(240, 240, 240);       // #F0F0F0
     private static readonly Color COLOR_MUTED = Color.FromRgb(136, 136, 136);      // #888888
 
@@ -58,9 +48,10 @@ public class TurnDisplayWidget : WidgetBase
 
     #region Sizing Constants
 
-    private const double WIDGET_HEIGHT = 60;
-    private const double WIDGET_WIDTH = 450;      // Fixed width for 3 columns
-    private const double PADDING = 10;
+    private const double WIDGET_WIDTH = 170;
+    private const double WIDGET_HEIGHT = 110;
+    private const double ROW_HEIGHT = 44;
+    private const double PADDING = 6;
     private const double BORDER_RADIUS = 6;
     private const double BORDER_THICKNESS = 2;
     private const double GLOW_BLUR_RADIUS = 8;
@@ -69,10 +60,11 @@ public class TurnDisplayWidget : WidgetBase
 
     #region Settings
 
-    /// <summary>
-    /// Whether to show turn names (true) or just turn numbers (false)
-    /// </summary>
+    /// <summary>Whether to show turn names (true) or just turn numbers (false)</summary>
     public bool ShowTurnName { get; set; } = true;
+
+    /// <summary>Whether to animate border color based on turn progress</summary>
+    public bool AnimateBorder { get; set; } = false;
 
     #endregion
 
@@ -91,12 +83,18 @@ public class TurnDisplayWidget : WidgetBase
 
     private void LoadSettings()
     {
-        if (Config?.Settings != null && Config.Settings.TryGetValue("showTurnName", out var value))
+        if (Config?.Settings == null) return;
+
+        if (Config.Settings.TryGetValue("showTurnName", out var v1))
         {
-            if (value is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.True)
-                ShowTurnName = true;
-            else if (value is bool boolValue)
-                ShowTurnName = boolValue;
+            if (v1 is JsonElement je1) ShowTurnName = je1.ValueKind == JsonValueKind.True;
+            else if (v1 is bool b1) ShowTurnName = b1;
+        }
+
+        if (Config.Settings.TryGetValue("animateBorder", out var v2))
+        {
+            if (v2 is JsonElement je2) AnimateBorder = je2.ValueKind == JsonValueKind.True;
+            else if (v2 is bool b2) AnimateBorder = b2;
         }
     }
 
@@ -104,12 +102,11 @@ public class TurnDisplayWidget : WidgetBase
     {
         if (Config == null) return;
         Config.Settings["showTurnName"] = ShowTurnName;
-        // Widget manager will handle actual save to file
+        Config.Settings["animateBorder"] = AnimateBorder;
     }
 
     private void InitializeWidget()
     {
-        // Main canvas
         _mainCanvas = new Canvas
         {
             Width = WIDGET_WIDTH,
@@ -117,7 +114,6 @@ public class TurnDisplayWidget : WidgetBase
             Background = Brushes.Transparent
         };
 
-        // Background border with rounded corners and glow
         _backgroundBorder = new Border
         {
             Width = WIDGET_WIDTH,
@@ -135,172 +131,132 @@ public class TurnDisplayWidget : WidgetBase
             }
         };
 
-        // Content grid (3 equal columns)
+        // Vertical content grid: 2 rows with separator
         _contentGrid = new Grid
         {
-            Width = WIDGET_WIDTH - (PADDING * 2),
-            Height = WIDGET_HEIGHT - (PADDING * 2),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
+            Margin = new Thickness(PADDING)
         };
 
-        // Define 3 equal columns + 2 separators
-        _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) }); // Separator
-        _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) }); // Separator
-        _contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        _contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        _contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Auto) }); // sep
+        _contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        // LAST TURN COLUMN
-        _lastTurnPanel = CreateTurnPanel(out _lastTurnLabel, out _lastTurnNumber, out _lastTurnName, "LAST", COLOR_MUTED);
-        Grid.SetColumn(_lastTurnPanel, 0);
-        _contentGrid.Children.Add(_lastTurnPanel);
+        // NEXT TURN (top, teal)
+        _nextRow = CreateTurnRow(out _nextTurnNumber, out _nextTurnName, "NXT", COLOR_TEAL);
+        Grid.SetRow(_nextRow, 0);
+        _contentGrid.Children.Add(_nextRow);
 
-        // Separator 1
-        var separator1 = new Border
-        {
-            Width = 1,
-            Height = WIDGET_HEIGHT - (PADDING * 2),
-            Background = new SolidColorBrush(COLOR_MUTED),
-            Opacity = 0.3,
-            Margin = new Thickness(8, 0, 8, 0)
-        };
-        Grid.SetColumn(separator1, 1);
-        _contentGrid.Children.Add(separator1);
+        // Separator
+        var sep = CreateSeparator();
+        Grid.SetRow(sep, 1);
+        _contentGrid.Children.Add(sep);
 
-        // CURRENT TURN COLUMN
-        _currentTurnPanel = CreateTurnPanel(out _currentTurnLabel, out _currentTurnNumber, out _currentTurnName, "CURRENT", COLOR_ORANGE);
-        Grid.SetColumn(_currentTurnPanel, 2);
-        _contentGrid.Children.Add(_currentTurnPanel);
+        // LAST TURN (bottom, orange)
+        _lastRow = CreateTurnRow(out _lastTurnNumber, out _lastTurnName, "LST", COLOR_ORANGE);
+        Grid.SetRow(_lastRow, 2);
+        _contentGrid.Children.Add(_lastRow);
 
-        // Separator 2
-        var separator2 = new Border
-        {
-            Width = 1,
-            Height = WIDGET_HEIGHT - (PADDING * 2),
-            Background = new SolidColorBrush(COLOR_MUTED),
-            Opacity = 0.3,
-            Margin = new Thickness(8, 0, 8, 0)
-        };
-        Grid.SetColumn(separator2, 3);
-        _contentGrid.Children.Add(separator2);
-
-        // NEXT TURN COLUMN
-        _nextTurnPanel = CreateTurnPanel(out _nextTurnLabel, out _nextTurnNumber, out _nextTurnName, "NEXT", COLOR_TEAL);
-        Grid.SetColumn(_nextTurnPanel, 4);
-        _contentGrid.Children.Add(_nextTurnPanel);
-
-        // Place content inside border
         _backgroundBorder.Child = _contentGrid;
-
-        // Add border to canvas
         _mainCanvas.Children.Add(_backgroundBorder);
-
-        // Set canvas as window content
         Content = _mainCanvas;
     }
 
-    private StackPanel CreateTurnPanel(out TextBlock label, out TextBlock number, out TextBlock name, string labelText, Color accentColor)
+    private Border CreateTurnRow(out TextBlock numberBlock, out TextBlock nameBlock, string label, Color accentColor)
     {
-        var panel = new StackPanel
+        var border = new Border
+        {
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(6, 2, 6, 2)
+        };
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32, GridUnitType.Pixel) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // Label + Number stack (left)
+        var leftStack = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Left
         };
 
-        // Label (LAST / CURRENT / NEXT)
-        label = new TextBlock
+        var labelBlock = new TextBlock
         {
-            Text = labelText,
-            FontSize = 8,
+            Text = label,
+            FontSize = 7,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(COLOR_MUTED),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 2)
+            HorizontalAlignment = HorizontalAlignment.Center
         };
-        panel.Children.Add(label);
+        leftStack.Children.Add(labelBlock);
 
-        // Turn number (T3)
-        number = new TextBlock
+        numberBlock = new TextBlock
         {
             Text = "—",
-            FontSize = 18,
+            FontSize = 16,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(accentColor),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 2)
+            HorizontalAlignment = HorizontalAlignment.Center
         };
-        panel.Children.Add(number);
+        leftStack.Children.Add(numberBlock);
 
-        // Turn name (Parabolica)
-        name = new TextBlock
+        Grid.SetColumn(leftStack, 0);
+        grid.Children.Add(leftStack);
+
+        // Turn name (right)
+        nameBlock = new TextBlock
         {
             Text = "",
-            FontSize = 10,
+            FontSize = 11,
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(COLOR_TEXT),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 120,
+            Margin = new Thickness(6, 0, 0, 0),
+            MaxWidth = 110,
             Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed
         };
-        panel.Children.Add(name);
+        Grid.SetColumn(nameBlock, 1);
+        grid.Children.Add(nameBlock);
 
-        return panel;
+        border.Child = grid;
+        return border;
+    }
+
+    private static Border CreateSeparator()
+    {
+        return new Border
+        {
+            Height = 1,
+            Background = new SolidColorBrush(COLOR_MUTED),
+            Opacity = 0.25,
+            Margin = new Thickness(4, 2, 4, 2)
+        };
     }
 
     protected override void UpdateUI(TelemetryData data)
     {
-        // Update turn name visibility if setting changed
-        _lastTurnName.Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed;
-        _currentTurnName.Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed;
+        // Update turn name visibility
         _nextTurnName.Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed;
+        _lastTurnName.Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed;
 
-        // Update last turn
-        if (data.LastTurnNumber > 0)
+        // Border animation (optional — off by default)
+        if (AnimateBorder && data.IsInTurn && data.TurnNumber > 0)
         {
-            _lastTurnNumber.Text = $"T{data.LastTurnNumber}";
-            _lastTurnName.Text = data.LastTurnName;
-        }
-        else
-        {
-            _lastTurnNumber.Text = "—";
-            _lastTurnName.Text = "";
-        }
-
-        // Update current turn
-        if (data.IsInTurn && data.TurnNumber > 0)
-        {
-            _currentTurnNumber.Text = $"T{data.TurnNumber}";
-            _currentTurnName.Text = data.TurnName;
-            
-            // Animate border color based on turn progress (teal → orange)
             var progressColor = InterpolateColor(COLOR_TEAL, COLOR_ORANGE, data.TurnProgress);
             _backgroundBorder.BorderBrush = new SolidColorBrush(progressColor);
-            
-            // Update glow effect
             if (_backgroundBorder.Effect is DropShadowEffect glow)
-            {
                 glow.Color = progressColor;
-            }
         }
         else
         {
-            _currentTurnNumber.Text = "—";
-            _currentTurnName.Text = "";
             _backgroundBorder.BorderBrush = new SolidColorBrush(COLOR_TEAL);
-            
-            // Restore glow
             if (_backgroundBorder.Effect is DropShadowEffect glow)
-            {
                 glow.Color = COLOR_TEAL;
-            }
         }
 
-        // Update next turn
+        // Next turn
         if (data.NextTurnNumber > 0)
         {
             _nextTurnNumber.Text = $"T{data.NextTurnNumber}";
@@ -310,6 +266,18 @@ public class TurnDisplayWidget : WidgetBase
         {
             _nextTurnNumber.Text = "—";
             _nextTurnName.Text = "";
+        }
+
+        // Last turn
+        if (data.LastTurnNumber > 0)
+        {
+            _lastTurnNumber.Text = $"T{data.LastTurnNumber}";
+            _lastTurnName.Text = data.LastTurnName;
+        }
+        else
+        {
+            _lastTurnNumber.Text = "—";
+            _lastTurnName.Text = "";
         }
     }
 

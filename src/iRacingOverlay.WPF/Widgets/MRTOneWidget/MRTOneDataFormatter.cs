@@ -147,6 +147,14 @@ public static class MRTOneDataFormatter
             TelemetryField.FuelDeltaToFinish when value is float fuel =>
                 (fuel >= 0 ? "+" : "") + FormatFuelValue(fuel, useMetricUnits),
 
+            // Fuel saving fields
+            TelemetryField.FuelSavingTarget when value is float target =>
+                target > 0.001f ? "-" + target.ToString("F3", CultureInfo.InvariantCulture) : "OK",
+            TelemetryField.FuelProjectedDelta when value is float delta =>
+                (delta >= 0 ? "+" : "") + delta.ToString("F2", CultureInfo.InvariantCulture),
+            TelemetryField.FuelIsPittingFaster when value is float v =>
+                v > 0.5f ? "PIT" : "SAVE",
+
             // Temperatures (no decimals, units in label)
             TelemetryField.WaterTemp when value is float temp =>
                 FormatTemperature(temp, useMetricUnits),
@@ -355,6 +363,9 @@ public static class MRTOneDataFormatter
             TelemetryField.FuelYellowLapsRemain => "YEL LP",
             TelemetryField.FuelNeededToFinish => useMetricUnits ? "NEED L" : "NEED gal",
             TelemetryField.FuelDeltaToFinish => useMetricUnits ? "DELTA L" : "DELTA gal",
+            TelemetryField.FuelSavingTarget => useMetricUnits ? "SAVE L" : "SAVE gal",
+            TelemetryField.FuelProjectedDelta => useMetricUnits ? "PROJ L" : "PROJ gal",
+            TelemetryField.FuelIsPittingFaster => "STRAT",
 
             TelemetryField.WaterTemp => useMetricUnits ? "H2O °C" : "H2O °F",
             TelemetryField.OilTemp => useMetricUnits ? "OIL °C" : "OIL °F",
@@ -499,6 +510,8 @@ public static class MRTOneDataFormatter
         TelemetryField.FuelPercent => true,
         TelemetryField.FuelToEnd => true,
         TelemetryField.FuelDeltaToFinish => true,
+        TelemetryField.FuelSavingTarget => true,
+        TelemetryField.FuelProjectedDelta => true,
         _ => false
     };
 

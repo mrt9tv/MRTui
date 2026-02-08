@@ -1,0 +1,514 @@
+using System;
+using System.Globalization;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Effects;
+using iRacingOverlay.Core.Models;
+using iRacingOverlay.Core.Services;
+using iRacingOverlay.WPF.Core;
+using iRacingOverlay.WPF.Models;
+
+namespace iRacingOverlay.WPF.Widgets.FuelWidget;
+
+/// <summary>
+/// Fuel Calculator Widget — compact overlay showing fuel saving / lift &amp; coast data.
+/// Displays: Fuel Remaining, L/Lap, Laps Left, L3/L5 averages, splutter buffer,
+/// Projected Delta, Saving Target, Strategy.
+/// MRT theme: dark background, teal/orange accents, high contrast text.
+/// </summary>
+public class FuelWidget : WidgetBase
+{
+    #region Constants
+
+    private const double WIDGET_WIDTH = 210;
+    private const double BASE_HEIGHT = 200;
+    private const double PADDING = 8;
+    private const double ROW_HEIGHT = 18;
+    private const double BORDER_RADIUS = 6;
+
+    #endregion
+
+    #region Colors
+
+    private static readonly Color COLOR_TEAL = Color.FromRgb(0, 128, 128);
+    private static readonly Color COLOR_ORANGE = Color.FromRgb(255, 128, 0);
+    private static readonly Color COLOR_DARK_BG = Color.FromArgb(245, 18, 18, 18);
+    private static readonly Color COLOR_TEXT = Color.FromRgb(240, 240, 240);
+    private static readonly Color COLOR_MUTED = Color.FromRgb(136, 136, 136);
+    private static readonly Color COLOR_GREEN = Color.FromRgb(0, 200, 83);
+    private static readonly Color COLOR_YELLOW = Color.FromRgb(255, 255, 0);
+    private static readonly Color COLOR_RED = Color.FromRgb(255, 50, 50);
+
+    private static readonly SolidColorBrush BRUSH_TEAL = new(COLOR_TEAL);
+    private static readonly SolidColorBrush BRUSH_ORANGE = new(COLOR_ORANGE);
+    private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
+    private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
+    private static readonly SolidColorBrush BRUSH_GREEN = new(COLOR_GREEN);
+    private static readonly SolidColorBrush BRUSH_YELLOW = new(COLOR_YELLOW);
+    private static readonly SolidColorBrush BRUSH_RED = new(COLOR_RED);
+
+    #endregion
+
+    #region UI Elements
+
+    private Canvas _canvas = null!;
+    private Border _backgroundBorder = null!;
+    private StackPanel _mainStack = null!;
+
+    // Core rows
+    private TextBlock _valFuelLevel = null!;
+    private TextBlock _valFuelPct = null!;
+    private TextBlock _valLPerLap = null!;
+    private TextBlock _valLapsLeft = null!;
+
+    // Toggleable average rows
+    private Grid _rowL3 = null!;
+    private TextBlock _valL3 = null!;
+    private Grid _rowL5 = null!;
+    private TextBlock _valL5 = null!;
+
+    // Splutter buffer row
+    private Grid _rowBuffer = null!;
+    private TextBlock _valBuffer = null!;
+
+    // Saving section
+    private TextBlock _valDelta = null!;
+    private TextBlock _valSavingTarget = null!;
+    private TextBlock _valSavingRate = null!;
+    private TextBlock _valStrategy = null!;
+
+    // Alert bar
+    private TextBlock _alertText = null!;
+    private Border _alertBorder = null!;
+
+    #endregion
+
+    #region Settings
+
+    /// <summary>Show Last 3 lap average row</summary>
+    public bool ShowL3Average { get; set; } = true;
+
+    /// <summary>Show Last 5 lap average row</summary>
+    public bool ShowL5Average { get; set; } = true;
+
+    /// <summary>Show splutter buffer row</summary>
+    public bool ShowBuffer { get; set; } = true;
+
+    #endregion
+
+    public override WidgetType WidgetType => WidgetType.FuelCalculator;
+
+    public FuelWidget(ITelemetryService telemetryService, WidgetConfig? config = null)
+        : base(telemetryService, config)
+    {
+        Title = "Fuel Calculator";
+        Width = WIDGET_WIDTH;
+
+        LoadSettings();
+        InitializeWidget();
+        RecalcHeight();
+    }
+
+    private void LoadSettings()
+    {
+        if (Config?.Settings == null) return;
+
+        if (Config.Settings.TryGetValue("showL3Average", out var v1))
+        {
+            if (v1 is JsonElement je) ShowL3Average = je.ValueKind == JsonValueKind.True;
+            else if (v1 is bool b) ShowL3Average = b;
+        }
+        if (Config.Settings.TryGetValue("showL5Average", out var v2))
+        {
+            if (v2 is JsonElement je) ShowL5Average = je.ValueKind == JsonValueKind.True;
+            else if (v2 is bool b) ShowL5Average = b;
+        }
+        if (Config.Settings.TryGetValue("showBuffer", out var v3))
+        {
+            if (v3 is JsonElement je) ShowBuffer = je.ValueKind == JsonValueKind.True;
+            else if (v3 is bool b) ShowBuffer = b;
+        }
+    }
+
+    public void SaveSettings()
+    {
+        Config.Settings ??= new Dictionary<string, object>();
+        Config.Settings["showL3Average"] = ShowL3Average;
+        Config.Settings["showL5Average"] = ShowL5Average;
+        Config.Settings["showBuffer"] = ShowBuffer;
+    }
+
+    private void InitializeWidget()
+    {
+        _canvas = new Canvas
+        {
+            Width = WIDGET_WIDTH,
+            ClipToBounds = false
+        };
+        Content = _canvas;
+
+        _backgroundBorder = new Border
+        {
+            Width = WIDGET_WIDTH,
+            CornerRadius = new CornerRadius(BORDER_RADIUS),
+            Background = new SolidColorBrush(COLOR_DARK_BG),
+            BorderBrush = BRUSH_TEAL,
+            BorderThickness = new Thickness(1.5),
+            Effect = new DropShadowEffect
+            {
+                Color = COLOR_TEAL,
+                BlurRadius = 6,
+                ShadowDepth = 0,
+                Opacity = 0.3
+            }
+        };
+        _canvas.Children.Add(_backgroundBorder);
+
+        _mainStack = new StackPanel { Margin = new Thickness(PADDING, PADDING, PADDING, 4) };
+        _backgroundBorder.Child = _mainStack;
+
+        // Header
+        _mainStack.Children.Add(new TextBlock
+        {
+            Text = "FUEL",
+            FontSize = 11,
+            FontWeight = FontWeights.Bold,
+            Foreground = BRUSH_TEAL,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+
+        _mainStack.Children.Add(CreateSeparator());
+
+        // Core rows
+        _valFuelLevel = CreateRow("FUEL", out _);
+        _valFuelPct = CreateRow("TANK %", out _);
+        _valLPerLap = CreateRow("L/LAP", out _);
+        _valLapsLeft = CreateRow("LAPS LEFT", out _);
+
+        // Toggleable L3 average
+        _valL3 = CreateToggleRow("AVG L3", out _rowL3);
+        _rowL3.Visibility = ShowL3Average ? Visibility.Visible : Visibility.Collapsed;
+
+        // Toggleable L5 average
+        _valL5 = CreateToggleRow("AVG L5", out _rowL5);
+        _rowL5.Visibility = ShowL5Average ? Visibility.Visible : Visibility.Collapsed;
+
+        // Splutter buffer row
+        _valBuffer = CreateToggleRow("BUFFER", out _rowBuffer);
+        _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
+
+        // Separator before saving section
+        _mainStack.Children.Add(CreateSeparator());
+
+        _valDelta = CreateRow("PROJ DELTA", out _);
+        _valSavingTarget = CreateRow("SAVE TGT", out _);
+        _valSavingRate = CreateRow("SAVING", out _);
+        _valStrategy = CreateRow("STRATEGY", out _);
+
+        // Alert bar
+        _mainStack.Children.Add(CreateSeparator());
+
+        _alertBorder = new Border
+        {
+            Height = 20,
+            CornerRadius = new CornerRadius(3),
+            Background = Brushes.Transparent,
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        _alertText = new TextBlock
+        {
+            Text = "",
+            FontSize = 9,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = BRUSH_TEXT,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _alertBorder.Child = _alertText;
+        _mainStack.Children.Add(_alertBorder);
+    }
+
+    /// <summary>Recalculate widget height based on visible optional rows.</summary>
+    public void RecalcHeight()
+    {
+        int extraRows = 0;
+        if (ShowL3Average) extraRows++;
+        if (ShowL5Average) extraRows++;
+        if (ShowBuffer) extraRows++;
+
+        double h = BASE_HEIGHT + (extraRows * (ROW_HEIGHT + 2));
+        Height = h;
+        _canvas.Height = h;
+        _backgroundBorder.Height = h;
+        Config.Height = h;
+    }
+
+    /// <summary>Apply current toggle states to row visibility and resize.</summary>
+    public void ApplyToggles()
+    {
+        _rowL3.Visibility = ShowL3Average ? Visibility.Visible : Visibility.Collapsed;
+        _rowL5.Visibility = ShowL5Average ? Visibility.Visible : Visibility.Collapsed;
+        _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
+        RecalcHeight();
+    }
+
+    private TextBlock CreateRow(string label, out TextBlock labelBlock)
+    {
+        var grid = new Grid { Height = ROW_HEIGHT, Margin = new Thickness(0, 1, 0, 1) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        labelBlock = new TextBlock
+        {
+            Text = label,
+            FontSize = 10,
+            Foreground = BRUSH_MUTED,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = new FontFamily("Consolas")
+        };
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        var valueBlock = new TextBlock
+        {
+            Text = "--",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = BRUSH_TEXT,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            FontFamily = new FontFamily("Consolas")
+        };
+        Grid.SetColumn(valueBlock, 1);
+        grid.Children.Add(valueBlock);
+
+        _mainStack.Children.Add(grid);
+        return valueBlock;
+    }
+
+    private TextBlock CreateToggleRow(string label, out Grid grid)
+    {
+        grid = new Grid { Height = ROW_HEIGHT, Margin = new Thickness(0, 1, 0, 1) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var lbl = new TextBlock
+        {
+            Text = label,
+            FontSize = 10,
+            Foreground = BRUSH_TEAL,
+            VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = new FontFamily("Consolas")
+        };
+        Grid.SetColumn(lbl, 0);
+        grid.Children.Add(lbl);
+
+        var val = new TextBlock
+        {
+            Text = "--",
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = BRUSH_TEXT,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            FontFamily = new FontFamily("Consolas")
+        };
+        Grid.SetColumn(val, 1);
+        grid.Children.Add(val);
+
+        _mainStack.Children.Add(grid);
+        return val;
+    }
+
+    private static Border CreateSeparator()
+    {
+        return new Border
+        {
+            Height = 1,
+            Background = new SolidColorBrush(Color.FromArgb(60, 128, 128, 128)),
+            Margin = new Thickness(0, 2, 0, 2)
+        };
+    }
+
+    #region UpdateUI
+
+    protected override void UpdateUI(TelemetryData data)
+    {
+        var fuel = _telemetryService.CurrentFuelData;
+        if (fuel == null) return;
+
+        // ── Basic fuel info ─────────────────────────────────────
+        _valFuelLevel.Text = fuel.CurrentFuel.ToString("F2", CultureInfo.InvariantCulture) + " L";
+
+        _valFuelPct.Text = (fuel.FuelPct * 100f).ToString("F0", CultureInfo.InvariantCulture) + "%";
+        _valFuelPct.Foreground = fuel.FuelPct switch
+        {
+            < 0.10f => BRUSH_RED,
+            < 0.25f => BRUSH_YELLOW,
+            _ => BRUSH_TEXT
+        };
+
+        // L/Lap (using selected method)
+        float lPerLap = fuel.AvgFuelPerLap;
+        _valLPerLap.Text = lPerLap > 0
+            ? lPerLap.ToString("F2", CultureInfo.InvariantCulture)
+            : "--";
+
+        // Laps left (already accounts for splutter buffer in calculator)
+        float lapsLeft = fuel.LapsRemaining;
+        _valLapsLeft.Text = lapsLeft > 0
+            ? lapsLeft.ToString("F1", CultureInfo.InvariantCulture)
+            : "--";
+        _valLapsLeft.Foreground = lapsLeft switch
+        {
+            < 1f => BRUSH_RED,
+            < 3f => BRUSH_YELLOW,
+            < 5f => BRUSH_ORANGE,
+            _ => BRUSH_TEXT
+        };
+
+        // ── Toggleable average rows ─────────────────────────────
+        if (ShowL3Average)
+        {
+            float l3 = fuel.AvgFuelPerLap_L3;
+            _valL3.Text = l3 > 0 ? l3.ToString("F3", CultureInfo.InvariantCulture) : "--";
+        }
+
+        if (ShowL5Average)
+        {
+            float l5 = fuel.AvgFuelPerLap_L5;
+            _valL5.Text = l5 > 0 ? l5.ToString("F3", CultureInfo.InvariantCulture) : "--";
+        }
+
+        // Splutter buffer display
+        if (ShowBuffer)
+        {
+            float threshold = fuel.FuelSputteringThreshold;
+            float usable = Math.Max(0, fuel.CurrentFuel - threshold);
+            _valBuffer.Text = $"{threshold:F1}L ({usable:F1} usable)";
+            _valBuffer.Foreground = usable < 1f ? BRUSH_RED : BRUSH_TEXT;
+        }
+
+        // ── Fuel saving section ─────────────────────────────────
+        // Projected delta (surplus/deficit at finish)
+        float projDelta = fuel.ProjectedFuelDelta;
+        if (fuel.HasSufficientData && (fuel.RaceLapsRemaining > 0 || fuel.IsTimedSession))
+        {
+            string sign = projDelta >= 0 ? "+" : "";
+            _valDelta.Text = sign + projDelta.ToString("F2", CultureInfo.InvariantCulture) + " L";
+            _valDelta.Foreground = projDelta switch
+            {
+                >= 1f => BRUSH_GREEN,
+                >= 0 => BRUSH_YELLOW,
+                _ => BRUSH_RED
+            };
+        }
+        else
+        {
+            _valDelta.Text = "--";
+            _valDelta.Foreground = BRUSH_MUTED;
+        }
+
+        // Saving target (L/lap reduction needed)
+        if (fuel.NeedsFuelSaving && fuel.FuelSavingTarget > 0)
+        {
+            _valSavingTarget.Text = "-" + fuel.FuelSavingTarget.ToString("F3", CultureInfo.InvariantCulture) + " L";
+            _valSavingTarget.Foreground = fuel.CanSaveFuelToFinish ? BRUSH_ORANGE : BRUSH_RED;
+        }
+        else
+        {
+            _valSavingTarget.Text = fuel.HasSufficientData ? "OK" : "--";
+            _valSavingTarget.Foreground = fuel.HasSufficientData ? BRUSH_GREEN : BRUSH_MUTED;
+        }
+
+        // Current saving rate
+        if (fuel.NeedsFuelSaving)
+        {
+            float rate = fuel.CurrentSavingRate;
+            if (rate > 0.001f)
+            {
+                _valSavingRate.Text = "-" + rate.ToString("F3", CultureInfo.InvariantCulture) + " L";
+                _valSavingRate.Foreground = fuel.FuelSavingWorking ? BRUSH_GREEN : BRUSH_ORANGE;
+            }
+            else
+            {
+                _valSavingRate.Text = "0.000";
+                _valSavingRate.Foreground = BRUSH_RED;
+            }
+        }
+        else
+        {
+            _valSavingRate.Text = "--";
+            _valSavingRate.Foreground = BRUSH_MUTED;
+        }
+
+        // Strategy: pit vs save
+        if (fuel.NeedsFuelSaving)
+        {
+            if (!fuel.CanSaveFuelToFinish)
+            {
+                _valStrategy.Text = "PIT";
+                _valStrategy.Foreground = BRUSH_RED;
+            }
+            else if (fuel.IsPittingFaster)
+            {
+                float delta = fuel.StrategyTimeDelta;
+                _valStrategy.Text = $"PIT +{delta:F1}s";
+                _valStrategy.Foreground = BRUSH_ORANGE;
+            }
+            else
+            {
+                _valStrategy.Text = "SAVE";
+                _valStrategy.Foreground = BRUSH_GREEN;
+            }
+        }
+        else
+        {
+            _valStrategy.Text = fuel.HasSufficientData ? "CLEAR" : "--";
+            _valStrategy.Foreground = fuel.HasSufficientData ? BRUSH_GREEN : BRUSH_MUTED;
+        }
+
+        // ── Alert bar ───────────────────────────────────────────
+        string? alert = fuel.StrategicAlert;
+        if (!string.IsNullOrEmpty(alert))
+        {
+            _alertText.Text = alert;
+            _alertBorder.Background = fuel.AlertSeverity switch
+            {
+                3 => new SolidColorBrush(Color.FromArgb(80, 255, 0, 0)),
+                2 => new SolidColorBrush(Color.FromArgb(60, 255, 128, 0)),
+                1 => new SolidColorBrush(Color.FromArgb(40, 0, 128, 128)),
+                _ => Brushes.Transparent
+            };
+            _alertText.Foreground = fuel.AlertSeverity switch
+            {
+                3 => BRUSH_RED,
+                2 => BRUSH_ORANGE,
+                _ => BRUSH_TEAL
+            };
+        }
+        else
+        {
+            _alertText.Text = "";
+            _alertBorder.Background = Brushes.Transparent;
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Override SetSize — this widget is not square.
+    /// Scale width proportionally, auto-adjust height.
+    /// </summary>
+    public override void SetSize(double size)
+    {
+        double scale = size / WIDGET_WIDTH;
+        Width = size;
+        Height = _backgroundBorder.Height * scale;
+        Config.Width = Width;
+        Config.Height = Height;
+    }
+}

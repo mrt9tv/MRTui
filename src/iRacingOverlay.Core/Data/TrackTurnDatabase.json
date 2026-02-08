@@ -47,17 +47,17 @@
       "totalTurns": 11,
       "trackLength": 3.167,
       "turns": [
-        { "number": 1, "name": "Turn 1", "startPct": 0.040, "endPct": 0.075, "type": "right" },
-        { "number": 2, "name": "Turn 2", "startPct": 0.100, "endPct": 0.135, "type": "left" },
-        { "number": 3, "name": "Turn 3", "startPct": 0.160, "endPct": 0.195, "type": "right" },
-        { "number": 4, "name": "Turn 4", "startPct": 0.220, "endPct": 0.255, "type": "left" },
-        { "number": 5, "name": "Turn 5", "startPct": 0.305, "endPct": 0.340, "type": "right" },
-        { "number": 6, "name": "Turn 6", "startPct": 0.385, "endPct": 0.420, "type": "left" },
-        { "number": 7, "name": "Turn 7", "startPct": 0.465, "endPct": 0.500, "type": "right" },
-        { "number": 8, "name": "Turn 8 (Hairpin)", "startPct": 0.545, "endPct": 0.595, "type": "hairpin_left" },
-        { "number": 9, "name": "Turn 9", "startPct": 0.665, "endPct": 0.700, "type": "right" },
-        { "number": 10, "name": "Turn 10", "startPct": 0.760, "endPct": 0.795, "type": "left" },
-        { "number": 11, "name": "Turn 11 (Fountain)", "startPct": 0.890, "endPct": 0.940, "type": "hairpin_right" }
+        { "number": 1, "name": "Shoreline Dr.", "startPct": 0.035, "endPct": 0.070, "type": "right" },
+        { "number": 2, "name": "Pine Ave.", "startPct": 0.095, "endPct": 0.130, "type": "left" },
+        { "number": 3, "name": "Turn 3", "startPct": 0.155, "endPct": 0.185, "type": "right" },
+        { "number": 4, "name": "Turn 4", "startPct": 0.210, "endPct": 0.245, "type": "left" },
+        { "number": 5, "name": "Turn 5", "startPct": 0.300, "endPct": 0.335, "type": "right" },
+        { "number": 6, "name": "Seaside Way", "startPct": 0.380, "endPct": 0.415, "type": "left" },
+        { "number": 7, "name": "Turn 7", "startPct": 0.460, "endPct": 0.495, "type": "right" },
+        { "number": 8, "name": "Hairpin", "startPct": 0.540, "endPct": 0.600, "type": "hairpin_left" },
+        { "number": 9, "name": "Turn 9", "startPct": 0.660, "endPct": 0.695, "type": "right" },
+        { "number": 10, "name": "Turn 10", "startPct": 0.755, "endPct": 0.790, "type": "left" },
+        { "number": 11, "name": "Fountain", "startPct": 0.885, "endPct": 0.945, "type": "hairpin_right" }
       ]
     },
     "bathurst": {

@@ -941,9 +941,32 @@ public class MRTOneWidget : WidgetBase
     /// </summary>
     public void UpdateDisplayFields(TelemetryField? topField, TelemetryField centerField, TelemetryField? bottomField)
     {
+        System.Diagnostics.Debug.WriteLine($"[MRTOne] UpdateDisplayFields: top={topField} center={centerField} bottom={bottomField}");
+        
         _dataBinding.SecondaryField = topField;  // Top section (speed)
         _dataBinding.PrimaryField = centerField;  // Center section (gear)
         _dataBinding.TertiaryField = bottomField; // Bottom section (RPM)
+        
+        // Update labels immediately so user sees feedback even without telemetry data
+        if (topField.HasValue)
+        {
+            _topLabelText.Text = MRTOneDataFormatter.GetLabel(topField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _topStack.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _topStack.Visibility = Visibility.Collapsed;
+        }
+        
+        if (bottomField.HasValue)
+        {
+            _bottomLabelText.Text = MRTOneDataFormatter.GetLabel(bottomField.Value, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
+            _bottomStack.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _bottomStack.Visibility = Visibility.Collapsed;
+        }
         
         // Force immediate UI refresh with last telemetry data
         if (_lastTelemetryData != null)

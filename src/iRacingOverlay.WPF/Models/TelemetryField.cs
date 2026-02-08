@@ -53,6 +53,11 @@ public enum TelemetryField
     FuelGreenLapsRemain,  // Laps remaining if green flag racing
     FuelYellowLapsRemain, // Laps remaining if yellow flag continues
     
+    // Fuel - Saving / Lift & Coast (Phase 3)
+    FuelSavingTarget,     // L/lap reduction needed to finish without stopping
+    FuelProjectedDelta,   // Projected fuel surplus/deficit at finish (liters)
+    FuelIsPittingFaster,  // Whether pitting is faster than fuel saving
+    
     // Lap & Timing
     LapNumber,
     Position,

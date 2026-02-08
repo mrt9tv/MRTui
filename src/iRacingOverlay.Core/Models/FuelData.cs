@@ -38,6 +38,9 @@ public class FuelData
     /// <summary>Average fuel per lap - Last completed lap</summary>
     public float AvgFuelPerLap_Last { get; set; }
     
+    /// <summary>Average fuel per lap - Last 3 laps</summary>
+    public float AvgFuelPerLap_L3 { get; set; }
+    
     /// <summary>Average fuel per lap - Last 5 laps</summary>
     public float AvgFuelPerLap_L5 { get; set; }
     

@@ -90,8 +90,7 @@ public partial class MainWindow : Window
         {
             new("MRT One", WidgetType.MRTOne),
             new("Turn Display", WidgetType.TurnDisplay),
-            // Future: new("Fuel Monitor", WidgetType.FuelMonitor),
-            // Future: new("Timing Board", WidgetType.TimingBoard),
+            new("Fuel Calculator", WidgetType.FuelCalculator),
         };
 
         CboActiveWidget.ItemsSource = items;
@@ -148,14 +147,18 @@ public partial class MainWindow : Window
         bool widgetExists = _widgetManager.HasWidgetType(widgetType.Value);
         BtnToggleWidget.Content = widgetExists ? "Hide" : "Show";
 
-        // Show/hide widget-specific panels
+        // Show/hide widget-specific panels (left + right columns)
         MRTOnePanel.Visibility = widgetType == WidgetType.MRTOne ? Visibility.Visible : Visibility.Collapsed;
+        MRTOneRightPanel.Visibility = widgetType == WidgetType.MRTOne ? Visibility.Visible : Visibility.Collapsed;
         TurnDisplayPanel.Visibility = widgetType == WidgetType.TurnDisplay ? Visibility.Visible : Visibility.Collapsed;
+        FuelCalculatorPanel.Visibility = widgetType == WidgetType.FuelCalculator ? Visibility.Visible : Visibility.Collapsed;
 
         if (widgetType == WidgetType.MRTOne)
             SyncPanelToMRTOne();
         else if (widgetType == WidgetType.TurnDisplay)
             SyncPanelToTurnDisplay();
+        else if (widgetType == WidgetType.FuelCalculator)
+            SyncPanelToFuelCalculator();
     }
 
     private void SyncPanelToMRTOne()
@@ -217,8 +220,14 @@ public partial class MainWindow : Window
 
     private MRTOne? GetActiveMRTOneWidget()
     {
-        if (_widgetManager == null) return null;
-        if (!_widgetManager.HasWidgetType(WidgetType.MRTOne)) return null;
+        if (_widgetManager == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[MRT-UI] GetActiveMRTOneWidget: _widgetManager is null");
+            return null;
+        }
+        bool exists = _widgetManager.HasWidgetType(WidgetType.MRTOne);
+        System.Diagnostics.Debug.WriteLine($"[MRT-UI] GetActiveMRTOneWidget: HasWidgetType={exists}, ActiveCount={_widgetManager.GetWidgetCount()}");
+        if (!exists) return null;
         return _widgetManager.GetWidgetsByType(WidgetType.MRTOne)
                              .FirstOrDefault() as MRTOne;
     }
@@ -232,6 +241,7 @@ public partial class MainWindow : Window
         try
         {
             ChkShowTurnNames.IsChecked = widget.ShowTurnName;
+            ChkAnimateBorder.IsChecked = widget.AnimateBorder;
         }
         finally
         {
@@ -303,9 +313,20 @@ public partial class MainWindow : Window
 
     private void FieldCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppressControlEvents) return;
+        if (_suppressControlEvents)
+        {
+            System.Diagnostics.Debug.WriteLine("[MRT-UI] FieldCombo changed but suppressed");
+            return;
+        }
+
         var widget = GetActiveMRTOneWidget();
-        if (widget == null) return;
+        if (widget == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[MRT-UI] FieldCombo changed but widget is null");
+            _logger.LogWarning("Data field change ignored — no active MRT One widget found");
+            WidgetStatusText.Text = "⚠ No active widget — click Show first";
+            return;
+        }
 
         var s = widget.GetCurrentSettings();
 
@@ -315,6 +336,8 @@ public partial class MainWindow : Window
         TelemetryField? bottom = GetSelectedField(CboBottomField);
         TelemetryField? left = GetSelectedField(CboLeftField);
         TelemetryField? right = GetSelectedField(CboRightField);
+
+        System.Diagnostics.Debug.WriteLine($"[MRT-UI] Field change: T={top} C={center} B={bottom} L={left} R={right}");
 
         // Update persistent settings (string names)
         s.TopField = top?.ToString();
@@ -327,6 +350,9 @@ public partial class MainWindow : Window
         widget.UpdateDisplayFields(top, center, bottom);
         widget.UpdateSideBoxes(left, right);
         widget.UpdateWidgetSettings(s);
+
+        // Persist layout so changes survive restart
+        _widgetManager.SaveCurrentLayout();
     }
 
     private static TelemetryField? GetSelectedField(ComboBox cbo)
@@ -350,6 +376,7 @@ public partial class MainWindow : Window
         s.EnablePitLimiterIndicator = ChkPitLimiter.IsChecked == true;
         s.EnableEnhancedRadar = ChkEnhancedRadar.IsChecked == true;
         widget.UpdateWidgetSettings(s);
+        _widgetManager.SaveCurrentLayout();
     }
 
     // ── Fuel alert thresholds ───────────────────────────────────────────
@@ -402,7 +429,51 @@ public partial class MainWindow : Window
         if (widget == null) return;
 
         widget.ShowTurnName = ChkShowTurnNames.IsChecked == true;
+        widget.AnimateBorder = ChkAnimateBorder.IsChecked == true;
         widget.SaveSettings();
+        _widgetManager.SaveCurrentLayout();
+    }
+
+    // ── Fuel Calculator panel sync ────────────────────────────────────
+
+    private void SyncPanelToFuelCalculator()
+    {
+        var widget = GetActiveFuelWidget();
+        if (widget == null) return;
+
+        _suppressControlEvents = true;
+        try
+        {
+            ChkFuelL3.IsChecked = widget.ShowL3Average;
+            ChkFuelL5.IsChecked = widget.ShowL5Average;
+            ChkFuelBuffer.IsChecked = widget.ShowBuffer;
+        }
+        finally
+        {
+            _suppressControlEvents = false;
+        }
+    }
+
+    private Widgets.FuelWidget.FuelWidget? GetActiveFuelWidget()
+    {
+        if (_widgetManager == null) return null;
+        if (!_widgetManager.HasWidgetType(WidgetType.FuelCalculator)) return null;
+        return _widgetManager.GetWidgetsByType(WidgetType.FuelCalculator)
+                             .FirstOrDefault() as Widgets.FuelWidget.FuelWidget;
+    }
+
+    private void FuelCalculatorToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveFuelWidget();
+        if (widget == null) return;
+
+        widget.ShowL3Average = ChkFuelL3.IsChecked == true;
+        widget.ShowL5Average = ChkFuelL5.IsChecked == true;
+        widget.ShowBuffer = ChkFuelBuffer.IsChecked == true;
+        widget.ApplyToggles();
+        widget.SaveSettings();
+        _widgetManager.SaveCurrentLayout();
     }
 
     // ── Connection status ───────────────────────────────────────────────

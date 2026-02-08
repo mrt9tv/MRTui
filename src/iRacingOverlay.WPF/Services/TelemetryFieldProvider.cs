@@ -72,6 +72,11 @@ public static class TelemetryFieldProvider
         new(TelemetryField.FuelGreenLapsRemain, "Green Laps Left", "Fuel", "Laps remaining under green flag", true),
         new(TelemetryField.FuelYellowLapsRemain, "Yellow Laps Left", "Fuel", "Laps remaining under yellow flag", true),
 
+        // ── Fuel Saving / Lift & Coast ──────────────────────────────────
+        new(TelemetryField.FuelSavingTarget, "Save Target", "Fuel Saving", "L/lap reduction needed to finish without pit stop"),
+        new(TelemetryField.FuelProjectedDelta, "Proj. Delta", "Fuel Saving", "Projected fuel surplus/deficit at race end (L)"),
+        new(TelemetryField.FuelIsPittingFaster, "Pit vs Save", "Fuel Saving", "Whether pitting is faster than fuel saving"),
+
         // ── Temperatures ────────────────────────────────────────────────
         new(TelemetryField.WaterTemp, "Water Temp", "Temperatures", "Engine water temperature"),
         new(TelemetryField.OilTemp, "Oil Temp", "Temperatures", "Engine oil temperature"),

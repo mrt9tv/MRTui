@@ -41,6 +41,9 @@ public class WidgetManager
         
         _widgetFactories[WidgetType.TurnDisplay] = (service, config) =>
             new Widgets.TurnDisplayWidget.TurnDisplayWidget(service, config);
+        
+        _widgetFactories[WidgetType.FuelCalculator] = (service, config) =>
+            new Widgets.FuelWidget.FuelWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)
@@ -119,7 +122,7 @@ public class WidgetManager
     }
 
     public bool HasWidgetType(WidgetType type) =>
-        _activeWidgets.Values.Any(w => w.WidgetType == type && w.IsVisible);
+        _activeWidgets.Values.Any(w => w.WidgetType == type);
 
     public IEnumerable<WidgetBase> GetWidgetsByType(WidgetType type) =>
         _activeWidgets.Values.Where(w => w.WidgetType == type);

@@ -13,7 +13,12 @@ public enum WidgetType
     /// <summary>
     /// Turn Display — compact horizontal bar showing current turn number and name.
     /// </summary>
-    TurnDisplay
+    TurnDisplay,
+    
+    /// <summary>
+    /// Fuel Calculator — compact overlay showing fuel saving / lift &amp; coast data.
+    /// </summary>
+    FuelCalculator
 }
 
 /// <summary>
@@ -25,6 +30,7 @@ public static class WidgetTypeExtensions
     {
         WidgetType.MRTOne => "MRT One",
         WidgetType.TurnDisplay => "Turn Display",
+        WidgetType.FuelCalculator => "Fuel Calculator",
         _ => type.ToString()
     };
 }

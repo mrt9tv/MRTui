@@ -119,6 +119,7 @@ public sealed class FuelCalculatorService
 
         // ── averages ────────────────────────────────────────────────
         CurrentData.AvgFuelPerLap_Last = _lapFuelUsage.Count > 0 ? _lapFuelUsage[^1] : 0;
+        CurrentData.AvgFuelPerLap_L3 = WindowAverage(_lapFuelUsage, 3);
         CurrentData.AvgFuelPerLap_L5 = WindowAverage(_lapFuelUsage, 5);
         CurrentData.AvgFuelPerLap_L10 = WindowAverage(_lapFuelUsage, 10);
         CurrentData.AvgFuelPerLap_Session = _lapFuelUsage.Count > 0
@@ -150,13 +151,16 @@ public sealed class FuelCalculatorService
             ? _lapTimes.TakeLast(5).Average()
             : 0;
 
-        // ── laps remaining ──────────────────────────────────────────
+        // ── laps remaining (accounts for splutter/buffer zone) ──────────
         float avgForCalc = CurrentData.AvgFuelPerLap_L5 > 0
             ? CurrentData.AvgFuelPerLap_L5
             : CurrentData.AvgFuelPerLap_Session;
 
+        // Usable fuel = current fuel minus splutter threshold (unusable fuel at bottom of tank)
+        float usableFuel = Math.Max(0, fuel - CurrentData.FuelSputteringThreshold);
+
         CurrentData.LapsRemaining = avgForCalc > 0
-            ? fuel / avgForCalc
+            ? usableFuel / avgForCalc
             : 0;
 
         // iRacing's estimate (from SDK SessionLapsRemain)
@@ -186,7 +190,7 @@ public sealed class FuelCalculatorService
         if (avgForCalc > 0 && effectiveRaceLaps > 0)
         {
             float buffer = CurrentData.FuelBufferLaps;
-            CurrentData.FuelNeededToFinish = (effectiveRaceLaps + buffer) * avgForCalc;
+            CurrentData.FuelNeededToFinish = (effectiveRaceLaps + buffer) * avgForCalc + CurrentData.FuelSputteringThreshold;
             CurrentData.FuelDeltaToFinish = fuel - CurrentData.FuelNeededToFinish;
             CurrentData.CanFinishWithoutStop = CurrentData.FuelDeltaToFinish >= 0;
             CurrentData.FuelToAddAtPit = Math.Max(0, CurrentData.FuelNeededToFinish - fuel);

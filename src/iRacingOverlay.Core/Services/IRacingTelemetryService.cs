@@ -190,6 +190,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private ITelemetryClient<SVappsLAB.iRacingTelemetrySDK.TelemetryData>? _client;
     private readonly LivePositionCalculator _livePositionCalculator;
     private readonly FuelCalculatorService _fuelCalculatorService;
+    private readonly FuelSavingService _fuelSavingService;
     private readonly TurnTrackingService _turnTrackingService;
     private ConnectionStatus _status = ConnectionStatus.Disconnected;
     private bool _disposed = false;
@@ -272,6 +273,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         _livePositionCalculator = new LivePositionCalculator();
         // Create FuelCalculatorService
         _fuelCalculatorService = new FuelCalculatorService();
+        // Create FuelSavingService (lift & coast calculations)
+        _fuelSavingService = new FuelSavingService();
         // Create TurnTrackingService
         _turnTrackingService = new TurnTrackingService(
             Microsoft.Extensions.Logging.Abstractions.NullLogger<TurnTrackingService>.Instance);
@@ -721,6 +724,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
 
             // Update fuel calculator with latest telemetry
             _fuelCalculatorService.Update(data);
+
+            // Update fuel saving calculations (lift & coast requirements)
+            _fuelSavingService.Update(_fuelCalculatorService.CurrentData);
 
             // Fire our telemetry event
             TelemetryUpdated?.Invoke(this, data);
