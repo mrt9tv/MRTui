@@ -58,37 +58,72 @@ The management window is the cockpit for all overlay configuration. Native WPF, 
 
 The four essential widgets every iRacing driver needs. Ship these before anything else.
 
+> **Phase 1 Differentiators (things no competitor does):**
+> - MRT One: contextual auto-swap center field with user-defined rules
+> - Relative: per-row closing rate arrows + danger highlighting
+> - Relative: smart row count that adapts to your actual position
+> - Standings: live projected iRating delta during race
+> - All widgets: unified MRT visual theme, smooth row animations, column presets with one-key cycling
+
 ### W1. MRT One — Circular Gauge `[WIP]`
 > Status: ~90% complete. Needs polish and contextual field enhancement.
 
 Compact circular design: Gear (center), Speed (top), RPM (bottom), Side boxes (left/right).
 
 **Remaining Work:**
-- [ ] **Contextual center field** — auto-swap based on situation:
-  - Green flag racing → gap to car ahead
-  - Caution / yellow → fuel remaining
-  - Out-lap / in-lap → lap delta to best
-  - Critical fuel → "PIT NOW" countdown with laps remaining
-  - Pit lane → pit limiter + pit service status
-- [ ] **RPM shift ring refinement** — per-car shift point calibration from `PlayerCarSLFirstRPM` / `PlayerCarSLShiftRPM` / `PlayerCarSLBlinkRPM`
-- [ ] **Enhanced proximity radar** — 3D position-aware dots using `CarIdxLapDistPct` + `CarLeftRight`
+
+#### Contextual Center Field (Auto-Swap) — Enable/Disable Feature
+> Must be an opt-in toggle. When disabled, center shows whatever the user selected.
+> When enabled, a priority-based rule engine decides what to display.
+
+- [ ] **Master toggle** — On/Off in MRT One settings, defaults to OFF
+- [ ] **Priority cascade** (highest wins):
+  1. `PIT NOW` — fuel critical (< configurable threshold, default 1.5 laps)
+  2. Pit service — when `PlayerCarInPitStall == true`, show pit service status + fuel being added
+  3. Yellow/Caution — when `SessionFlags` has yellow, show fuel remaining
+  4. Close car alert — when `CarLeftRight != Clear`, show lateral indicator (LEFT / RIGHT / BOTH)
+  5. User-selected default (gap to car ahead, lap delta, fuel %, etc.)
+- [ ] **Per-rule enable/disable** — checkboxes for each trigger independently
+- [ ] **Hold time** — configurable seconds before reverting to default (e.g., 3s after yellow clears)
+- [ ] **Default field selector** — dropdown to pick what shows when no triggers are active
+
+#### RPM Shift Ring — Visual Refinement
+> The SDK values `PlayerCarSLFirstRPM`, `PlayerCarSLShiftRPM`, `PlayerCarSLLastRPM`, `PlayerCarSLBlinkRPM` are **already per-car** — iRacing sets them automatically when you enter any car. The current code already reads them. The work here is visual, not data.
+
+- [ ] **Smooth gradient sweep** — interpolate ring color from green (FirstRPM) → yellow (ShiftRPM) → red (LastRPM) → blink (BlinkRPM)
+- [ ] **Ring fill percentage** — arc fills proportionally based on RPM position between First and Blink thresholds
+- [ ] **Blink animation** — ring flashes at BlinkRPM frequency (over-rev warning)
+- [ ] **Shift flash** — brief full-ring white flash at exact ShiftRPM to signal optimal upshift
+- [ ] **Note:** `ShiftIndicatorPct` is **DEPRECATED** — use the 4 RPM threshold vars directly. `ShiftPowerPct` (0.0–1.0) is available as alternative single-float driver.
+
+#### Proximity Indicator
+> **SDK Reality:** `Lat`, `Lon`, `Alt` are **Disk Only** (ibt files) — NOT available via live telemetry API. `CarIdxLapDistPct` gives 1D centerline position only — no cross-track offset. True 3D/2D positional radar is **not possible** with live SDK data.
+
+- [ ] **1D proximity strip** — linear ahead/behind indicator using `CarIdxLapDistPct` + `ProximityCalculator` (existing)
+- [ ] **CarLeftRight overlay** — left/right/both-sides indicator combining `CarLeftRight` enum (0=Off, 1=Clear, 2=Left, 3=Right, 4=Both, 5=TwoLeft, 6=TwoRight) with proximity distance
+- [ ] **Side-specific coloring** — when `CarLeftRight` reports a car alongside AND `ProximityCalculator` shows < threshold, color the relevant side indicator on the gauge
+- [ ] **Note on `CarLeftRight`:** It DOES specify which side (left/right/both). It also reports `TwoCarsLeft`/`TwoCarsRight`. On reversed ovals, left/right may be swapped — use `TrackDirection` from session YAML to handle this.
+
+#### General Polish
 - [ ] **Metric/imperial toggle** — per-field unit selection persisted in settings
 - [ ] **Opacity slider** — 0–100% widget transparency
+- [ ] **Widget lock** — prevent accidental drag during racing
 
-**iRacing SDK channels used:** `Speed`, `RPM`, `Gear`, `Throttle`, `Brake`, `FuelLevel`, `FuelLevelPct`, `CarLeftRight`, `SessionFlags`, `PitSvFlags`, `ShiftIndicatorPct`, `PlayerCarSLFirstRPM`, `PlayerCarSLShiftRPM`, `PlayerCarSLLastRPM`, `PlayerCarSLBlinkRPM`
+**iRacing SDK channels used:** `Speed`, `RPM`, `Gear`, `Throttle`, `Brake`, `FuelLevel`, `FuelLevelPct`, `CarLeftRight`, `SessionFlags`, `PitSvFlags`, `PlayerCarSLFirstRPM`, `PlayerCarSLShiftRPM`, `PlayerCarSLLastRPM`, `PlayerCarSLBlinkRPM`, `ShiftPowerPct`, `PlayerCarInPitStall`, `CarIdxLapDistPct`
 
 ---
 
 ### W2. Relative Widget `[PLANNED]`
 > Priority: **HIGHEST** — most requested overlay across all competitors.
 > References: RaceLab Relative, Edge Relative Timing, iOverlay Relative
+> **Design goal:** Clean, information-dense, zero visual clutter. Must look like it belongs with MRT One.
 
 Compact table showing cars around you (configurable ±3 to ±10) with live intervals.
 
 **Core Columns:**
 - [ ] Position (overall + class position)
 - [ ] Driver name (truncated, with optional iRating badge)
-- [ ] Car number + class color stripe
+- [ ] Car number + class color stripe (left-edge, 3px)
 - [ ] Interval (time gap, ±seconds, updates per tick)
 - [ ] Last lap time
 - [ ] Pit indicator (in pit lane / in pit stall / pit count)
@@ -101,67 +136,92 @@ Compact table showing cars around you (configurable ±3 to ±10) with live inter
 - [ ] Tire compound indicator (using `CarIdxTireCompound`)
 - [ ] Laps completed / laps down
 - [ ] Fast repair status (using `CarIdxFastRepairsUsed`)
-- [ ] Connection quality indicator (using `ChanPartnerQuality`)
 
-**Layout Options:**
-- [ ] Compact mode (position + name + interval only)
-- [ ] Standard mode (+ last lap + pit + off-track)
-- [ ] Detailed mode (all columns)
-- [ ] User picks which columns to show + column order
+**🧠 MRT Differentiators (no competitor does these):**
+- [ ] **Closing rate arrow** — tiny ▲/▼ icon per row showing if gap is shrinking or growing, computed from interval delta over last N ticks
+- [ ] **Danger row highlighting** — when a car's closing rate exceeds threshold (e.g., >0.5s/lap faster), row gets a subtle warning glow. You see a threat before it arrives.
+- [ ] **Smart row count** — if you're P3, don't show 5 empty rows ahead. Dynamically reallocate to show more cars behind. Configurable: auto vs fixed.
+- [ ] **Class-aware dual gap** — in multi-class, show both "gap to class car" and "gap to overall" in a compact dual-column. Not one-or-the-other.
+
+**Column Presets (one-key cycling):**
+- [ ] **Minimal** — position + name + interval (3 columns)
+- [ ] **Standard** — + last lap + pit + off-track (6 columns)
+- [ ] **Full** — + iRating + tire + laps (all columns)
+- [ ] Hotkey to cycle through presets without opening settings
+- [ ] Custom: user picks which columns to show + column order via drag-drop in management window
 
 **Multi-class Support:**
 - [ ] Class color sidebar (left-edge stripe per iRacing class color)
 - [ ] Class position vs overall position toggle
 - [ ] Class filter — show only your class, all classes, or specific classes
-- [ ] Class separator rows in standings
+
+**Visual Design:**
+- [ ] MRT theme — dark background, teal/orange accents matching MRT One
+- [ ] Smooth row slide animation on position changes (not snap)
+- [ ] Your car row: distinct background color, always centered
+- [ ] Font size scaling — single slider scales all text proportionally
+- [ ] Smart column reflow — widget auto-narrows when showing fewer columns (no wasted space)
+- [ ] Row right-click → "Set as H2H target" (hook for future Head-to-Head widget)
 
 **Technical Implementation:**
 - [ ] Build `RelativeCalculator` service in Core — compute sorted interval list from `CarIdxLapDistPct` + `CarIdxEstTime` + `CarIdxLap`
-- [ ] Highlight your car row (distinct background)
-- [ ] Row animation on position changes (fade/slide)
+- [ ] `ClosingRateTracker` — rolling window of interval deltas per car, smoothed over N ticks
 - [ ] Header row with session clock / SOF / remaining laps/time
 
-**iRacing SDK channels:** `CarIdxLapDistPct`, `CarIdxEstTime`, `CarIdxLap`, `CarIdxLapCompleted`, `CarIdxLastLapTime`, `CarIdxBestLapTime`, `CarIdxOnPitRoad`, `CarIdxTrackSurface`, `CarIdxClass`, `CarIdxClassPosition`, `CarIdxPosition`, `CarIdxTireCompound`, `CarIdxFastRepairsUsed`, `CarIdxGear`, `CarIdxRPM`
+**iRacing SDK channels:** `CarIdxLapDistPct`, `CarIdxEstTime`, `CarIdxLap`, `CarIdxLapCompleted`, `CarIdxLastLapTime`, `CarIdxBestLapTime`, `CarIdxOnPitRoad`, `CarIdxTrackSurface`, `CarIdxClass`, `CarIdxClassPosition`, `CarIdxPosition`, `CarIdxTireCompound`, `CarIdxFastRepairsUsed`
 
 ---
 
 ### W3. Standings Widget `[PLANNED]`
 > References: RaceLab Standings (flagship), Edge Leaderboard, iOverlay Standings
 > Key difference from Relative: Shows full field; Relative shows cars around you.
+> **Design goal:** Full-field but never overwhelming. Clean class separation, live data storytelling.
 
 Full-field leaderboard with class-aware multi-class rendering.
 
 **Core Display:**
 - [ ] Position (overall / class toggle)
 - [ ] Driver name + car number
-- [ ] Class color coding (left border stripe)
+- [ ] Class color coding (left border stripe, 3px)
 - [ ] Gap to leader / interval to car ahead (toggle)
 - [ ] Last lap time + personal best lap time
 - [ ] Laps completed
 
 **Pro Columns (toggleable):**
-- [ ] iRating + predicted iRating change (+/- after race)
-- [ ] Safety Rating + license class (R, D, C, B, A, Pro)
-- [ ] Positions gained/lost from grid
+- [ ] iRating (from YAML)
+- [ ] Safety Rating + license class color (R, D, C, B, A, Pro)
 - [ ] Pit stop count + in-pit indicator
 - [ ] Fastest lap indicator (purple time)
 - [ ] Off-track / incident flash
-- [ ] Car brand/model name
+- [ ] Car brand/model name (from YAML `CarScreenName`)
 - [ ] Tire compound
 
+**🧠 MRT Differentiators:**
+- [ ] **Positions gained/lost column** — green ▲ / red ▼ arrow + number showing spots gained/lost since race start. Instant visual race narrative.
+- [ ] **Live iRating delta** — projected iRating change (+/-) calculated live from current position + SOF. Nobody else shows this during a race.
+- [ ] **Condensed class headers** — class name + color in a thin separator bar (not a full-height row). Maximum car density.
+- [ ] **Dim disconnected/spectating** — de-emphasize (gray out) rather than remove. Keeps the field count honest.
+
 **Multi-class Rendering:**
-- [ ] Grouped by class with class headers (class name + color)
+- [ ] Grouped by class with condensed class headers
 - [ ] Overall/class position dual display
 - [ ] Show/hide specific classes
-- [ ] Class leader highlight
+- [ ] Class leader row highlight
 
 **Session Awareness:**
-- [ ] Practice: show best laps, laps completed
-- [ ] Qualifying: show qualifying position, best lap, sector times
-- [ ] Race: show gaps, intervals, pit stops, positions gained
+- [ ] Practice: show best laps, laps completed, gap to fastest
+- [ ] Qualifying: show qualifying position, best lap
+- [ ] Race: show gaps, intervals, pit stops, positions gained, iRating delta
+
+**Visual Design (shared with Relative):**
+- [ ] MRT theme — consistent dark background, teal/orange accents
+- [ ] Smooth row slide animation on position changes
+- [ ] Font size scaling — single slider
+- [ ] Column presets (Minimal / Standard / Full) with hotkey cycling
+- [ ] Row right-click → "Set as H2H target"
 
 **iRacing SDK channels:** `CarIdxPosition`, `CarIdxClassPosition`, `CarIdxLap`, `CarIdxLapCompleted`, `CarIdxLastLapTime`, `CarIdxBestLapTime`, `CarIdxBestLapNum`, `CarIdxOnPitRoad`, `CarIdxClass`, `CarIdxTrackSurface`, `CarIdxTireCompound`, `CarIdxF2Time`, `CarIdxEstTime`
-**iRacing YAML:** `DriverInfo` (iRating, license, car, team), `SessionInfo` (session type, laps/time), `SplitTimeInfo`
+**iRacing YAML:** `DriverInfo` (iRating, license, car, team, `CarScreenName`), `SessionInfo` (session type, laps/time), `SplitTimeInfo`
 
 ---
 
