@@ -76,6 +76,11 @@ public class RelativeWidget : WidgetBase
         ThreeLetterCode,        // "SMI" (first 3 of last name, uppercased)
         LastCommaFirst,         // "Smith, J."
         FirstLast4,             // "J.Smit" (first initial + last 4 chars of last name)
+        FirstNameLastInit,      // "Joe S." (first name + last initial)
+        UpperLastName,          // "SMITH" (last name all caps)
+        InitialLast3,           // "J.Smi" (first initial + 3 chars of last name)
+        LastSpaceFirst,         // "Smith J" (last name + first initial, no comma)
+        CompactNoPrefix,        // "JSmith" (compact, no dot)
     }
 
     #endregion
@@ -92,7 +97,7 @@ public class RelativeWidget : WidgetBase
     private static readonly Color COLOR_PIT = Color.FromRgb(255, 200, 50);
     private static readonly Color COLOR_PURPLE = Color.FromRgb(180, 0, 255);
     private static readonly Color COLOR_MEATBALL = Color.FromRgb(255, 100, 0); // orange meatball
-    private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(200, 30, 30); // red-ish for black flag
+    private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(0, 0, 0); // solid black for black flag
 
     private static readonly Color COLOR_SEPARATOR = Color.FromArgb(40, 80, 80, 80);
 
@@ -108,6 +113,9 @@ public class RelativeWidget : WidgetBase
     private static readonly SolidColorBrush BRUSH_MEATBALL = Freeze(new SolidColorBrush(COLOR_MEATBALL));
     private static readonly SolidColorBrush BRUSH_BLACK_FLAG = Freeze(new SolidColorBrush(COLOR_BLACK_FLAG));
     private static readonly SolidColorBrush BRUSH_WHITE = Freeze(new SolidColorBrush(Colors.White));
+    private static readonly SolidColorBrush BRUSH_DARK_TEXT = Freeze(new SolidColorBrush(Color.FromRgb(20, 20, 20)));
+    private static readonly SolidColorBrush BRUSH_STATUS_BG_DEFAULT = Freeze(new SolidColorBrush(Color.FromArgb(170, 18, 18, 18)));
+    private static readonly SolidColorBrush BRUSH_STATUS_BG_BLACK = Freeze(new SolidColorBrush(Color.FromArgb(240, 0, 0, 0)));
 
     // ── iRacing License Colors ──────────────────────────────────────
     private static readonly SolidColorBrush BRUSH_LIC_A = Freeze(new SolidColorBrush(Color.FromRgb(0x01, 0x53, 0xDB))); // Blue
@@ -458,9 +466,9 @@ public class RelativeWidget : WidgetBase
         _hdrCar = AddText(_rowCanvas, "CAR", _layout.CarModelX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
         _hdrName = AddText(_rowCanvas, "NAME", _layout.NameX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
         _hdrInfo = AddText(_rowCanvas, "INFO", _layout.InfoX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        _hdrInt = AddText(_rowCanvas, "INT", _layout.IntX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrInt = AddText(_rowCanvas, "GAP", _layout.IntX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
         _hdrLast = AddText(_rowCanvas, "LAST", _layout.LastX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        _hdrGap = AddText(_rowCanvas, "GAP", _layout.GapX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrGap = AddText(_rowCanvas, "REL", _layout.GapX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
 
         // No STATUS header — it floats outside the box
 
@@ -510,6 +518,18 @@ public class RelativeWidget : WidgetBase
         row.CarModel = CreateRowText(0, y, 9, BRUSH_DIM, FontWeights.Normal);
         row.Name = CreateRowText(0, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
 
+        // Info background — extends license color behind the iRating text
+        row.InfoBackground = new Border
+        {
+            Width = COL_W_INFO,
+            Height = ROW_HEIGHT - 2,
+            CornerRadius = new CornerRadius(2),
+            Background = BRUSH_TRANSPARENT,
+            Opacity = 0.25
+        };
+        Canvas.SetTop(row.InfoBackground, y + 1);
+        _rowCanvas.Children.Add(row.InfoBackground);
+
         // License badge: colored border with letter on top
         row.LicenseBadge = new Border
         {
@@ -530,7 +550,7 @@ public class RelativeWidget : WidgetBase
             TextAlignment = TextAlignment.Center,
             Width = 14
         };
-        Canvas.SetTop(row.LicenseText, y + 1);
+        Canvas.SetTop(row.LicenseText, y + 3);
         _rowCanvas.Children.Add(row.LicenseText);
 
         row.DriverInfo = CreateRowText(0, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
@@ -574,9 +594,10 @@ public class RelativeWidget : WidgetBase
             FontWeight = FontWeights.Bold,
             FontFamily = new FontFamily("Segoe UI"),
             VerticalAlignment = VerticalAlignment.Center,
-            Padding = new Thickness(3, 0, 0, 0),
+            Padding = new Thickness(4, 0, 0, 0),
             Height = ROW_HEIGHT,
-            LineHeight = ROW_HEIGHT
+            LineHeight = ROW_HEIGHT,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight
         };
         Canvas.SetLeft(row.Status, _layout.StatusX);
         Canvas.SetTop(row.Status, statusCanvasY);
@@ -833,8 +854,14 @@ public class RelativeWidget : WidgetBase
             row.LicenseBadge.Visibility = Visibility.Visible;
             Canvas.SetLeft(row.LicenseBadge, _layout.InfoX);
             row.LicenseText.Text = licLetter;
+            row.LicenseText.Foreground = GetLicenseTextBrush(entry.LicenseClass);
             row.LicenseText.Visibility = Visibility.Visible;
             Canvas.SetLeft(row.LicenseText, _layout.InfoX);
+
+            // Expand license color as background behind iRating
+            row.InfoBackground.Background = licBrush;
+            row.InfoBackground.Visibility = Visibility.Visible;
+            Canvas.SetLeft(row.InfoBackground, _layout.InfoX);
 
             // iRating value next to badge
             string irText = entry.IRating > 0
@@ -848,23 +875,26 @@ public class RelativeWidget : WidgetBase
         else
         {
             row.DriverInfo.Visibility = Visibility.Collapsed;
+            row.InfoBackground.Visibility = Visibility.Collapsed;
             row.LicenseBadge.Visibility = Visibility.Collapsed;
             row.LicenseText.Visibility = Visibility.Collapsed;
         }
 
-        // Interval to player
+        // GAP column (toggleable) — gap to car directly ahead
         if (ShowInterval)
         {
             row.Interval.Visibility = Visibility.Visible;
-            if (entry.IsPlayer)
+            if (entry.IsPlayer || entry.GapToCarAhead <= 0f)
             {
                 row.Interval.Text = "---";
                 row.Interval.Foreground = BRUSH_MUTED;
             }
             else
             {
-                row.Interval.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
-                row.Interval.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
+                row.Interval.Text = entry.GapToCarAhead < 100f
+                    ? string.Format(CultureInfo.InvariantCulture, "{0:F1}", entry.GapToCarAhead)
+                    : ">99";
+                row.Interval.Foreground = BRUSH_MUTED;
             }
         }
         else
@@ -889,18 +919,18 @@ public class RelativeWidget : WidgetBase
             row.LastLap.Visibility = Visibility.Collapsed;
         }
 
-        // Gap to car ahead (always visible)
-        if (entry.IsPlayer || entry.GapToCarAhead <= 0f)
+        // REL column (always visible) — relative interval to player
+        if (entry.IsPlayer)
         {
             row.Gap.Text = "---";
             row.Gap.Foreground = BRUSH_MUTED;
+            row.Gap.FontWeight = FontWeights.Normal;
         }
         else
         {
-            row.Gap.Text = entry.GapToCarAhead < 100f
-                ? string.Format(CultureInfo.InvariantCulture, "{0:F1}", entry.GapToCarAhead)
-                : ">99";
+            row.Gap.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
             row.Gap.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
+            row.Gap.FontWeight = FontWeights.SemiBold;
         }
 
         // ── Status column: priority-based (OUTSIDE BOX) ────────────
@@ -918,16 +948,16 @@ public class RelativeWidget : WidgetBase
         else if (entry.HasBlackFlag && !entry.IsPlayer)
         {
             statusText = isBlinkOn ? "BLACK" : "";
-            statusBrush = BRUSH_BLACK_FLAG;
+            statusBrush = BRUSH_WHITE; // white text on black background
             showStatusBg = true;
         }
-        else if (entry.PitState == PitStatus.Pitting)
+        else if (entry.PitState == PitStatus.Pitting && !entry.IsPlayer)
         {
             statusText = "PITTING";
             statusBrush = BRUSH_PIT;
             showStatusBg = true;
         }
-        else if (entry.PitState == PitStatus.InPit)
+        else if (entry.PitState == PitStatus.InPit && !entry.IsPlayer)
         {
             // Show TOWED if driver was towed in
             if (entry.WasTowed)
@@ -941,7 +971,7 @@ public class RelativeWidget : WidgetBase
             statusBrush = BRUSH_PIT;
             showStatusBg = true;
         }
-        else if (entry.PitState == PitStatus.ExitingPit)
+        else if (entry.PitState == PitStatus.ExitingPit && !entry.IsPlayer)
         {
             // Blink the final BOX time for 3 seconds
             if (entry.FinalBoxDuration > 0f && entry.ExitingPitDuration < 3.0f)
@@ -989,6 +1019,8 @@ public class RelativeWidget : WidgetBase
 
         row.Status.Text = statusText;
         row.Status.Foreground = statusBrush;
+        row.StatusBg.Background = entry.HasBlackFlag && !entry.IsPlayer && showStatusBg
+            ? BRUSH_STATUS_BG_BLACK : BRUSH_STATUS_BG_DEFAULT;
         row.StatusBg.Visibility = showStatusBg && !string.IsNullOrEmpty(statusText)
             ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -1048,6 +1080,7 @@ public class RelativeWidget : WidgetBase
         row.CarModel.Visibility = vis;
         row.Name.Visibility = vis;
         row.DriverInfo.Visibility = vis;
+        row.InfoBackground.Visibility = vis;
         row.LicenseBadge.Visibility = vis;
         row.LicenseText.Visibility = vis;
         row.Interval.Visibility = vis;
@@ -1090,6 +1123,19 @@ public class RelativeWidget : WidgetBase
             NameFormat.FirstLast4 => parts.Length == 1
                 ? parts[0]
                 : $"{parts[0][..1]}.{parts[^1][..Math.Min(4, parts[^1].Length)]}",
+            NameFormat.FirstNameLastInit => parts.Length == 1
+                ? parts[0]
+                : $"{parts[0]} {parts[^1][..1]}.",
+            NameFormat.UpperLastName => parts[^1].ToUpperInvariant(),
+            NameFormat.InitialLast3 => parts.Length == 1
+                ? parts[0]
+                : $"{parts[0][..1]}.{parts[^1][..Math.Min(3, parts[^1].Length)]}",
+            NameFormat.LastSpaceFirst => parts.Length == 1
+                ? parts[0]
+                : $"{parts[^1]} {parts[0][..1]}",
+            NameFormat.CompactNoPrefix => parts.Length == 1
+                ? parts[0]
+                : $"{parts[0][..1]}{parts[^1]}",
             _ => parts.Length == 1
                 ? parts[0]
                 : $"{parts[0][..1].ToUpperInvariant()}.{parts[^1]}"
@@ -1155,6 +1201,16 @@ public class RelativeWidget : WidgetBase
         };
     }
 
+    /// <summary>Get text color for license badge — dark text on light backgrounds for readability.</summary>
+    private static SolidColorBrush GetLicenseTextBrush(string licenseClass)
+    {
+        return licenseClass?.ToUpperInvariant() switch
+        {
+            "C" or "D" => BRUSH_DARK_TEXT, // dark text on yellow/orange badges
+            _ => BRUSH_WHITE               // white text on blue/green/red/pro
+        };
+    }
+
     /// <summary>
     /// Generate a distinct, saturated color from a class ID using
     /// the golden-angle hue distribution for maximum separation.
@@ -1214,6 +1270,7 @@ public class RelativeWidget : WidgetBase
         public TextBlock CarNumber = null!;
         public TextBlock CarModel = null!;    // 3-letter car model abbreviation
         public TextBlock Name = null!;
+        public Border InfoBackground = null!; // colored background spanning full info column
         public Border LicenseBadge = null!;   // colored background for license letter
         public TextBlock LicenseText = null!;  // license letter on colored badge
         public TextBlock DriverInfo = null!;  // iRating value next to badge

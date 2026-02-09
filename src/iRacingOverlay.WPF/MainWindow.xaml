@@ -624,9 +624,10 @@
                                               IsChecked="False" Margin="0,0,8,4"
                                               ToolTip="Show 3-letter car abbreviation (e.g. 488, AMG)"
                                               Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowInterval" Content="Interval"
+                                    <CheckBox x:Name="ChkShowInterval" Content="Gap"
                                               Style="{StaticResource MRT.ToggleButton}"
                                               IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show gap to car directly ahead in race position"
                                               Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                     <CheckBox x:Name="ChkShowLastLap" Content="Last Lap"
                                               Style="{StaticResource MRT.ToggleButton}"
@@ -661,6 +662,11 @@
                                     <ComboBoxItem Content="3-Letter Code (SMI)" Tag="6"/>
                                     <ComboBoxItem Content="Smith, J." Tag="7"/>
                                     <ComboBoxItem Content="J.Smit (4-char)" Tag="8"/>
+                                    <ComboBoxItem Content="Joe S." Tag="9"/>
+                                    <ComboBoxItem Content="SMITH (caps)" Tag="10"/>
+                                    <ComboBoxItem Content="J.Smi (3-char)" Tag="11"/>
+                                    <ComboBoxItem Content="Smith J" Tag="12"/>
+                                    <ComboBoxItem Content="JSmith (compact)" Tag="13"/>
                                 </ComboBox>
                             </StackPanel>
                         </Border>
