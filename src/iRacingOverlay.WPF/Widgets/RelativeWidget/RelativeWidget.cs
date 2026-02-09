@@ -42,7 +42,7 @@ public class RelativeWidget : WidgetBase
     private const double COL_W_INFO_FULL = 68;  // "A 2035" (SR class + iRating, full)
     private const double COL_W_INT = 45;       // "+3.2" / "+1L"
     private const double COL_W_LAST = 62;      // "1:42.123"
-    private const double COL_W_GAP = 62;       // "+3.2 +1L" (relative interval + lap delta)
+    private const double COL_W_GAP = 44;       // "+3.2" (relative interval)
     private const double COL_W_STATUS = 72;    // "BOX 1:23.4" (outside the box)
     private const double STATUS_GAP = 8;       // gap between box edge and status
     private const double STATUS_BG_OPACITY = 0.65; // status background ~65%
@@ -781,8 +781,9 @@ public class RelativeWidget : WidgetBase
             maxBehind = MaxBehind;
         }
 
-        // Calculate relative entries
+        // Calculate relative entries (filter out disconnected drivers)
         var entries = _calculator.Calculate(data, maxAhead, maxBehind);
+        entries.RemoveAll(e => !e.IsConnected && !e.IsPlayer);
 
         // Advance blink frame counter
         _frameCount++;
@@ -1348,21 +1349,11 @@ public class RelativeWidget : WidgetBase
         return string.Format(CultureInfo.InvariantCulture, "{0}:{1:00.000}", min, sec);
     }
 
-    /// <summary>Format interval as "+3.2" / "-1.5" — always shows time, with lap delta as suffix.</summary>
+    /// <summary>Format interval as "+3.2" / "-1.5" — shows relative time only.</summary>
     private static string FormatInterval(float intervalSeconds, int lapDelta)
     {
-        // Always show relative time gap (never just "+1L")
         string sign = intervalSeconds >= 0 ? "+" : "";
-        string time = string.Format(CultureInfo.InvariantCulture, "{0}{1:F1}", sign, intervalSeconds);
-
-        // Append lap indicator as suffix for lapped cars
-        if (Math.Abs(lapDelta) >= 1)
-        {
-            string lapStr = lapDelta > 0 ? $"+{lapDelta}L" : $"{lapDelta}L";
-            return $"{time} {lapStr}";
-        }
-
-        return time;
+        return string.Format(CultureInfo.InvariantCulture, "{0}{1:F1}", sign, intervalSeconds);
     }
 
     // ── Class legend helpers ──────────────────────────────────────────
