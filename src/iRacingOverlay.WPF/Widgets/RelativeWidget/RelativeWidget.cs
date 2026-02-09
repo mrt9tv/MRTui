@@ -38,10 +38,11 @@ public class RelativeWidget : WidgetBase
     private const double COL_W_POS = 21;       // "12"
     private const double COL_W_NUM = 35;       // "#44"
     private const double COL_W_NAME = 102;     // "J.Hamilton"
-    private const double COL_W_INFO = 56;      // "A 3.2k" (SR class + iRating)
+    private const double COL_W_INFO = 56;      // "A 3.2k" (SR class + iRating, compact)
+    private const double COL_W_INFO_FULL = 68;  // "A 2035" (SR class + iRating, full)
     private const double COL_W_INT = 45;       // "+3.2" / "+1L"
     private const double COL_W_LAST = 62;      // "1:42.123"
-    private const double COL_W_GAP = 40;       // "3.2"
+    private const double COL_W_GAP = 62;       // "+3.2 +1L" (relative interval + lap delta)
     private const double COL_W_STATUS = 72;    // "BOX 1:23.4" (outside the box)
     private const double STATUS_GAP = 8;       // gap between box edge and status
     private const double STATUS_BG_OPACITY = 0.65; // status background ~65%
@@ -240,6 +241,9 @@ public class RelativeWidget : WidgetBase
     /// <summary>Show class color legend in header</summary>
     public bool ShowClassLegend { get; set; } = false;
 
+    /// <summary>Show full iRating (e.g. 2035) instead of compact (e.g. 2.0k)</summary>
+    public bool UseFullIRating { get; set; } = false;
+
     #endregion
 
     #region Services
@@ -292,6 +296,7 @@ public class RelativeWidget : WidgetBase
         if (TryGetBool("showSectorDelta", out var sd)) ShowSectorDelta = sd;
         if (TryGetBool("showNationality", out var nat)) ShowNationality = nat;
         if (TryGetBool("showClassLegend", out var cl)) ShowClassLegend = cl;
+        if (TryGetBool("useFullIRating", out var fir)) UseFullIRating = fir;
         // Migration: old showIRating/showSafetyRating → showDriverInfo
         if (TryGetBool("showIRating", out var oldIr) && oldIr) ShowDriverInfo = true;
         if (TryGetBool("showSafetyRating", out var oldSr) && oldSr) ShowDriverInfo = true;
@@ -318,6 +323,7 @@ public class RelativeWidget : WidgetBase
         Config.Settings["showSectorDelta"] = ShowSectorDelta;
         Config.Settings["showNationality"] = ShowNationality;
         Config.Settings["showClassLegend"] = ShowClassLegend;
+        Config.Settings["useFullIRating"] = UseFullIRating;
     }
 
     private bool TryGetBool(string key, out bool value)
@@ -367,7 +373,7 @@ public class RelativeWidget : WidgetBase
         x += COL_W_NAME;
 
         _layout.InfoX = x;
-        if (ShowDriverInfo) x += COL_W_INFO;
+        if (ShowDriverInfo) x += UseFullIRating ? COL_W_INFO_FULL : COL_W_INFO;
 
         _layout.PitsX = x;
         if (ShowPitStopCount) x += COL_W_PITS;
@@ -479,16 +485,18 @@ public class RelativeWidget : WidgetBase
         _infoBarBorder = new Border
         {
             Height = INFO_BAR_HEIGHT,
-            Background = new SolidColorBrush(Color.FromArgb(35, 0, 128, 128)),
-            CornerRadius = new CornerRadius(0, 0, 4, 4)
+            Background = new SolidColorBrush(Color.FromArgb(80, 0, 128, 128)),
+            CornerRadius = new CornerRadius(0, 0, 4, 4),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(60, 0, 128, 128)),
+            BorderThickness = new Thickness(0, 1, 0, 0)
         };
         Canvas.SetLeft(_infoBarBorder, 0);
         _rowCanvas.Children.Add(_infoBarBorder);
 
         _infoEstLaps = new TextBlock
         {
-            FontSize = 8.5,
-            Foreground = BRUSH_MUTED,
+            FontSize = 9.5,
+            Foreground = BRUSH_TEXT,
             FontFamily = new FontFamily("Segoe UI"),
             Padding = new Thickness(4, 2, 0, 0)
         };
@@ -496,8 +504,8 @@ public class RelativeWidget : WidgetBase
 
         _infoTimeRemain = new TextBlock
         {
-            FontSize = 8.5,
-            Foreground = BRUSH_MUTED,
+            FontSize = 9.5,
+            Foreground = BRUSH_TEXT,
             FontFamily = new FontFamily("Segoe UI"),
             TextAlignment = TextAlignment.Center,
             Padding = new Thickness(0, 2, 0, 0)
@@ -506,8 +514,8 @@ public class RelativeWidget : WidgetBase
 
         _infoIncidents = new TextBlock
         {
-            FontSize = 8.5,
-            Foreground = BRUSH_MUTED,
+            FontSize = 9.5,
+            Foreground = BRUSH_TEXT,
             FontFamily = new FontFamily("Segoe UI"),
             TextAlignment = TextAlignment.Right,
             Padding = new Thickness(0, 2, 4, 0)
@@ -742,7 +750,8 @@ public class RelativeWidget : WidgetBase
 
     public void RecalcHeight()
     {
-        int maxRows = MaxAhead + 1 + MaxBehind; // +1 for player
+        // Use actual visible row count if available, otherwise use configured max
+        int maxRows = _visibleRowCount > 0 ? _visibleRowCount : MaxAhead + 1 + MaxBehind;
         double infoH = ShowInfoBar ? INFO_BAR_HEIGHT : 0;
         double contentHeight = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 4 + (maxRows * ROW_HEIGHT) + infoH + PADDING;
         Height = contentHeight;
@@ -787,14 +796,14 @@ public class RelativeWidget : WidgetBase
         else
             HideClassLegend();
 
-        // Resize if row count changed
+        // Always resize to match actual row count + info bar state (avoids empty space)
         int newRowCount = entries.Count;
-        if (newRowCount != _visibleRowCount)
+        _visibleRowCount = newRowCount;
+        double infoH = ShowInfoBar ? INFO_BAR_HEIGHT : 0;
+        double contentHeight = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 4
+            + (Math.Max(newRowCount, 1) * ROW_HEIGHT) + infoH + PADDING;
+        if (Math.Abs(Height - contentHeight) > 0.5)
         {
-            _visibleRowCount = newRowCount;
-            double infoH = ShowInfoBar ? INFO_BAR_HEIGHT : 0;
-            double contentHeight = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 4
-                + (Math.Max(newRowCount, 1) * ROW_HEIGHT) + infoH + PADDING;
             Height = contentHeight;
             _backgroundBorder.Height = contentHeight;
         }
@@ -834,10 +843,12 @@ public class RelativeWidget : WidgetBase
             Canvas.SetTop(_infoTimeRemain, infoY);
             _infoTimeRemain.Visibility = Visibility.Visible;
 
-            // Player incident count
+            // Player incident count (format: Inc: X/17x)
             int playerInc = data.PlayerCarMyIncidentCount;
-            _infoIncidents.Text = playerInc > 0 ? $"{playerInc}x" : "0x";
-            _infoIncidents.Foreground = playerInc >= 8 ? BRUSH_ORANGE : BRUSH_MUTED;
+            int incLimit = 17; // iRacing standard incident limit
+            _infoIncidents.Text = $"Inc: {playerInc}/{incLimit}x";
+            _infoIncidents.Foreground = playerInc >= incLimit - 4 ? BRUSH_ORANGE
+                : playerInc >= incLimit - 8 ? BRUSH_PIT : BRUSH_TEXT;
             _infoIncidents.Width = barW;
             Canvas.SetLeft(_infoIncidents, 0);
             Canvas.SetTop(_infoIncidents, infoY);
@@ -990,14 +1001,26 @@ public class RelativeWidget : WidgetBase
             row.InfoBackground.Visibility = Visibility.Visible;
             Canvas.SetLeft(row.InfoBackground, _layout.InfoX);
 
-            // iRating value next to badge
-            string irText = entry.IRating > 0
-                ? string.Format(CultureInfo.InvariantCulture, "{0:F1}k", entry.IRating / 1000f)
-                : "-";
+            // iRating value next to badge — colored to match license class
+            var licTextBrush = GetLicenseBrush(entry.LicenseClass); // same color as badge
+            string irText;
+            if (entry.IRating > 0)
+            {
+                irText = UseFullIRating
+                    ? entry.IRating.ToString(CultureInfo.InvariantCulture)
+                    : string.Format(CultureInfo.InvariantCulture, "{0:F1}k", entry.IRating / 1000f);
+            }
+            else
+                irText = "-";
             row.DriverInfo.Text = irText;
-            row.DriverInfo.Foreground = BRUSH_MUTED;
+            row.DriverInfo.Foreground = entry.IRating > 0 ? licTextBrush : BRUSH_MUTED;
+            row.DriverInfo.FontSize = UseFullIRating ? 10 : FONT_DATA;
             row.DriverInfo.Visibility = Visibility.Visible;
             Canvas.SetLeft(row.DriverInfo, _layout.InfoX + 17); // offset past badge
+
+            // Size the info background to match column width
+            double infoW = UseFullIRating ? COL_W_INFO_FULL : COL_W_INFO;
+            row.InfoBackground.Width = infoW;
         }
         else
         {
@@ -1325,19 +1348,21 @@ public class RelativeWidget : WidgetBase
         return string.Format(CultureInfo.InvariantCulture, "{0}:{1:00.000}", min, sec);
     }
 
-    /// <summary>Format interval as "+3.2" / "-1.5" with lap delta shown alongside.</summary>
+    /// <summary>Format interval as "+3.2" / "-1.5" — always shows time, with lap delta as suffix.</summary>
     private static string FormatInterval(float intervalSeconds, int lapDelta)
     {
-        // For lapped cars, show both lap indicator and time
+        // Always show relative time gap (never just "+1L")
+        string sign = intervalSeconds >= 0 ? "+" : "";
+        string time = string.Format(CultureInfo.InvariantCulture, "{0}{1:F1}", sign, intervalSeconds);
+
+        // Append lap indicator as suffix for lapped cars
         if (Math.Abs(lapDelta) >= 1)
         {
             string lapStr = lapDelta > 0 ? $"+{lapDelta}L" : $"{lapDelta}L";
-            return lapStr;
+            return $"{time} {lapStr}";
         }
 
-        // Time interval
-        string sign = intervalSeconds >= 0 ? "+" : "";
-        return string.Format(CultureInfo.InvariantCulture, "{0}{1:F1}", sign, intervalSeconds);
+        return time;
     }
 
     // ── Class legend helpers ──────────────────────────────────────────

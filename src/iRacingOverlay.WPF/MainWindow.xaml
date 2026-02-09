@@ -122,6 +122,104 @@
                                    FontSize="11" Foreground="#888888" Margin="4,0,0,4"/>
                         <TextBlock x:Name="MenuRateText" Text="0 Hz" 
                                    FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="4,0,0,10"/>
+                        
+                        <Border Height="1" Background="{StaticResource DarkBorder}" Margin="0,0,0,10"/>
+                        
+                        <!-- SESSION AUTO-DETECT -->
+                        <TextBlock Text="SESSION" Style="{StaticResource MRT.Text.Label}" Margin="4,0,0,4"/>
+                        <CheckBox x:Name="ChkAutoDetectSession" Content="Auto-detect"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  IsChecked="False" Margin="0,0,0,4"
+                                  ToolTip="Auto-configure widgets when session type changes"
+                                  Checked="ChkAutoDetect_Changed" Unchecked="ChkAutoDetect_Changed"/>
+                        <StackPanel Orientation="Horizontal" Margin="4,0,0,6">
+                            <TextBlock Text="Current: " FontSize="10" Foreground="{StaticResource MutedText}"/>
+                            <TextBlock x:Name="TxtSessionIndicator" Text="—" FontSize="10" Foreground="#888888"/>
+                        </StackPanel>
+                        
+                        <!-- Practice preset -->
+                        <TextBlock Text="Practice" FontSize="9" Foreground="#00BCD4" Margin="4,0,0,2"/>
+                        <WrapPanel Margin="4,0,0,2">
+                            <CheckBox x:Name="ChkSession_Practice_MRTOne" Content="M" FontSize="9" IsChecked="True"
+                                      Tag="Practice:MRTOne" ToolTip="MRT One"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Practice_TurnDisplay" Content="T" FontSize="9" IsChecked="True"
+                                      Tag="Practice:TurnDisplay" ToolTip="Turn Display"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Practice_FuelCalculator" Content="F" FontSize="9" IsChecked="True"
+                                      Tag="Practice:FuelCalculator" ToolTip="Fuel Calculator"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Practice_Relative" Content="R" FontSize="9" IsChecked="True"
+                                      Tag="Practice:Relative" ToolTip="Relative"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                        </WrapPanel>
+                        
+                        <!-- Qualifying preset -->
+                        <TextBlock Text="Qualifying" FontSize="9" Foreground="#AB47BC" Margin="4,2,0,2"/>
+                        <WrapPanel Margin="4,0,0,2">
+                            <CheckBox x:Name="ChkSession_Qualifying_MRTOne" Content="M" FontSize="9" IsChecked="True"
+                                      Tag="Qualifying:MRTOne" ToolTip="MRT One"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Qualifying_TurnDisplay" Content="T" FontSize="9" IsChecked="True"
+                                      Tag="Qualifying:TurnDisplay" ToolTip="Turn Display"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Qualifying_FuelCalculator" Content="F" FontSize="9" IsChecked="False"
+                                      Tag="Qualifying:FuelCalculator" ToolTip="Fuel Calculator"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Qualifying_Relative" Content="R" FontSize="9" IsChecked="False"
+                                      Tag="Qualifying:Relative" ToolTip="Relative"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                        </WrapPanel>
+                        
+                        <!-- Race preset -->
+                        <TextBlock Text="Race" FontSize="9" Foreground="#4CAF50" Margin="4,2,0,2"/>
+                        <WrapPanel Margin="4,0,0,2">
+                            <CheckBox x:Name="ChkSession_Race_MRTOne" Content="M" FontSize="9" IsChecked="True"
+                                      Tag="Race:MRTOne" ToolTip="MRT One"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Race_TurnDisplay" Content="T" FontSize="9" IsChecked="True"
+                                      Tag="Race:TurnDisplay" ToolTip="Turn Display"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Race_FuelCalculator" Content="F" FontSize="9" IsChecked="True"
+                                      Tag="Race:FuelCalculator" ToolTip="Fuel Calculator"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Race_Relative" Content="R" FontSize="9" IsChecked="True"
+                                      Tag="Race:Relative" ToolTip="Relative"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                        </WrapPanel>
+                        
+                        <!-- Warmup preset -->
+                        <TextBlock Text="Warmup" FontSize="9" Foreground="#FF9800" Margin="4,2,0,2"/>
+                        <WrapPanel Margin="4,0,0,6">
+                            <CheckBox x:Name="ChkSession_Warmup_MRTOne" Content="M" FontSize="9" IsChecked="True"
+                                      Tag="Warmup:MRTOne" ToolTip="MRT One"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Warmup_TurnDisplay" Content="T" FontSize="9" IsChecked="False"
+                                      Tag="Warmup:TurnDisplay" ToolTip="Turn Display"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Warmup_FuelCalculator" Content="F" FontSize="9" IsChecked="False"
+                                      Tag="Warmup:FuelCalculator" ToolTip="Fuel Calculator"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Warmup_Relative" Content="R" FontSize="9" IsChecked="True"
+                                      Tag="Warmup:Relative" ToolTip="Relative"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                        </WrapPanel>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -614,6 +712,11 @@
                                               Style="{StaticResource MRT.ToggleButton}"
                                               IsChecked="False" Margin="0,0,8,4"
                                               ToolTip="Show license badge + iRating"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkUseFullIRating" Content="Full iR"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show full iRating (2035) instead of compact (2.0k)"
                                               Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                     <CheckBox x:Name="ChkShowCarNumber" Content="Car #"
                                               Style="{StaticResource MRT.ToggleButton}"

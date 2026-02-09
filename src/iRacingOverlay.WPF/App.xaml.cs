@@ -30,6 +30,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<ITelemetryService, IRacingTelemetryService>();
                 services.AddSingleton<FuelCalculatorService>();
                 services.AddSingleton<WidgetManager>();
+                services.AddSingleton<SessionConfigService>();
                 services.AddLogging(builder =>
                 {
                     builder.AddConsole();

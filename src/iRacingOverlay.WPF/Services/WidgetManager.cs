@@ -132,6 +132,31 @@ public class WidgetManager
 
     public int GetWidgetCount() => _activeWidgets.Count;
 
+    /// <summary>
+    /// Apply a session preset: show/hide (or create) widgets by type.
+    /// </summary>
+    public void ApplySessionPreset(Models.SessionPreset preset)
+    {
+        foreach (var (widgetType, shouldBeVisible) in preset.WidgetVisibility)
+        {
+            bool exists = HasWidgetType(widgetType);
+            if (shouldBeVisible)
+            {
+                if (!exists)
+                    CreateWidget(widgetType);
+                else
+                    foreach (var w in GetWidgetsByType(widgetType))
+                        w.SetUserVisibility(true);
+            }
+            else if (exists)
+            {
+                foreach (var w in GetWidgetsByType(widgetType))
+                    w.SetUserVisibility(false);
+            }
+        }
+        WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     // ── Layout persistence ──────────────────────────────────────────────
 
     private static string LayoutFilePath =>

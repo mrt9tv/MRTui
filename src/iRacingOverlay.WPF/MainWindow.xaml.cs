@@ -22,6 +22,7 @@ public partial class MainWindow : Window
 {
     private readonly WidgetManager _widgetManager;
     private readonly ITelemetryService _telemetryService;
+    private readonly SessionConfigService _sessionConfig;
     private readonly ILogger<MainWindow> _logger;
     private readonly DispatcherTimer _updateRateTimer;
     private GlobalHotkey? _toggleLockHotkey;
@@ -39,9 +40,13 @@ public partial class MainWindow : Window
 
         _widgetManager = services.GetRequiredService<WidgetManager>();
         _telemetryService = services.GetRequiredService<ITelemetryService>();
+        _sessionConfig = services.GetRequiredService<SessionConfigService>();
         _logger = services.GetRequiredService<ILogger<MainWindow>>();
 
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
+        _telemetryService.TelemetryUpdated += OnTelemetryUpdatedForSession;
+        _sessionConfig.SessionCategoryChanged += OnSessionCategoryChanged;
+        _sessionConfig.Load();
         Closing += MainWindow_Closing;
         LocationChanged += MainWindow_LocationChanged;
         SizeChanged += MainWindow_SizeChanged;
@@ -75,6 +80,7 @@ public partial class MainWindow : Window
         RegisterGlobalHotkeys();
         // Sync panel to widget state (if widget was restored from saved layout)
         SyncPanelToActiveWidget();
+        SyncSessionPanel();
     }
 
     // ── Widget selector ─────────────────────────────────────────────────
@@ -538,6 +544,7 @@ public partial class MainWindow : Window
             ChkShowSectorDelta.IsChecked = widget.ShowSectorDelta;
             ChkShowNationality.IsChecked = widget.ShowNationality;
             ChkShowClassLegend.IsChecked = widget.ShowClassLegend;
+            ChkUseFullIRating.IsChecked = widget.UseFullIRating;
             CboNameFormat.SelectedIndex = (int)widget.DriverNameFormat;
             SliderRelativeOpacity.Value = widget.Opacity * 100;
             TxtRelativeOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
@@ -577,6 +584,7 @@ public partial class MainWindow : Window
         widget.ShowSectorDelta = ChkShowSectorDelta.IsChecked == true;
         widget.ShowNationality = ChkShowNationality.IsChecked == true;
         widget.ShowClassLegend = ChkShowClassLegend.IsChecked == true;
+        widget.UseFullIRating = ChkUseFullIRating.IsChecked == true;
         widget.RecalcLayout();
         widget.RecalcHeight();
         widget.SaveSettings();
@@ -672,6 +680,101 @@ public partial class MainWindow : Window
         {
             MenuColumn.Width = new GridLength(160);
             MenuBorder.Visibility = Visibility.Visible;
+        }
+    }
+
+    // ── Session auto-detect ─────────────────────────────────────────────
+
+    private void OnTelemetryUpdatedForSession(object? sender, TelemetryData data)
+    {
+        Dispatcher.Invoke(() => _sessionConfig.CheckSessionChange(data));
+    }
+
+    private void OnSessionCategoryChanged(object? sender, SessionCategory category)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var preset = _sessionConfig.GetPreset(category);
+            if (preset != null)
+            {
+                _widgetManager.ApplySessionPreset(preset);
+                SyncPanelToActiveWidget();
+            }
+            UpdateSessionIndicator();
+            _logger.LogInformation("Applied session preset: {Category}", category);
+        });
+    }
+
+    private void UpdateSessionIndicator()
+    {
+        if (TxtSessionIndicator == null) return;
+        var cat = _sessionConfig.CurrentCategory;
+        TxtSessionIndicator.Text = cat == SessionCategory.Unknown ? "—" : cat.ToString();
+        TxtSessionIndicator.Foreground = cat switch
+        {
+            SessionCategory.Practice => new SolidColorBrush(Color.FromRgb(0, 188, 212)),
+            SessionCategory.Qualifying => new SolidColorBrush(Color.FromRgb(171, 71, 188)),
+            SessionCategory.Race => new SolidColorBrush(Color.FromRgb(76, 175, 80)),
+            SessionCategory.Warmup => new SolidColorBrush(Color.FromRgb(255, 152, 0)),
+            _ => new SolidColorBrush(Color.FromRgb(136, 136, 136)),
+        };
+    }
+
+    private void ChkAutoDetect_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        _sessionConfig.IsEnabled = ChkAutoDetectSession.IsChecked == true;
+        _sessionConfig.Save();
+    }
+
+    /// <summary>
+    /// Toggle a widget's visibility within a specific session preset.
+    /// The tag format is "SessionCategory:WidgetType" (e.g. "Practice:Relative").
+    /// </summary>
+    private void SessionPresetToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        if (sender is not CheckBox chk) return;
+        if (chk.Tag is not string tag) return;
+
+        var parts = tag.Split(':');
+        if (parts.Length != 2) return;
+        if (!Enum.TryParse<SessionCategory>(parts[0], out var cat)) return;
+        if (!Enum.TryParse<WidgetType>(parts[1], out var wt)) return;
+
+        var preset = _sessionConfig.GetPreset(cat);
+        if (preset == null) return;
+
+        preset.WidgetVisibility[wt] = chk.IsChecked == true;
+        _sessionConfig.Save();
+    }
+
+    private void SyncSessionPanel()
+    {
+        _suppressControlEvents = true;
+        try
+        {
+            ChkAutoDetectSession.IsChecked = _sessionConfig.IsEnabled;
+            UpdateSessionIndicator();
+
+            // Sync per-session checkboxes
+            foreach (var cat in new[] { SessionCategory.Practice, SessionCategory.Qualifying,
+                                         SessionCategory.Race, SessionCategory.Warmup })
+            {
+                var preset = _sessionConfig.GetPreset(cat);
+                if (preset == null) continue;
+
+                foreach (var (wt, visible) in preset.WidgetVisibility)
+                {
+                    var chkName = $"ChkSession_{cat}_{wt}";
+                    if (FindName(chkName) is CheckBox chk)
+                        chk.IsChecked = visible;
+                }
+            }
+        }
+        finally
+        {
+            _suppressControlEvents = false;
         }
     }
 
@@ -773,6 +876,9 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _telemetryService.StatusChanged -= OnTelemetryStatusChanged;
+        _telemetryService.TelemetryUpdated -= OnTelemetryUpdatedForSession;
+        _sessionConfig.SessionCategoryChanged -= OnSessionCategoryChanged;
+        _sessionConfig.Save();
         _toggleLockHotkey?.Dispose();
         _toggleVisibilityHotkey?.Dispose();
         _widgetManager.SaveCurrentLayout();
