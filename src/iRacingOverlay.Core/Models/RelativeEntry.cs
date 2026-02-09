@@ -187,6 +187,28 @@ public class RelativeEntry
     /// Used for dimming/hiding OUTLAP indicator past 85%.
     /// </summary>
     public float OutLapProgress { get; set; }
+
+    // ── New Features ────────────────────────────────────────────────
+
+    /// <summary>Number of pit stops this driver has made during the session.</summary>
+    public int PitStopCount { get; set; }
+
+    /// <summary>
+    /// Closing rate in seconds per lap (positive = closing on you, negative = pulling away).
+    /// Computed from interval trend over last 3-5 completed laps.
+    /// </summary>
+    public float ClosingRate { get; set; }
+
+    /// <summary>
+    /// Position change vs 5 laps ago (positive = gained positions, e.g. P8→P5 = +3).
+    /// </summary>
+    public int PositionDelta { get; set; }
+
+    /// <summary>Whether the gap to this car is currently shrinking compared to previous lap.</summary>
+    public bool IsGapClosing { get; set; }
+
+    /// <summary>2-letter country code from iRacing Club data (approximate mapping).</summary>
+    public string CountryCode { get; set; } = string.Empty;
 }
 
 /// <summary>

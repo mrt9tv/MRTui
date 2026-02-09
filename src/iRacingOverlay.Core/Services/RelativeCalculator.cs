@@ -81,8 +81,31 @@ public class RelativeCalculator
     /// <summary>Track whether each car was towed (skipped pit road approach).</summary>
     private readonly bool[] _wasTowed = new bool[MAX_CARS];
 
+    // ── New: pit stop counting ──────────────────────────────────────
+    private readonly int[] _pitStopCount = new int[MAX_CARS];
+
+    // ── New: interval history for closing rate (per-lap snapshots) ──
+    private const int HISTORY_SIZE = 5;
+    private readonly float[][] _intervalHistory;
+    private readonly int[][] _positionHistory;
+    private readonly int[] _historyIdx = new int[MAX_CARS];
+    private readonly int[] _lastKnownLap = new int[MAX_CARS];
+    private readonly float[] _prevInterval = new float[MAX_CARS]; // previous-frame interval for trend
+
     /// <summary>Timestamp of last Calculate call (for delta timing)</summary>
     private DateTime _lastCalcTime = DateTime.UtcNow;
+
+    public RelativeCalculator()
+    {
+        // Initialize per-car circular history buffers
+        _intervalHistory = new float[MAX_CARS][];
+        _positionHistory = new int[MAX_CARS][];
+        for (int i = 0; i < MAX_CARS; i++)
+        {
+            _intervalHistory[i] = new float[HISTORY_SIZE];
+            _positionHistory[i] = new int[HISTORY_SIZE];
+        }
+    }
 
     /// <summary>
     /// Calculate the relative display entries from current telemetry.
@@ -160,6 +183,7 @@ public class RelativeCalculator
                 {
                     _pitStallEntryTime[i] = now; // record entry time
                     _wasServiced[i] = true; // assume service when entering stall
+                    _pitStopCount[i]++; // increment pit stop counter
                     // Tow detection: entering pit stall from on-track without approaching pits
                     int lastSurf = _lastTrackSurface[i];
                     if (lastSurf == TRACK_SURFACE_ON_TRACK || lastSurf == TRACK_SURFACE_OFF_TRACK)
@@ -275,7 +299,10 @@ public class RelativeCalculator
                     ? (float)(now - entry_dt).TotalSeconds : 0f,
                 FinalBoxDuration = _finalBoxDuration[i],
                 ExitingPitDuration = _exitingPitStartTime[i] is DateTime exitDt
-                    ? (float)(now - exitDt).TotalSeconds : 0f
+                    ? (float)(now - exitDt).TotalSeconds : 0f,
+                // New feature fields
+                PitStopCount = _pitStopCount[i],
+                CountryCode = DictString(data.CarIdxToCountryCode, i, string.Empty),
             };
 
             // ── Off-track duration accumulation ────────────────────
@@ -295,6 +322,44 @@ public class RelativeCalculator
                     float outDist = pct >= exitPct ? pct - exitPct : (1.0f - exitPct) + pct;
                     entry.OutLapProgress = Math.Clamp(outDist / lapLen, 0f, 1f);
                 }
+            }
+
+            // ── Per-lap history for closing rate + position delta ───
+            int carLap = ArrayInt(data.CarIdxLap, i, 0);
+            if (carLap > 0 && carLap != _lastKnownLap[i])
+            {
+                // New lap completed — snapshot current interval and position
+                int idx2 = _historyIdx[i] % HISTORY_SIZE;
+                _intervalHistory[i][idx2] = entry.IntervalToPlayer;
+                _positionHistory[i][idx2] = entry.OverallPosition;
+                _historyIdx[i]++;
+                _lastKnownLap[i] = carLap;
+            }
+
+            // Closing rate: compare current interval to 3 laps ago
+            if (_historyIdx[i] >= 3 && !entry.IsPlayer)
+            {
+                int cur = (_historyIdx[i] - 1) % HISTORY_SIZE;
+                int old = (_historyIdx[i] - 3) % HISTORY_SIZE;
+                float oldAbs = Math.Abs(_intervalHistory[i][old]);
+                float curAbs = Math.Abs(entry.IntervalToPlayer);
+                entry.ClosingRate = (oldAbs - curAbs) / 3f; // positive = closing
+                entry.IsGapClosing = curAbs < oldAbs;
+            }
+            else
+            {
+                // Per-frame gap trend as fallback
+                float prevAbs = Math.Abs(_prevInterval[i]);
+                float curAbs2 = Math.Abs(entry.IntervalToPlayer);
+                entry.IsGapClosing = curAbs2 < prevAbs && prevAbs > 0.01f;
+            }
+            _prevInterval[i] = entry.IntervalToPlayer;
+
+            // Position delta: compare to 5 laps ago
+            if (_historyIdx[i] >= 5 && !entry.IsPlayer)
+            {
+                int old5 = (_historyIdx[i] - 5) % HISTORY_SIZE;
+                entry.PositionDelta = _positionHistory[i][old5] - entry.OverallPosition; // positive = gained
             }
 
             // ── Player row ─────────────────────────────────────────

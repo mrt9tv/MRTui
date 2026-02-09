@@ -170,6 +170,17 @@ Compact table showing cars around you (configurable ±3 to ±10) with live inter
 
 **iRacing SDK channels:** `CarIdxLapDistPct`, `CarIdxEstTime`, `CarIdxLap`, `CarIdxLapCompleted`, `CarIdxLastLapTime`, `CarIdxBestLapTime`, `CarIdxOnPitRoad`, `CarIdxTrackSurface`, `CarIdxClass`, `CarIdxClassPosition`, `CarIdxPosition`, `CarIdxTireCompound`, `CarIdxFastRepairsUsed`
 
+#### 🧠 Rival Tracker — Persistent Cross-Session Driver Intel
+> No competitor offers this. A persistent local database of drivers you've raced against.
+
+- [ ] **Auto-log encounters** — every session, record driver name, iRating, finish positions, incidents, average gap
+- [ ] **Rival tagging** — right-click any row → "Tag as Rival / Friendly / Aggressive" with color coding
+- [ ] **Encounter history** — tooltip/popup showing "Raced 12 times, you beat them 7x, avg gap: +1.3s"
+- [ ] **Threat scoring** — ML-based: combine iRating, incident rate, closing tendencies into a 1-5 star threat score per driver
+- [ ] **Race prep** — before green flag, scan entry list and highlight known rivals + show their stats
+- [ ] **Storage** — Local SQLite database, no cloud. Indexed by iRacing customer ID.
+- [ ] **Export** — CSV/JSON dump of your rival database for analysis
+
 ---
 
 ### W3. Standings Widget `[PLANNED]`
@@ -598,6 +609,18 @@ ML-based pit window optimizer replacing simple fuel calculations.
 ### UI/UX Enhancements
 - [ ] **Drag-to-Reorder Columns/Rows** — Let users drag column headers or row order in any widget, persisted in settings.
 - [ ] **Quick-Glance Mode** — Relative widget compact mode: only 2 cars ahead + 2 behind, larger text for peripheral vision at speed.
+
+### 🧠 Unique MRT-Only Features (No Competitor Has These)
+
+- [ ] **Ghost Gap Projection** — Extrapolate closing/opening rates to show *when* a car will catch/pass you. Display a countdown timer: "P3 catches you in ~4 laps" or "You catch P2 in ~7 laps". Uses rolling interval deltas + pace trend, visible as a subtle timer next to the REL column.
+
+- [ ] **Incident Heatmap Zones** — Track which corners produce the most incidents across all cars in the session. Overlay a small corner danger indicator (🔴🟡🟢) on the Turn Display widget or as floating badges. Data comes from correlating `CarIdxTrackSurface=OffTrack` events with `LapDistPct` per car per lap.
+
+- [ ] **Pit Window Optimizer** — Real-time undercut/overcut analysis. Tracks when nearby competitors pit, calculates their expected rejoin position, and tells you if pitting NOW would gain or lose positions. Shows "+2P if pit now" or "wait 3 laps: -1P risk". Uses fuel burn + pit time + interval data from the relative table.
+
+- [ ] **Adaptive Widget Density** — ML model that learns your glance patterns (which widgets you look at in corners vs straights) and automatically reduces information density during high-workload sections. E.g., relative table shrinks to 3 rows in a chicane, expands to full in a straight. Uses `LapDistPct` + turn data + steering input as proxies for workload.
+
+- [ ] **Race Narrative Log** — Auto-generates a post-race text summary of your race: "Started P12, gained 4 positions in first 5 laps. Battled with J.Smith for P7 from lap 8-14 (avg gap 0.4s). Lost P6 to R.Johnson after incident on lap 22 (+2x). Finished P8, gained 3 positions overall." Exportable as Markdown for forums/Discord.
 
 ---
 

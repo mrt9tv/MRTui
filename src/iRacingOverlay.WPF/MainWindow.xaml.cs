@@ -532,6 +532,12 @@ public partial class MainWindow : Window
             ChkShowLastLap.IsChecked = widget.ShowLastLap;
             ChkShowAltRowShading.IsChecked = widget.ShowAlternateRowShading;
             ChkShowInfoBar.IsChecked = widget.ShowInfoBar;
+            ChkShowClosingRate.IsChecked = widget.ShowClosingRate;
+            ChkShowPitStopCount.IsChecked = widget.ShowPitStopCount;
+            ChkShowPositionChange.IsChecked = widget.ShowPositionChange;
+            ChkShowSectorDelta.IsChecked = widget.ShowSectorDelta;
+            ChkShowNationality.IsChecked = widget.ShowNationality;
+            ChkShowClassLegend.IsChecked = widget.ShowClassLegend;
             CboNameFormat.SelectedIndex = (int)widget.DriverNameFormat;
             SliderRelativeOpacity.Value = widget.Opacity * 100;
             TxtRelativeOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
@@ -565,6 +571,12 @@ public partial class MainWindow : Window
         widget.ShowLastLap = ChkShowLastLap.IsChecked == true;
         widget.ShowAlternateRowShading = ChkShowAltRowShading.IsChecked == true;
         widget.ShowInfoBar = ChkShowInfoBar.IsChecked == true;
+        widget.ShowClosingRate = ChkShowClosingRate.IsChecked == true;
+        widget.ShowPitStopCount = ChkShowPitStopCount.IsChecked == true;
+        widget.ShowPositionChange = ChkShowPositionChange.IsChecked == true;
+        widget.ShowSectorDelta = ChkShowSectorDelta.IsChecked == true;
+        widget.ShowNationality = ChkShowNationality.IsChecked == true;
+        widget.ShowClassLegend = ChkShowClassLegend.IsChecked == true;
         widget.RecalcLayout();
         widget.RecalcHeight();
         widget.SaveSettings();

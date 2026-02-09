@@ -231,6 +231,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private int[] _carIdxRecentIncidentDelta = new int[64];       // how many x incidents gained (e.g. 2 = 2x)
     private DateTime[] _carIdxIncidentTime = new DateTime[64];    // when the incident flag was set
     private Dictionary<int, string> _carIdxToCarModel = new();    // CarIdx -> 3-letter car model abbreviation
+    private Dictionary<int, string> _carIdxToCountryCode = new(); // CarIdx -> 2-letter country code
     private readonly object _driverDataLock = new(); // Thread safety for async session callbacks
     
     // Tier 2: SessionInfo version tracking - Only parse when SDK increments SessionInfoUpdate
@@ -675,6 +676,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxRecentIncident = CopyRecentIncidents(out var recentDelta),
                 CarIdxRecentIncidentDelta = recentDelta,
                 CarIdxToCarModel = CopyDictSafe(_carIdxToCarModel),
+                CarIdxToCountryCode = CopyDictSafe(_carIdxToCountryCode),
 
                 // Live Position Calculation
                 SessionState = (int)sdkData.SessionState.GetValueOrDefault(),
@@ -908,6 +910,40 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         return carName.Length >= 3 ? carName[..3].ToUpperInvariant() : carName.ToUpperInvariant();
     }
 
+    /// <summary>Map iRacing ClubName to a 2-letter country code (ISO 3166-1 alpha-2, approximate).</summary>
+    private static string ClubToCountryCode(string clubName)
+    {
+        if (string.IsNullOrWhiteSpace(clubName)) return "";
+        var cn = clubName.Trim();
+        // Match common iRacing club names to country codes
+        if (cn.Contains("DE-AT-CH") || cn.Contains("Germany")) return "DE";
+        if (cn.Contains("Benelux")) return "NL";
+        if (cn.Contains("Brazil") || cn.Contains("Brasil")) return "BR";
+        if (cn.Contains("Central-Eastern")) return "PL";
+        if (cn.Contains("Finland") || cn.Contains("Suomi")) return "FI";
+        if (cn.Contains("France")) return "FR";
+        if (cn.Contains("Iberia") || cn.Contains("Spain")) return "ES";
+        if (cn.Contains("Italy") || cn.Contains("Italia")) return "IT";
+        if (cn.Contains("UK") || cn.Contains("Britain")) return "GB";
+        if (cn.Contains("Scandinavia") || cn.Contains("Nordic")) return "SE";
+        if (cn.Contains("Australia") || cn.Contains("NZ")) return "AU";
+        if (cn.Contains("Japan")) return "JP";
+        if (cn.Contains("South America")) return "AR";
+        if (cn.Contains("Asia")) return "KR";
+        if (cn.Contains("India")) return "IN";
+        if (cn.Contains("South Africa")) return "ZA";
+        if (cn.Contains("Canada")) return "CA";
+        // US regions — many club names
+        if (cn.Contains("Michigan") || cn.Contains("Carolina") || cn.Contains("Texas") ||
+            cn.Contains("California") || cn.Contains("Florida") || cn.Contains("New York") ||
+            cn.Contains("Georgia") || cn.Contains("Illinois") || cn.Contains("Ohio") ||
+            cn.Contains("Pennsylvania") || cn.Contains("Virginia") || cn.Contains("New England") ||
+            cn.Contains("Northwest") || cn.Contains("Pacific") || cn.Contains("Mid") ||
+            cn.Contains("South") || cn.Contains("West") || cn.Contains("Plains"))
+            return "US";
+        return ""; // unknown
+    }
+
     // ── Typed session info processing (SDK v1.0 ChannelReader) ──────────
 
     /// <summary>
@@ -931,6 +967,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 _carIdxToSafetyRating.Clear();
                 _carIdxToLicenseClass.Clear();
                 _carIdxToCarModel.Clear();
+                _carIdxToCountryCode.Clear();
 
                 foreach (var driver in session.DriverInfo.Drivers)
                 {
@@ -967,6 +1004,10 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         if (parts.Length > 0)
                             _carIdxToLicenseClass[idx] = parts[0];
                     }
+
+                    // Country code from ClubName (approximate mapping)
+                    if (!string.IsNullOrEmpty(driver.ClubName))
+                        _carIdxToCountryCode[idx] = ClubToCountryCode(driver.ClubName);
 
                     // Player-specific data
                     if (idx == driverCarIdx)

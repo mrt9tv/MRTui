@@ -643,6 +643,36 @@
                                               IsChecked="False" Margin="0,0,8,4"
                                               ToolTip="Show est laps, time remaining, incidents at bottom"
                                               Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowClosingRate" Content="Closing ▲▼"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show closing rate arrow (▲ closing / ▼ pulling away)"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowPitStopCount" Content="Pit Stops"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show pit stop count per driver (1p, 2p, etc.)"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowPositionChange" Content="Pos Δ"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show position change arrows (▲3 gained / ▼2 lost vs 5 laps ago)"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowSectorDelta" Content="Gap Color"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Color REL column green (closing) / red (opening)"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowNationality" Content="Nationality"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show 2-letter country code from iRacing club data"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowClassLegend" Content="Class Legend"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Show class color legend with car counts in header"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>

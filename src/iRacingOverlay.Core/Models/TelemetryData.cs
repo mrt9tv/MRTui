@@ -847,6 +847,11 @@ public class TelemetryData
     public Dictionary<int, string>? CarIdxToCarModel { get; set; }
 
     /// <summary>
+    /// Map of CarIdx to 2-letter country code (from iRacing ClubID mapping).
+    /// </summary>
+    public Dictionary<int, string>? CarIdxToCountryCode { get; set; }
+
+    /// <summary>
     /// Player heading angle in radians (yaw around Z-axis)
     /// </summary>
     public float Yaw { get; set; }

@@ -48,6 +48,10 @@ public class RelativeWidget : WidgetBase
     private const double MIN_WIDGET_WIDTH = 250;
     private const double ALT_ROW_ALPHA = 12;    // alternate row shading alpha (subtle)
     private const double COL_W_CAR_MODEL = 30;  // "488" car model abbreviation
+    private const double COL_W_POS_DELTA = 22;  // "▲3" position change
+    private const double COL_W_NAT = 22;        // "DE" nationality code
+    private const double COL_W_PITS = 20;       // "2p" pit stop count
+    private const double COL_W_CLOSE = 14;      // "▲" closing rate arrow
     private const double INFO_BAR_HEIGHT = 18;  // bottom info bar height
 
     // ── Row limits ──────────────────────────────────────────────────
@@ -116,6 +120,8 @@ public class RelativeWidget : WidgetBase
     private static readonly SolidColorBrush BRUSH_DARK_TEXT = Freeze(new SolidColorBrush(Color.FromRgb(20, 20, 20)));
     private static readonly SolidColorBrush BRUSH_STATUS_BG_DEFAULT = Freeze(new SolidColorBrush(Color.FromArgb(170, 18, 18, 18)));
     private static readonly SolidColorBrush BRUSH_STATUS_BG_BLACK = Freeze(new SolidColorBrush(Color.FromArgb(240, 0, 0, 0)));
+    private static readonly SolidColorBrush BRUSH_GREEN = Freeze(new SolidColorBrush(Color.FromRgb(0, 200, 80)));
+    private static readonly SolidColorBrush BRUSH_RED = Freeze(new SolidColorBrush(Color.FromRgb(220, 50, 50)));
 
     // ── iRacing License Colors ──────────────────────────────────────
     private static readonly SolidColorBrush BRUSH_LIC_A = Freeze(new SolidColorBrush(Color.FromRgb(0x01, 0x53, 0xDB))); // Blue
@@ -135,7 +141,7 @@ public class RelativeWidget : WidgetBase
     {
         public double BoxWidth;     // width of the main bordered box (without status)
         public double TotalWidth;   // total widget including status overhang
-        public double PosX, NumX, CarModelX, NameX, InfoX, IntX, LastX, GapX, StatusX;
+        public double PosX, PosDeltaX, NumX, CarModelX, NatX, NameX, InfoX, PitsX, IntX, LastX, CloseX, GapX, StatusX;
     }
 
     private ColumnLayout _layout;
@@ -153,7 +159,13 @@ public class RelativeWidget : WidgetBase
     private TextBlock _hdrP = null!, _hdrNum = null!, _hdrCar = null!, _hdrName = null!;
     private TextBlock _hdrInfo = null!, _hdrInt = null!, _hdrLast = null!;
     private TextBlock _hdrGap = null!;
+    private TextBlock _hdrPosDelta = null!, _hdrNat = null!, _hdrPits = null!;
     private Border _hdrSeparator = null!;
+
+    // Class legend elements (up to 6 classes)
+    private const int MAX_LEGEND_ITEMS = 6;
+    private readonly Border[] _legendSwatches = new Border[MAX_LEGEND_ITEMS];
+    private readonly TextBlock[] _legendLabels = new TextBlock[MAX_LEGEND_ITEMS];
 
     // Info bar elements (bottom of widget)
     private Border _infoBarBorder = null!;
@@ -210,6 +222,24 @@ public class RelativeWidget : WidgetBase
     /// <summary>Show info bar at the bottom (est laps, time remaining, incidents)</summary>
     public bool ShowInfoBar { get; set; } = false;
 
+    /// <summary>Show closing rate arrow (▲ closing / ▼ pulling away)</summary>
+    public bool ShowClosingRate { get; set; } = false;
+
+    /// <summary>Show pit stop count per driver</summary>
+    public bool ShowPitStopCount { get; set; } = false;
+
+    /// <summary>Show position change arrows (▲+2 / ▼-1)</summary>
+    public bool ShowPositionChange { get; set; } = false;
+
+    /// <summary>Color REL column based on gap trend (green=closing, red=opening)</summary>
+    public bool ShowSectorDelta { get; set; } = false;
+
+    /// <summary>Show 2-letter nationality/country code</summary>
+    public bool ShowNationality { get; set; } = false;
+
+    /// <summary>Show class color legend in header</summary>
+    public bool ShowClassLegend { get; set; } = false;
+
     #endregion
 
     #region Services
@@ -256,6 +286,12 @@ public class RelativeWidget : WidgetBase
         if (TryGetBool("showCarModel", out var cm)) ShowCarModel = cm;
         if (TryGetBool("showAlternateRowShading", out var ars)) ShowAlternateRowShading = ars;
         if (TryGetBool("showInfoBar", out var ib)) ShowInfoBar = ib;
+        if (TryGetBool("showClosingRate", out var cr)) ShowClosingRate = cr;
+        if (TryGetBool("showPitStopCount", out var psc)) ShowPitStopCount = psc;
+        if (TryGetBool("showPositionChange", out var pc)) ShowPositionChange = pc;
+        if (TryGetBool("showSectorDelta", out var sd)) ShowSectorDelta = sd;
+        if (TryGetBool("showNationality", out var nat)) ShowNationality = nat;
+        if (TryGetBool("showClassLegend", out var cl)) ShowClassLegend = cl;
         // Migration: old showIRating/showSafetyRating → showDriverInfo
         if (TryGetBool("showIRating", out var oldIr) && oldIr) ShowDriverInfo = true;
         if (TryGetBool("showSafetyRating", out var oldSr) && oldSr) ShowDriverInfo = true;
@@ -276,6 +312,12 @@ public class RelativeWidget : WidgetBase
         Config.Settings["showCarModel"] = ShowCarModel;
         Config.Settings["showAlternateRowShading"] = ShowAlternateRowShading;
         Config.Settings["showInfoBar"] = ShowInfoBar;
+        Config.Settings["showClosingRate"] = ShowClosingRate;
+        Config.Settings["showPitStopCount"] = ShowPitStopCount;
+        Config.Settings["showPositionChange"] = ShowPositionChange;
+        Config.Settings["showSectorDelta"] = ShowSectorDelta;
+        Config.Settings["showNationality"] = ShowNationality;
+        Config.Settings["showClassLegend"] = ShowClassLegend;
     }
 
     private bool TryGetBool(string key, out bool value)
@@ -309,11 +351,17 @@ public class RelativeWidget : WidgetBase
         _layout.PosX = x;
         x += COL_W_POS;
 
+        _layout.PosDeltaX = x;
+        if (ShowPositionChange) x += COL_W_POS_DELTA;
+
         _layout.NumX = x;
         if (ShowCarNumber) x += COL_W_NUM;
 
         _layout.CarModelX = x;
         if (ShowCarModel) x += COL_W_CAR_MODEL;
+
+        _layout.NatX = x;
+        if (ShowNationality) x += COL_W_NAT;
 
         _layout.NameX = x;
         x += COL_W_NAME;
@@ -321,11 +369,17 @@ public class RelativeWidget : WidgetBase
         _layout.InfoX = x;
         if (ShowDriverInfo) x += COL_W_INFO;
 
+        _layout.PitsX = x;
+        if (ShowPitStopCount) x += COL_W_PITS;
+
         _layout.IntX = x;
         if (ShowInterval) x += COL_W_INT;
 
         _layout.LastX = x;
         if (ShowLastLap) x += COL_W_LAST;
+
+        _layout.CloseX = x;
+        if (ShowClosingRate) x += COL_W_CLOSE;
 
         _layout.GapX = x;
         x += COL_W_GAP;
@@ -364,6 +418,12 @@ public class RelativeWidget : WidgetBase
             Canvas.SetLeft(_hdrLast, _layout.LastX);
             _hdrLast.Visibility = ShowLastLap ? Visibility.Visible : Visibility.Collapsed;
             Canvas.SetLeft(_hdrGap, _layout.GapX);
+            Canvas.SetLeft(_hdrPosDelta, _layout.PosDeltaX);
+            _hdrPosDelta.Visibility = ShowPositionChange ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrNat, _layout.NatX);
+            _hdrNat.Visibility = ShowNationality ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrPits, _layout.PitsX);
+            _hdrPits.Visibility = ShowPitStopCount ? Visibility.Visible : Visibility.Collapsed;
             _hdrSeparator.Width = boxW - PADDING * 2;
         }
 
@@ -469,6 +529,9 @@ public class RelativeWidget : WidgetBase
         _hdrInt = AddText(_rowCanvas, "GAP", _layout.IntX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
         _hdrLast = AddText(_rowCanvas, "LAST", _layout.LastX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
         _hdrGap = AddText(_rowCanvas, "REL", _layout.GapX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrPosDelta = AddText(_rowCanvas, "Δ", _layout.PosDeltaX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrNat = AddText(_rowCanvas, "NAT", _layout.NatX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrPits = AddText(_rowCanvas, "PIT", _layout.PitsX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
 
         // No STATUS header — it floats outside the box
 
@@ -482,6 +545,31 @@ public class RelativeWidget : WidgetBase
         Canvas.SetLeft(_hdrSeparator, 0);
         Canvas.SetTop(_hdrSeparator, HEADER_HEIGHT + 2);
         _rowCanvas.Children.Add(_hdrSeparator);
+
+        // Class legend items (pre-allocated, positioned dynamically in UpdateUI)
+        double legendY = 2;
+        for (int c = 0; c < MAX_LEGEND_ITEMS; c++)
+        {
+            _legendSwatches[c] = new Border
+            {
+                Width = 8, Height = 8,
+                CornerRadius = new CornerRadius(1),
+                Background = BRUSH_TRANSPARENT,
+                Visibility = Visibility.Collapsed
+            };
+            Canvas.SetTop(_legendSwatches[c], legendY);
+            _rowCanvas.Children.Add(_legendSwatches[c]);
+
+            _legendLabels[c] = new TextBlock
+            {
+                FontSize = 7,
+                Foreground = BRUSH_MUTED,
+                FontFamily = new FontFamily("Segoe UI"),
+                Visibility = Visibility.Collapsed
+            };
+            Canvas.SetTop(_legendLabels[c], legendY - 1);
+            _rowCanvas.Children.Add(_legendLabels[c]);
+        }
     }
 
     private RowElements CreateDataRow(double y)
@@ -558,9 +646,15 @@ public class RelativeWidget : WidgetBase
         row.LastLap = CreateRowText(0, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
         row.Gap = CreateRowText(0, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
 
+        // Optional feature columns
+        row.ClosingArrow = CreateRowText(0, y, 10, BRUSH_TEAL, FontWeights.Bold);
+        row.PitStops = CreateRowText(0, y, 9, BRUSH_MUTED, FontWeights.Normal);
+        row.PositionDelta = CreateRowText(0, y, 9, BRUSH_TEAL, FontWeights.Normal);
+        row.Nationality = CreateRowText(0, y, 9, BRUSH_MUTED, FontWeights.Normal);
+
         // Vertical separator lines between columns (solid through rows)
         row.Separators = new List<Border>();
-        for (int s = 0; s < 7; s++) // up to 7 separators between columns
+        for (int s = 0; s < 11; s++) // up to 11 separators between columns (includes optional columns)
         {
             var sep = new Border
             {
@@ -686,6 +780,12 @@ public class RelativeWidget : WidgetBase
 
         // Update display rows
         UpdateRows(entries);
+
+        // Class color legend in header area
+        if (ShowClassLegend)
+            UpdateClassLegend(entries);
+        else
+            HideClassLegend();
 
         // Resize if row count changed
         int newRowCount = entries.Count;
@@ -827,6 +927,23 @@ public class RelativeWidget : WidgetBase
         row.Position.Text = pos > 0 ? pos.ToString() : "-";
         row.Position.Foreground = entry.IsPlayer ? BRUSH_TEAL : textBrush;
 
+        // Position delta (▲3 gained / ▼2 lost)
+        if (ShowPositionChange)
+        {
+            Canvas.SetLeft(row.PositionDelta, _layout.PosDeltaX);
+            row.PositionDelta.Visibility = Visibility.Visible;
+            if (!entry.IsPlayer && entry.PositionDelta != 0)
+            {
+                row.PositionDelta.Text = entry.PositionDelta > 0
+                    ? $"▲{entry.PositionDelta}" : $"▼{Math.Abs(entry.PositionDelta)}";
+                row.PositionDelta.Foreground = entry.PositionDelta > 0 ? BRUSH_GREEN : BRUSH_RED;
+            }
+            else
+                row.PositionDelta.Text = "";
+        }
+        else
+            row.PositionDelta.Visibility = Visibility.Collapsed;
+
         // Car number
         row.CarNumber.Text = !string.IsNullOrEmpty(entry.CarNumber) ? $"#{entry.CarNumber}" : "-";
         row.CarNumber.Foreground = mutedBrush;
@@ -835,6 +952,16 @@ public class RelativeWidget : WidgetBase
         // Car model abbreviation
         row.CarModel.Text = !string.IsNullOrEmpty(entry.CarModel) ? entry.CarModel : "";
         row.CarModel.Visibility = ShowCarModel ? Visibility.Visible : Visibility.Collapsed;
+
+        // Nationality (2-letter country code)
+        if (ShowNationality)
+        {
+            Canvas.SetLeft(row.Nationality, _layout.NatX);
+            row.Nationality.Visibility = Visibility.Visible;
+            row.Nationality.Text = !string.IsNullOrEmpty(entry.CountryCode) ? entry.CountryCode : "";
+        }
+        else
+            row.Nationality.Visibility = Visibility.Collapsed;
 
         // Name
         string name = !string.IsNullOrEmpty(entry.DriverName)
@@ -880,6 +1007,17 @@ public class RelativeWidget : WidgetBase
             row.LicenseText.Visibility = Visibility.Collapsed;
         }
 
+        // Pit stop count
+        if (ShowPitStopCount)
+        {
+            Canvas.SetLeft(row.PitStops, _layout.PitsX);
+            row.PitStops.Visibility = Visibility.Visible;
+            row.PitStops.Text = entry.PitStopCount > 0 ? $"{entry.PitStopCount}p" : "";
+            row.PitStops.Foreground = entry.PitStopCount >= 2 ? BRUSH_ORANGE : BRUSH_MUTED;
+        }
+        else
+            row.PitStops.Visibility = Visibility.Collapsed;
+
         // GAP column (toggleable) — gap to car directly ahead
         if (ShowInterval)
         {
@@ -919,6 +1057,22 @@ public class RelativeWidget : WidgetBase
             row.LastLap.Visibility = Visibility.Collapsed;
         }
 
+        // Closing rate arrow (▲ closing / ▼ pulling away)
+        if (ShowClosingRate)
+        {
+            Canvas.SetLeft(row.ClosingArrow, _layout.CloseX);
+            row.ClosingArrow.Visibility = Visibility.Visible;
+            if (!entry.IsPlayer && Math.Abs(entry.ClosingRate) > 0.05f)
+            {
+                row.ClosingArrow.Text = entry.ClosingRate > 0 ? "▲" : "▼";
+                row.ClosingArrow.Foreground = entry.ClosingRate > 0 ? BRUSH_GREEN : BRUSH_RED;
+            }
+            else
+                row.ClosingArrow.Text = "";
+        }
+        else
+            row.ClosingArrow.Visibility = Visibility.Collapsed;
+
         // REL column (always visible) — relative interval to player
         if (entry.IsPlayer)
         {
@@ -929,7 +1083,11 @@ public class RelativeWidget : WidgetBase
         else
         {
             row.Gap.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
-            row.Gap.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
+            // Sector delta: green=closing, red=opening (overrides default teal/orange)
+            if (ShowSectorDelta)
+                row.Gap.Foreground = entry.IsGapClosing ? BRUSH_GREEN : BRUSH_RED;
+            else
+                row.Gap.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
             row.Gap.FontWeight = FontWeights.SemiBold;
         }
 
@@ -1031,18 +1189,26 @@ public class RelativeWidget : WidgetBase
         var edges = new List<double>();
         // After POS column
         edges.Add(_layout.PosX + COL_W_POS - 2);
+        // After POS DELTA column (if visible)
+        if (ShowPositionChange) edges.Add(_layout.PosDeltaX + COL_W_POS_DELTA - 2);
         // After NUM column (if visible)
         if (ShowCarNumber) edges.Add(_layout.NumX + COL_W_NUM - 2);
         // After CAR MODEL column (if visible)
         if (ShowCarModel) edges.Add(_layout.CarModelX + COL_W_CAR_MODEL - 2);
+        // After NAT column (if visible)
+        if (ShowNationality) edges.Add(_layout.NatX + COL_W_NAT - 2);
         // After NAME column
         edges.Add(_layout.NameX + COL_W_NAME - 2);
         // After INFO column (if visible)
         if (ShowDriverInfo) edges.Add(_layout.InfoX + COL_W_INFO - 2);
+        // After PITS column (if visible)
+        if (ShowPitStopCount) edges.Add(_layout.PitsX + COL_W_PITS - 2);
         // After INT column (if visible)
         if (ShowInterval) edges.Add(_layout.IntX + COL_W_INT - 2);
         // After LAST column (if visible)
         if (ShowLastLap) edges.Add(_layout.LastX + COL_W_LAST - 2);
+        // After CLOSE column (if visible)
+        if (ShowClosingRate) edges.Add(_layout.CloseX + COL_W_CLOSE - 2);
         return edges.ToArray();
     }
 
@@ -1086,6 +1252,11 @@ public class RelativeWidget : WidgetBase
         row.Interval.Visibility = vis;
         row.Gap.Visibility = vis;
         row.LastLap.Visibility = vis;
+        // New feature elements
+        row.ClosingArrow.Visibility = vis;
+        row.PitStops.Visibility = vis;
+        row.PositionDelta.Visibility = vis;
+        row.Nationality.Visibility = vis;
         // Status and StatusBg are on the main canvas — hide when row hidden
         row.Status.Visibility = vis;
         if (!visible)
@@ -1167,6 +1338,61 @@ public class RelativeWidget : WidgetBase
         // Time interval
         string sign = intervalSeconds >= 0 ? "+" : "";
         return string.Format(CultureInfo.InvariantCulture, "{0}{1:F1}", sign, intervalSeconds);
+    }
+
+    // ── Class legend helpers ──────────────────────────────────────────
+
+    private void UpdateClassLegend(List<RelativeEntry> entries)
+    {
+        // Gather unique class IDs with car counts
+        var classCount = new Dictionary<int, int>();
+        foreach (var e in entries)
+        {
+            if (e.CarClassId > 0)
+            {
+                if (!classCount.ContainsKey(e.CarClassId))
+                    classCount[e.CarClassId] = 0;
+                classCount[e.CarClassId]++;
+            }
+        }
+
+        int idx = 0;
+        double x = _layout.BoxWidth - PADDING * 2; // right-align from box edge
+        foreach (var kvp in classCount)
+        {
+            if (idx >= MAX_LEGEND_ITEMS) break;
+
+            // Right-align: count label, then color swatch to its left
+            string label = kvp.Value.ToString();
+            x -= 14;
+            _legendLabels[idx].Text = label;
+            Canvas.SetLeft(_legendLabels[idx], x);
+            _legendLabels[idx].Visibility = Visibility.Visible;
+
+            x -= 10;
+            _legendSwatches[idx].Background = GetClassBrush(kvp.Key, false);
+            Canvas.SetLeft(_legendSwatches[idx], x);
+            _legendSwatches[idx].Visibility = Visibility.Visible;
+
+            x -= 3; // gap between legend items
+            idx++;
+        }
+
+        // Hide unused slots
+        for (; idx < MAX_LEGEND_ITEMS; idx++)
+        {
+            _legendSwatches[idx].Visibility = Visibility.Collapsed;
+            _legendLabels[idx].Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void HideClassLegend()
+    {
+        for (int i = 0; i < MAX_LEGEND_ITEMS; i++)
+        {
+            _legendSwatches[i].Visibility = Visibility.Collapsed;
+            _legendLabels[i].Visibility = Visibility.Collapsed;
+        }
     }
 
     // ── Class color generation ──────────────────────────────────────
@@ -1280,5 +1506,10 @@ public class RelativeWidget : WidgetBase
         public TextBlock Status = null!;      // placed on _canvas (outside box)
         public Border StatusBg = null!;       // semi-transparent bg behind status
         public List<Border> Separators = new(); // vertical column separators
+        // New feature elements
+        public TextBlock ClosingArrow = null!;    // ▲/▼ closing rate indicator
+        public TextBlock PitStops = null!;        // pit stop count
+        public TextBlock PositionDelta = null!;   // position change arrows
+        public TextBlock Nationality = null!;     // 2-letter country code
     }
 }
