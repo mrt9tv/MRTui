@@ -75,7 +75,7 @@ public class TurnTrackingService
         }
         
         // Normalize track name to lowercase for dictionary lookup
-        var trackKey = trackName.ToLowerInvariant();
+        var trackKey = trackName.ToLowerInvariant().Trim();
         
         // Skip if already set to this track
         if (trackKey == _currentTrackKey)
@@ -83,19 +83,47 @@ public class TurnTrackingService
         
         _currentTrackKey = trackKey;
         
-        // Try to find track in database
+        // Try exact match first
         if (_database.Tracks.TryGetValue(trackKey, out var trackData))
         {
             _currentTrackData = trackData;
             _logger.LogInformation("Turn tracking enabled for {TrackName} ({TrackDisplay}) - {TurnCount} turns mapped",
                 trackKey, trackData.DisplayName, trackData.TotalTurns);
+            return;
         }
-        else
+        
+        // Try normalized match (strip spaces, hyphens, underscores)
+        var normalizedKey = NormalizeTrackKey(trackKey);
+        foreach (var kvp in _database.Tracks)
         {
-            _currentTrackData = null;
-            _logger.LogInformation("Track '{TrackName}' not found in turn database. Turn tracking disabled for this track.", trackName);
+            if (NormalizeTrackKey(kvp.Key) == normalizedKey)
+            {
+                _currentTrackData = kvp.Value;
+                _logger.LogInformation("Turn tracking enabled for {TrackName} via fuzzy match → {DbKey} ({TrackDisplay}) - {TurnCount} turns mapped",
+                    trackName, kvp.Key, kvp.Value.DisplayName, kvp.Value.TotalTurns);
+                return;
+            }
         }
+        
+        // Try contains match (track name contains a database key or vice versa)
+        foreach (var kvp in _database.Tracks)
+        {
+            if (normalizedKey.Contains(NormalizeTrackKey(kvp.Key)) || NormalizeTrackKey(kvp.Key).Contains(normalizedKey))
+            {
+                _currentTrackData = kvp.Value;
+                _logger.LogInformation("Turn tracking enabled for {TrackName} via partial match → {DbKey} ({TrackDisplay}) - {TurnCount} turns mapped",
+                    trackName, kvp.Key, kvp.Value.DisplayName, kvp.Value.TotalTurns);
+                return;
+            }
+        }
+        
+        _currentTrackData = null;
+        _logger.LogInformation("Track '{TrackName}' (normalized: '{NormalizedKey}') not found in turn database. Turn tracking disabled for this track.", trackName, normalizedKey);
     }
+    
+    /// <summary>Normalize a track key by removing spaces, hyphens, underscores.</summary>
+    private static string NormalizeTrackKey(string key)
+        => key.Replace(" ", "").Replace("-", "").Replace("_", "").ToLowerInvariant();
     
     /// <summary>
     /// Get current turn information based on LapDistPct

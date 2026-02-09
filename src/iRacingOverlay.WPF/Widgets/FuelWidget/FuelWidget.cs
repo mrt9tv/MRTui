@@ -23,7 +23,7 @@ public class FuelWidget : WidgetBase
     #region Constants
 
     private const double WIDGET_WIDTH = 210;
-    private const double BASE_HEIGHT = 200;
+    private const double BASE_HEIGHT = 68;
     private const double PADDING = 8;
     private const double ROW_HEIGHT = 18;
     private const double BORDER_RADIUS = 6;
@@ -79,6 +79,11 @@ public class FuelWidget : WidgetBase
     private TextBlock _valSavingRate = null!;
     private TextBlock _valStrategy = null!;
 
+    // Toggleable section containers
+    private StackPanel _tankPctContainer = null!;
+    private StackPanel _savingContainer = null!;
+    private StackPanel _alertContainer = null!;
+
     // Alert bar
     private TextBlock _alertText = null!;
     private Border _alertBorder = null!;
@@ -94,7 +99,16 @@ public class FuelWidget : WidgetBase
     public bool ShowL5Average { get; set; } = true;
 
     /// <summary>Show splutter buffer row</summary>
-    public bool ShowBuffer { get; set; } = true;
+    public bool ShowBuffer { get; set; } = false;
+
+    /// <summary>Show fuel saving section (delta, target, rate, strategy)</summary>
+    public bool ShowSavingSection { get; set; } = true;
+
+    /// <summary>Show tank percentage row</summary>
+    public bool ShowTankPct { get; set; } = true;
+
+    /// <summary>Show alert bar</summary>
+    public bool ShowAlert { get; set; } = true;
 
     #endregion
 
@@ -130,6 +144,21 @@ public class FuelWidget : WidgetBase
             if (v3 is JsonElement je) ShowBuffer = je.ValueKind == JsonValueKind.True;
             else if (v3 is bool b) ShowBuffer = b;
         }
+        if (Config.Settings.TryGetValue("showSavingSection", out var v4))
+        {
+            if (v4 is JsonElement je) ShowSavingSection = je.ValueKind == JsonValueKind.True;
+            else if (v4 is bool b) ShowSavingSection = b;
+        }
+        if (Config.Settings.TryGetValue("showTankPct", out var v5))
+        {
+            if (v5 is JsonElement je) ShowTankPct = je.ValueKind == JsonValueKind.True;
+            else if (v5 is bool b) ShowTankPct = b;
+        }
+        if (Config.Settings.TryGetValue("showAlert", out var v6))
+        {
+            if (v6 is JsonElement je) ShowAlert = je.ValueKind == JsonValueKind.True;
+            else if (v6 is bool b) ShowAlert = b;
+        }
     }
 
     public void SaveSettings()
@@ -138,6 +167,9 @@ public class FuelWidget : WidgetBase
         Config.Settings["showL3Average"] = ShowL3Average;
         Config.Settings["showL5Average"] = ShowL5Average;
         Config.Settings["showBuffer"] = ShowBuffer;
+        Config.Settings["showSavingSection"] = ShowSavingSection;
+        Config.Settings["showTankPct"] = ShowTankPct;
+        Config.Settings["showAlert"] = ShowAlert;
     }
 
     private void InitializeWidget()
@@ -184,7 +216,13 @@ public class FuelWidget : WidgetBase
 
         // Core rows
         _valFuelLevel = CreateRow("FUEL", out _);
-        _valFuelPct = CreateRow("TANK %", out _);
+
+        // Toggleable TANK % row — wrapped in container
+        _tankPctContainer = new StackPanel();
+        _valFuelPct = CreateRow("TANK %", out _, _tankPctContainer);
+        _mainStack.Children.Add(_tankPctContainer);
+        _tankPctContainer.Visibility = ShowTankPct ? Visibility.Visible : Visibility.Collapsed;
+
         _valLPerLap = CreateRow("L/LAP", out _);
         _valLapsLeft = CreateRow("LAPS LEFT", out _);
 
@@ -200,16 +238,19 @@ public class FuelWidget : WidgetBase
         _valBuffer = CreateToggleRow("BUFFER", out _rowBuffer);
         _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
 
-        // Separator before saving section
-        _mainStack.Children.Add(CreateSeparator());
+        // Toggleable saving section (separator + 4 rows)
+        _savingContainer = new StackPanel();
+        _savingContainer.Children.Add(CreateSeparator());
+        _valDelta = CreateRow("PROJ DELTA", out _, _savingContainer);
+        _valSavingTarget = CreateRow("SAVE TGT", out _, _savingContainer);
+        _valSavingRate = CreateRow("SAVING", out _, _savingContainer);
+        _valStrategy = CreateRow("STRATEGY", out _, _savingContainer);
+        _mainStack.Children.Add(_savingContainer);
+        _savingContainer.Visibility = ShowSavingSection ? Visibility.Visible : Visibility.Collapsed;
 
-        _valDelta = CreateRow("PROJ DELTA", out _);
-        _valSavingTarget = CreateRow("SAVE TGT", out _);
-        _valSavingRate = CreateRow("SAVING", out _);
-        _valStrategy = CreateRow("STRATEGY", out _);
-
-        // Alert bar
-        _mainStack.Children.Add(CreateSeparator());
+        // Toggleable alert bar (separator + alert)
+        _alertContainer = new StackPanel();
+        _alertContainer.Children.Add(CreateSeparator());
 
         _alertBorder = new Border
         {
@@ -228,7 +269,9 @@ public class FuelWidget : WidgetBase
             VerticalAlignment = VerticalAlignment.Center
         };
         _alertBorder.Child = _alertText;
-        _mainStack.Children.Add(_alertBorder);
+        _alertContainer.Children.Add(_alertBorder);
+        _mainStack.Children.Add(_alertContainer);
+        _alertContainer.Visibility = ShowAlert ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Recalculate widget height based on visible optional rows.</summary>
@@ -238,8 +281,13 @@ public class FuelWidget : WidgetBase
         if (ShowL3Average) extraRows++;
         if (ShowL5Average) extraRows++;
         if (ShowBuffer) extraRows++;
+        if (ShowTankPct) extraRows++;
 
-        double h = BASE_HEIGHT + (extraRows * (ROW_HEIGHT + 2));
+        // Saving section = separator(5) + 4 rows; alert = separator(5) + alert bar(22)
+        double savingHeight = ShowSavingSection ? 5 + (4 * (ROW_HEIGHT + 2)) : 0;
+        double alertHeight = ShowAlert ? 27 : 0;
+
+        double h = BASE_HEIGHT + (extraRows * (ROW_HEIGHT + 2)) + savingHeight + alertHeight;
         Height = h;
         _canvas.Height = h;
         _backgroundBorder.Height = h;
@@ -252,10 +300,13 @@ public class FuelWidget : WidgetBase
         _rowL3.Visibility = ShowL3Average ? Visibility.Visible : Visibility.Collapsed;
         _rowL5.Visibility = ShowL5Average ? Visibility.Visible : Visibility.Collapsed;
         _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
+        _tankPctContainer.Visibility = ShowTankPct ? Visibility.Visible : Visibility.Collapsed;
+        _savingContainer.Visibility = ShowSavingSection ? Visibility.Visible : Visibility.Collapsed;
+        _alertContainer.Visibility = ShowAlert ? Visibility.Visible : Visibility.Collapsed;
         RecalcHeight();
     }
 
-    private TextBlock CreateRow(string label, out TextBlock labelBlock)
+    private TextBlock CreateRow(string label, out TextBlock labelBlock, Panel? parent = null)
     {
         var grid = new Grid { Height = ROW_HEIGHT, Margin = new Thickness(0, 1, 0, 1) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Auto) });
@@ -276,7 +327,7 @@ public class FuelWidget : WidgetBase
         {
             Text = "--",
             FontSize = 13,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeights.Normal,
             Foreground = BRUSH_TEXT,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -285,7 +336,7 @@ public class FuelWidget : WidgetBase
         Grid.SetColumn(valueBlock, 1);
         grid.Children.Add(valueBlock);
 
-        _mainStack.Children.Add(grid);
+        (parent ?? _mainStack).Children.Add(grid);
         return valueBlock;
     }
 
@@ -310,7 +361,7 @@ public class FuelWidget : WidgetBase
         {
             Text = "--",
             FontSize = 13,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = FontWeights.Normal,
             Foreground = BRUSH_TEXT,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -341,7 +392,7 @@ public class FuelWidget : WidgetBase
         if (fuel == null) return;
 
         // ── Basic fuel info ─────────────────────────────────────
-        _valFuelLevel.Text = fuel.CurrentFuel.ToString("F2", CultureInfo.InvariantCulture) + " L";
+        _valFuelLevel.Text = fuel.CurrentFuel.ToString("F3", CultureInfo.InvariantCulture) + " L";
 
         _valFuelPct.Text = (fuel.FuelPct * 100f).ToString("F0", CultureInfo.InvariantCulture) + "%";
         _valFuelPct.Foreground = fuel.FuelPct switch
@@ -354,7 +405,7 @@ public class FuelWidget : WidgetBase
         // L/Lap (using selected method)
         float lPerLap = fuel.AvgFuelPerLap;
         _valLPerLap.Text = lPerLap > 0
-            ? lPerLap.ToString("F2", CultureInfo.InvariantCulture)
+            ? lPerLap.ToString("F3", CultureInfo.InvariantCulture)
             : "--";
 
         // Laps left (already accounts for splutter buffer in calculator)

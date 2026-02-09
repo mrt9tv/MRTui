@@ -44,6 +44,9 @@ public class WidgetManager
         
         _widgetFactories[WidgetType.FuelCalculator] = (service, config) =>
             new Widgets.FuelWidget.FuelWidget(service, config);
+        
+        _widgetFactories[WidgetType.Relative] = (service, config) =>
+            new Widgets.RelativeWidget.RelativeWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)

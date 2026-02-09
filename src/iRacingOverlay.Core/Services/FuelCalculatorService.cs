@@ -21,14 +21,69 @@ public sealed class FuelCalculatorService
     private float _maxFuel;
     private bool _wasUnderYellow;
 
+    // Session change detection
+    private int _lastSessionNum = -1;
+    private string _lastTrackName = string.Empty;
+    private string _lastCarScreenName = string.Empty;
+
     /// <summary>Current fuel calculation snapshot exposed to consumers.</summary>
     public FuelData CurrentData { get; } = new();
+
+    /// <summary>
+    /// Reset all fuel calculation state. Called when session/car/track changes.
+    /// </summary>
+    public void Reset()
+    {
+        _lapFuelUsage.Clear();
+        _greenLapFuelUsage.Clear();
+        _yellowLapFuelUsage.Clear();
+        _lapTimes.Clear();
+        _fuelAtLapStart = 0f;
+        _lastLap = -1;
+        _initialized = false;
+        _previousFuel = 0f;
+        _minFuel = float.MaxValue;
+        _maxFuel = 0f;
+        _wasUnderYellow = false;
+
+        // Reset snapshot (keep defaults)
+        var data = CurrentData;
+        data.LapsCompleted = 0;
+        data.FuelUsedLastLap = 0;
+        data.FuelUsedThisLap = 0;
+        data.CurrentLapFuelRate = 0;
+        data.StartingFuel = 0;
+        data.RefuelCount = 0;
+        data.LastRefuelAmount = 0;
+        data.StintLapCount = 0;
+        data.LapToLapDelta = 0;
+        data.GreenFlagLapCount = 0;
+        data.YellowFlagLapCount = 0;
+    }
 
     /// <summary>
     /// Called every telemetry tick (~60 Hz). Detects lap changes and recalculates.
     /// </summary>
     public void Update(TelemetryData data)
     {
+        // ── Session/car/track change detection (reset calculator) ────
+        bool sessionChanged = data.SessionNum != _lastSessionNum && _lastSessionNum >= 0;
+        bool trackChanged = !string.IsNullOrEmpty(data.TrackName)
+                         && !string.IsNullOrEmpty(_lastTrackName)
+                         && data.TrackName != _lastTrackName;
+        bool carChanged = !string.IsNullOrEmpty(data.CarScreenName)
+                       && !string.IsNullOrEmpty(_lastCarScreenName)
+                       && data.CarScreenName != _lastCarScreenName;
+
+        if (sessionChanged || trackChanged || carChanged)
+        {
+            Reset();
+        }
+
+        _lastSessionNum = data.SessionNum;
+        if (!string.IsNullOrEmpty(data.TrackName)) _lastTrackName = data.TrackName;
+        if (!string.IsNullOrEmpty(data.CarScreenName)) _lastCarScreenName = data.CarScreenName;
+
         var fuel = data.FuelLevel;
         var lap = data.Lap;
 

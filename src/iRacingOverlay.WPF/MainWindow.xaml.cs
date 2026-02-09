@@ -91,6 +91,7 @@ public partial class MainWindow : Window
             new("MRT One", WidgetType.MRTOne),
             new("Turn Display", WidgetType.TurnDisplay),
             new("Fuel Calculator", WidgetType.FuelCalculator),
+            new("Relative", WidgetType.Relative),
         };
 
         CboActiveWidget.ItemsSource = items;

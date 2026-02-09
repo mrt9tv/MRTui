@@ -18,7 +18,12 @@ public enum WidgetType
     /// <summary>
     /// Fuel Calculator — compact overlay showing fuel saving / lift &amp; coast data.
     /// </summary>
-    FuelCalculator
+    FuelCalculator,
+
+    /// <summary>
+    /// Relative — proximity-sorted competitor table with time intervals and class colors.
+    /// </summary>
+    Relative
 }
 
 /// <summary>
@@ -31,6 +36,7 @@ public static class WidgetTypeExtensions
         WidgetType.MRTOne => "MRT One",
         WidgetType.TurnDisplay => "Turn Display",
         WidgetType.FuelCalculator => "Fuel Calculator",
+        WidgetType.Relative => "Relative",
         _ => type.ToString()
     };
 }
