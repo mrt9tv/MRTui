@@ -24,29 +24,37 @@ public class RelativeWidget : WidgetBase
     #region Constants
 
     // ── Dimensions ──────────────────────────────────────────────────
-    private const double WIDGET_WIDTH = 370;
     private const double PADDING = 8;
-    private const double ROW_HEIGHT = 20;
+    private const double ROW_HEIGHT = 18;
+    private const double ROW_GAP = 1;
     private const double HEADER_HEIGHT = 18;
     private const double SEPARATOR_HEIGHT = 1;
     private const double BORDER_RADIUS = 6;
     private const double CLASS_STRIPE_WIDTH = 3;
 
-    // ── Column positions (left edge, inside padding) ────────────────
-    private const double COL_STRIPE = 0;
-    private const double COL_POS = 7;          // Position: "3"
-    private const double COL_NUMBER = 28;       // Car #: "#44"
-    private const double COL_NAME = 63;         // Name: "Hamilton"
-    private const double COL_INTERVAL = 170;    // Interval: "+3.2"
-    private const double COL_GAP = 215;         // Gap to car ahead
-    private const double COL_LASTLAP = 260;     // Last lap: "1:42.123"
-    private const double COL_STATUS = 326;      // Status: "PIT" / "OFF" / "+1L"
+    // ── Column widths (dynamic positioning) ─────────────────────────
+    // Order: Stripe | P | [#] | NAME | [INFO] | [INT] | [LAST] | GAP | STATUS
+    private const double COL_START = 7;        // gap after stripe
+    private const double COL_W_POS = 21;       // "12"
+    private const double COL_W_NUM = 35;       // "#44"
+    private const double COL_W_NAME = 102;     // "J.Hamilton"
+    private const double COL_W_INFO = 56;      // "A 3.2k" (SR class + iRating)
+    private const double COL_W_INT = 45;       // "+3.2" / "+1L"
+    private const double COL_W_LAST = 62;      // "1:42.123"
+    private const double COL_W_GAP = 40;       // "3.2"
+    private const double COL_W_STATUS = 72;    // "BOX 1:23.4" (outside the box)
+    private const double STATUS_GAP = 8;       // gap between box edge and status
+    private const double STATUS_BG_OPACITY = 0.65; // status background ~65%
+    private const double MIN_WIDGET_WIDTH = 250;
+    private const double ALT_ROW_ALPHA = 12;    // alternate row shading alpha (subtle)
+    private const double COL_W_CAR_MODEL = 30;  // "488" car model abbreviation
+    private const double INFO_BAR_HEIGHT = 18;  // bottom info bar height
 
     // ── Row limits ──────────────────────────────────────────────────
-    private const int DEFAULT_AHEAD = 6;
-    private const int DEFAULT_BEHIND = 6;
+    private const int DEFAULT_AHEAD = 3;
+    private const int DEFAULT_BEHIND = 3;
     private const int MAX_DISPLAY_ROWS = 15; // absolute maximum pre-allocated rows
-    private const int TOTAL_SMART_ROWS = 12; // total non-player rows for smart distribution
+    private const int TOTAL_SMART_ROWS = 6; // total non-player rows for smart distribution
 
     // ── Font sizes ──────────────────────────────────────────────────
     private const double FONT_DATA = 11.5;
@@ -55,6 +63,20 @@ public class RelativeWidget : WidgetBase
 
     // ── Name formatting ─────────────────────────────────────────────
     private const int MAX_NAME_LENGTH = 15;
+
+    /// <summary>How to display driver names in the Relative widget.</summary>
+    public enum NameFormat
+    {
+        FirstInitialLastName,   // "J.Smith" (default)
+        FullName,               // "Joe Smith"
+        InitialsOnly,           // "J.S."
+        FirstThreeLetters,      // "JOS" / "SMI"
+        LastNameOnly,           // "Smith"
+        FirstNameOnly,          // "Joe"
+        ThreeLetterCode,        // "SMI" (first 3 of last name, uppercased)
+        LastCommaFirst,         // "Smith, J."
+        FirstLast4,             // "J.Smit" (first initial + last 4 chars of last name)
+    }
 
     #endregion
 
@@ -68,6 +90,11 @@ public class RelativeWidget : WidgetBase
     private static readonly Color COLOR_MUTED = Color.FromRgb(100, 100, 100);
     private static readonly Color COLOR_DIM = Color.FromRgb(70, 70, 70);
     private static readonly Color COLOR_PIT = Color.FromRgb(255, 200, 50);
+    private static readonly Color COLOR_PURPLE = Color.FromRgb(180, 0, 255);
+    private static readonly Color COLOR_MEATBALL = Color.FromRgb(255, 100, 0); // orange meatball
+    private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(200, 30, 30); // red-ish for black flag
+
+    private static readonly Color COLOR_SEPARATOR = Color.FromArgb(40, 80, 80, 80);
 
     private static readonly SolidColorBrush BRUSH_TEAL = Freeze(new SolidColorBrush(COLOR_TEAL));
     private static readonly SolidColorBrush BRUSH_ORANGE = Freeze(new SolidColorBrush(COLOR_ORANGE));
@@ -77,8 +104,34 @@ public class RelativeWidget : WidgetBase
     private static readonly SolidColorBrush BRUSH_PIT = Freeze(new SolidColorBrush(COLOR_PIT));
     private static readonly SolidColorBrush BRUSH_TRANSPARENT = Freeze(new SolidColorBrush(Colors.Transparent));
     private static readonly SolidColorBrush BRUSH_PLAYER_BG = Freeze(new SolidColorBrush(COLOR_PLAYER_BG));
+    private static readonly SolidColorBrush BRUSH_PURPLE = Freeze(new SolidColorBrush(COLOR_PURPLE));
+    private static readonly SolidColorBrush BRUSH_MEATBALL = Freeze(new SolidColorBrush(COLOR_MEATBALL));
+    private static readonly SolidColorBrush BRUSH_BLACK_FLAG = Freeze(new SolidColorBrush(COLOR_BLACK_FLAG));
+    private static readonly SolidColorBrush BRUSH_WHITE = Freeze(new SolidColorBrush(Colors.White));
+
+    // ── iRacing License Colors ──────────────────────────────────────
+    private static readonly SolidColorBrush BRUSH_LIC_A = Freeze(new SolidColorBrush(Color.FromRgb(0x01, 0x53, 0xDB))); // Blue
+    private static readonly SolidColorBrush BRUSH_LIC_B = Freeze(new SolidColorBrush(Color.FromRgb(0x00, 0xC7, 0x02))); // Green
+    private static readonly SolidColorBrush BRUSH_LIC_C = Freeze(new SolidColorBrush(Color.FromRgb(0xFE, 0xEC, 0x04))); // Yellow
+    private static readonly SolidColorBrush BRUSH_LIC_D = Freeze(new SolidColorBrush(Color.FromRgb(0xFC, 0x8A, 0x27))); // Orange
+    private static readonly SolidColorBrush BRUSH_LIC_R = Freeze(new SolidColorBrush(Color.FromRgb(0xFC, 0x1A, 0x2B))); // Red
 
     private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
+
+    #endregion
+
+    #region Layout State
+
+    /// <summary>Current column X positions and widget width, recomputed when toggles change.</summary>
+    private struct ColumnLayout
+    {
+        public double BoxWidth;     // width of the main bordered box (without status)
+        public double TotalWidth;   // total widget including status overhang
+        public double PosX, NumX, CarModelX, NameX, InfoX, IntX, LastX, GapX, StatusX;
+    }
+
+    private ColumnLayout _layout;
+    private bool _layoutDirty = true;
 
     #endregion
 
@@ -86,9 +139,20 @@ public class RelativeWidget : WidgetBase
 
     private Canvas _canvas = null!;
     private Border _backgroundBorder = null!;
-    private Canvas _rowCanvas = null!; // inner canvas holding all rows
+    private Canvas _rowCanvas = null!;
 
-    /// <summary>Pre-allocated row visual elements</summary>
+    // Header TextBlocks (stored for repositioning)
+    private TextBlock _hdrP = null!, _hdrNum = null!, _hdrCar = null!, _hdrName = null!;
+    private TextBlock _hdrInfo = null!, _hdrInt = null!, _hdrLast = null!;
+    private TextBlock _hdrGap = null!;
+    private Border _hdrSeparator = null!;
+
+    // Info bar elements (bottom of widget)
+    private Border _infoBarBorder = null!;
+    private TextBlock _infoEstLaps = null!;
+    private TextBlock _infoTimeRemain = null!;
+    private TextBlock _infoIncidents = null!;
+
     private readonly RowElements[] _rows = new RowElements[MAX_DISPLAY_ROWS];
 
     /// <summary>Current number of visible rows</summary>
@@ -108,14 +172,35 @@ public class RelativeWidget : WidgetBase
     /// <summary>Show class position instead of overall</summary>
     public bool ShowClassPosition { get; set; } = false;
 
-    /// <summary>Show dimmed disconnected/off-track drivers</summary>
-    public bool DimDisconnected { get; set; } = true;
-
     /// <summary>Fixed max ahead (used when smart row count is off)</summary>
     public int MaxAhead { get; set; } = DEFAULT_AHEAD;
 
     /// <summary>Fixed max behind (used when smart row count is off)</summary>
     public int MaxBehind { get; set; } = DEFAULT_BEHIND;
+
+    /// <summary>Show car number column</summary>
+    public bool ShowCarNumber { get; set; } = true;
+
+    /// <summary>Show combined driver info column (license class badge + iRating in X.Yk format)</summary>
+    public bool ShowDriverInfo { get; set; } = false;
+
+    /// <summary>Show interval-to-player column (default OFF)</summary>
+    public bool ShowInterval { get; set; } = false;
+
+    /// <summary>Show last lap time column (default OFF)</summary>
+    public bool ShowLastLap { get; set; } = false;
+
+    /// <summary>Driver name display format</summary>
+    public NameFormat DriverNameFormat { get; set; } = NameFormat.FirstInitialLastName;
+
+    /// <summary>Show car model 3-letter abbreviation column</summary>
+    public bool ShowCarModel { get; set; } = false;
+
+    /// <summary>Show alternate row shading for readability</summary>
+    public bool ShowAlternateRowShading { get; set; } = false;
+
+    /// <summary>Show info bar at the bottom (est laps, time remaining, incidents)</summary>
+    public bool ShowInfoBar { get; set; } = false;
 
     #endregion
 
@@ -136,9 +221,10 @@ public class RelativeWidget : WidgetBase
         : base(telemetryService, config)
     {
         Title = "Relative";
-        Width = WIDGET_WIDTH;
-
+        
         LoadSettings();
+        RecalcLayout();
+        Width = _layout.TotalWidth;
         InitializeWidget();
         RecalcHeight();
     }
@@ -151,9 +237,20 @@ public class RelativeWidget : WidgetBase
 
         if (TryGetBool("useSmartRowCount", out var smart)) UseSmartRowCount = smart;
         if (TryGetBool("showClassPosition", out var cls)) ShowClassPosition = cls;
-        if (TryGetBool("dimDisconnected", out var dim)) DimDisconnected = dim;
         if (TryGetInt("maxAhead", out var ah)) MaxAhead = Math.Clamp(ah, 1, 10);
         if (TryGetInt("maxBehind", out var bh)) MaxBehind = Math.Clamp(bh, 1, 10);
+        if (TryGetBool("showCarNumber", out var cn)) ShowCarNumber = cn;
+        if (TryGetBool("showDriverInfo", out var di)) ShowDriverInfo = di;
+        if (TryGetBool("showInterval", out var iv)) ShowInterval = iv;
+        if (TryGetBool("showLastLap", out var ll)) ShowLastLap = ll;
+        if (TryGetInt("nameFormat", out var nf) && Enum.IsDefined(typeof(NameFormat), nf))
+            DriverNameFormat = (NameFormat)nf;
+        if (TryGetBool("showCarModel", out var cm)) ShowCarModel = cm;
+        if (TryGetBool("showAlternateRowShading", out var ars)) ShowAlternateRowShading = ars;
+        if (TryGetBool("showInfoBar", out var ib)) ShowInfoBar = ib;
+        // Migration: old showIRating/showSafetyRating → showDriverInfo
+        if (TryGetBool("showIRating", out var oldIr) && oldIr) ShowDriverInfo = true;
+        if (TryGetBool("showSafetyRating", out var oldSr) && oldSr) ShowDriverInfo = true;
     }
 
     public void SaveSettings()
@@ -161,9 +258,16 @@ public class RelativeWidget : WidgetBase
         Config.Settings ??= new Dictionary<string, object>();
         Config.Settings["useSmartRowCount"] = UseSmartRowCount;
         Config.Settings["showClassPosition"] = ShowClassPosition;
-        Config.Settings["dimDisconnected"] = DimDisconnected;
         Config.Settings["maxAhead"] = MaxAhead;
         Config.Settings["maxBehind"] = MaxBehind;
+        Config.Settings["showCarNumber"] = ShowCarNumber;
+        Config.Settings["showDriverInfo"] = ShowDriverInfo;
+        Config.Settings["showInterval"] = ShowInterval;
+        Config.Settings["showLastLap"] = ShowLastLap;
+        Config.Settings["nameFormat"] = (int)DriverNameFormat;
+        Config.Settings["showCarModel"] = ShowCarModel;
+        Config.Settings["showAlternateRowShading"] = ShowAlternateRowShading;
+        Config.Settings["showInfoBar"] = ShowInfoBar;
     }
 
     private bool TryGetBool(string key, out bool value)
@@ -184,20 +288,93 @@ public class RelativeWidget : WidgetBase
         return false;
     }
 
+    // ── Dynamic layout computation ──────────────────────────────────
+
+    /// <summary>
+    /// Recompute column positions and widget width based on current toggle state.
+    /// Call this when any column visibility toggle changes.
+    /// </summary>
+    public void RecalcLayout()
+    {
+        double x = COL_START;
+
+        _layout.PosX = x;
+        x += COL_W_POS;
+
+        _layout.NumX = x;
+        if (ShowCarNumber) x += COL_W_NUM;
+
+        _layout.CarModelX = x;
+        if (ShowCarModel) x += COL_W_CAR_MODEL;
+
+        _layout.NameX = x;
+        x += COL_W_NAME;
+
+        _layout.InfoX = x;
+        if (ShowDriverInfo) x += COL_W_INFO;
+
+        _layout.IntX = x;
+        if (ShowInterval) x += COL_W_INT;
+
+        _layout.LastX = x;
+        if (ShowLastLap) x += COL_W_LAST;
+
+        _layout.GapX = x;
+        x += COL_W_GAP;
+
+        // Box ends here — status floats OUTSIDE
+        _layout.BoxWidth = Math.Max(x + PADDING * 2, MIN_WIDGET_WIDTH);
+        _layout.StatusX = _layout.BoxWidth + STATUS_GAP; // to the right of the box border
+        _layout.TotalWidth = _layout.StatusX + COL_W_STATUS;
+        _layoutDirty = true;
+    }
+
+    /// <summary>Apply the current layout to widget dimensions and header elements.</summary>
+    private void ApplyLayout()
+    {
+        double w = _layout.TotalWidth;
+        double boxW = _layout.BoxWidth;
+        Width = w;
+        _canvas.Width = w;
+        _backgroundBorder.Width = boxW; // box only — status floats outside
+        if (_rowCanvas != null)
+            _rowCanvas.Width = boxW - PADDING * 2;
+
+        // Reposition header elements
+        if (_hdrP != null)
+        {
+            Canvas.SetLeft(_hdrP, _layout.PosX);
+            Canvas.SetLeft(_hdrNum, _layout.NumX);
+            _hdrNum.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrCar, _layout.CarModelX);
+            _hdrCar.Visibility = ShowCarModel ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrName, _layout.NameX);
+            Canvas.SetLeft(_hdrInfo, _layout.InfoX);
+            _hdrInfo.Visibility = ShowDriverInfo ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrInt, _layout.IntX);
+            _hdrInt.Visibility = ShowInterval ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrLast, _layout.LastX);
+            _hdrLast.Visibility = ShowLastLap ? Visibility.Visible : Visibility.Collapsed;
+            Canvas.SetLeft(_hdrGap, _layout.GapX);
+            _hdrSeparator.Width = boxW - PADDING * 2;
+        }
+
+        _layoutDirty = false;
+    }
+
     // ── Widget initialization ───────────────────────────────────────
 
     private void InitializeWidget()
     {
-        _canvas = new Canvas
-        {
-            Width = WIDGET_WIDTH,
-            ClipToBounds = false
-        };
+        double w = _layout.TotalWidth;
+        double boxW = _layout.BoxWidth;
+
+        _canvas = new Canvas { Width = w, ClipToBounds = false };
         Content = _canvas;
 
         _backgroundBorder = new Border
         {
-            Width = WIDGET_WIDTH,
+            Width = boxW,
             CornerRadius = new CornerRadius(BORDER_RADIUS),
             Background = new SolidColorBrush(COLOR_DARK_BG),
             BorderBrush = BRUSH_TEAL,
@@ -212,12 +389,7 @@ public class RelativeWidget : WidgetBase
         };
         _canvas.Children.Add(_backgroundBorder);
 
-        // Inner canvas for absolute positioning of rows
-        _rowCanvas = new Canvas
-        {
-            Width = WIDGET_WIDTH - (PADDING * 2),
-            ClipToBounds = true
-        };
+        _rowCanvas = new Canvas { Width = boxW - PADDING * 2, ClipToBounds = false };
         _backgroundBorder.Child = new Border
         {
             Padding = new Thickness(PADDING),
@@ -234,29 +406,74 @@ public class RelativeWidget : WidgetBase
             _rows[i] = CreateDataRow(yStart + (i * ROW_HEIGHT));
             _rows[i].Container.Visibility = Visibility.Collapsed;
         }
+
+        // Info bar at the bottom (created once, repositioned dynamically)
+        _infoBarBorder = new Border
+        {
+            Height = INFO_BAR_HEIGHT,
+            Background = new SolidColorBrush(Color.FromArgb(35, 0, 128, 128)),
+            CornerRadius = new CornerRadius(0, 0, 4, 4)
+        };
+        Canvas.SetLeft(_infoBarBorder, 0);
+        _rowCanvas.Children.Add(_infoBarBorder);
+
+        _infoEstLaps = new TextBlock
+        {
+            FontSize = 8.5,
+            Foreground = BRUSH_MUTED,
+            FontFamily = new FontFamily("Segoe UI"),
+            Padding = new Thickness(4, 2, 0, 0)
+        };
+        _rowCanvas.Children.Add(_infoEstLaps);
+
+        _infoTimeRemain = new TextBlock
+        {
+            FontSize = 8.5,
+            Foreground = BRUSH_MUTED,
+            FontFamily = new FontFamily("Segoe UI"),
+            TextAlignment = TextAlignment.Center,
+            Padding = new Thickness(0, 2, 0, 0)
+        };
+        _rowCanvas.Children.Add(_infoTimeRemain);
+
+        _infoIncidents = new TextBlock
+        {
+            FontSize = 8.5,
+            Foreground = BRUSH_MUTED,
+            FontFamily = new FontFamily("Segoe UI"),
+            TextAlignment = TextAlignment.Right,
+            Padding = new Thickness(0, 2, 4, 0)
+        };
+        _rowCanvas.Children.Add(_infoIncidents);
+
+        ApplyLayout();
     }
 
     private void CreateHeaderRow()
     {
         double y = 0;
-        AddText(_rowCanvas, "P", COL_POS, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        AddText(_rowCanvas, "#", COL_NUMBER, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        AddText(_rowCanvas, "NAME", COL_NAME, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        AddText(_rowCanvas, "INT", COL_INTERVAL, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        AddText(_rowCanvas, "GAP", COL_GAP, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
-        AddText(_rowCanvas, "LAST", COL_LASTLAP, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
 
-        // Separator line
-        var sep = new Border
+        _hdrP = AddText(_rowCanvas, "P", _layout.PosX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrNum = AddText(_rowCanvas, "#", _layout.NumX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrCar = AddText(_rowCanvas, "CAR", _layout.CarModelX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrName = AddText(_rowCanvas, "NAME", _layout.NameX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrInfo = AddText(_rowCanvas, "INFO", _layout.InfoX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrInt = AddText(_rowCanvas, "INT", _layout.IntX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrLast = AddText(_rowCanvas, "LAST", _layout.LastX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+        _hdrGap = AddText(_rowCanvas, "GAP", _layout.GapX, y, FONT_HEADER, BRUSH_MUTED, FontWeights.SemiBold);
+
+        // No STATUS header — it floats outside the box
+
+        _hdrSeparator = new Border
         {
-            Width = WIDGET_WIDTH - (PADDING * 2),
+            Width = _layout.BoxWidth - PADDING * 2,
             Height = SEPARATOR_HEIGHT,
             Background = BRUSH_MUTED,
             Opacity = 0.3
         };
-        Canvas.SetLeft(sep, 0);
-        Canvas.SetTop(sep, HEADER_HEIGHT + 2);
-        _rowCanvas.Children.Add(sep);
+        Canvas.SetLeft(_hdrSeparator, 0);
+        Canvas.SetTop(_hdrSeparator, HEADER_HEIGHT + 2);
+        _rowCanvas.Children.Add(_hdrSeparator);
     }
 
     private RowElements CreateDataRow(double y)
@@ -266,7 +483,7 @@ public class RelativeWidget : WidgetBase
         // Row background (used for player highlight)
         row.Background = new Border
         {
-            Width = WIDGET_WIDTH - (PADDING * 2),
+            Width = _layout.BoxWidth - PADDING * 2,
             Height = ROW_HEIGHT,
             Background = BRUSH_TRANSPARENT,
             CornerRadius = new CornerRadius(2)
@@ -283,30 +500,87 @@ public class RelativeWidget : WidgetBase
             CornerRadius = new CornerRadius(1),
             Background = BRUSH_TRANSPARENT
         };
-        Canvas.SetLeft(row.ClassStripe, COL_STRIPE);
+        Canvas.SetLeft(row.ClassStripe, 0);
         Canvas.SetTop(row.ClassStripe, y + 2);
         _rowCanvas.Children.Add(row.ClassStripe);
 
-        // Position
-        row.Position = CreateRowText(COL_POS, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
+        // All text columns start at x=0 — repositioned dynamically in PopulateRow
+        row.Position = CreateRowText(0, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
+        row.CarNumber = CreateRowText(0, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
+        row.CarModel = CreateRowText(0, y, 9, BRUSH_DIM, FontWeights.Normal);
+        row.Name = CreateRowText(0, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
 
-        // Car number
-        row.CarNumber = CreateRowText(COL_NUMBER, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
+        // License badge: colored border with letter on top
+        row.LicenseBadge = new Border
+        {
+            Width = 14,
+            Height = 14,
+            CornerRadius = new CornerRadius(2),
+            Background = BRUSH_TRANSPARENT
+        };
+        Canvas.SetTop(row.LicenseBadge, y + 2);
+        _rowCanvas.Children.Add(row.LicenseBadge);
 
-        // Driver name
-        row.Name = CreateRowText(COL_NAME, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
+        row.LicenseText = new TextBlock
+        {
+            FontSize = 8.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = BRUSH_TEXT,
+            FontFamily = new FontFamily("Segoe UI"),
+            TextAlignment = TextAlignment.Center,
+            Width = 14
+        };
+        Canvas.SetTop(row.LicenseText, y + 1);
+        _rowCanvas.Children.Add(row.LicenseText);
 
-        // Interval
-        row.Interval = CreateRowText(COL_INTERVAL, y, FONT_DATA, BRUSH_TEAL, FontWeights.SemiBold);
+        row.DriverInfo = CreateRowText(0, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
+        row.Interval = CreateRowText(0, y, FONT_DATA, BRUSH_TEAL, FontWeights.SemiBold);
+        row.LastLap = CreateRowText(0, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
+        row.Gap = CreateRowText(0, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
 
-        // Gap to car ahead
-        row.Gap = CreateRowText(COL_GAP, y, FONT_DATA, BRUSH_MUTED, FontWeights.Normal);
+        // Vertical separator lines between columns (solid through rows)
+        row.Separators = new List<Border>();
+        for (int s = 0; s < 7; s++) // up to 7 separators between columns
+        {
+            var sep = new Border
+            {
+                Width = 1,
+                Height = ROW_HEIGHT,
+                Background = new SolidColorBrush(COLOR_SEPARATOR)
+            };
+            Canvas.SetTop(sep, y);
+            _rowCanvas.Children.Add(sep);
+            row.Separators.Add(sep);
+        }
 
-        // Last lap time
-        row.LastLap = CreateRowText(COL_LASTLAP, y, FONT_DATA, BRUSH_TEXT, FontWeights.Normal);
+        // Status text and background — placed on the MAIN canvas (outside the box)
+        double statusCanvasY = PADDING + y; // offset by border padding
+        row.StatusBg = new Border
+        {
+            Width = COL_W_STATUS,
+            Height = ROW_HEIGHT,
+            Background = new SolidColorBrush(Color.FromArgb(170, 18, 18, 18)),
+            CornerRadius = new CornerRadius(3),
+            Opacity = STATUS_BG_OPACITY
+        };
+        Canvas.SetLeft(row.StatusBg, _layout.StatusX);
+        Canvas.SetTop(row.StatusBg, statusCanvasY);
+        _canvas.Children.Add(row.StatusBg);
 
-        // Status (PIT / +1L / -2L)
-        row.Status = CreateRowText(COL_STATUS, y, FONT_STATUS, BRUSH_PIT, FontWeights.Bold);
+        row.Status = new TextBlock
+        {
+            FontSize = FONT_STATUS,
+            Foreground = BRUSH_PIT,
+            FontWeight = FontWeights.Bold,
+            FontFamily = new FontFamily("Segoe UI"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Padding = new Thickness(3, 0, 0, 0),
+            Height = ROW_HEIGHT,
+            LineHeight = ROW_HEIGHT
+        };
+        Canvas.SetLeft(row.Status, _layout.StatusX);
+        Canvas.SetTop(row.Status, statusCanvasY);
+        _canvas.Children.Add(row.Status);
 
         // Container to group visibility
         row.Container = new Canvas { Width = 0, Height = 0 };
@@ -351,10 +625,11 @@ public class RelativeWidget : WidgetBase
         return tb;
     }
 
-    private void RecalcHeight()
+    public void RecalcHeight()
     {
         int maxRows = MaxAhead + 1 + MaxBehind; // +1 for player
-        double contentHeight = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 4 + (maxRows * ROW_HEIGHT) + PADDING;
+        double infoH = ShowInfoBar ? INFO_BAR_HEIGHT : 0;
+        double contentHeight = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 4 + (maxRows * ROW_HEIGHT) + infoH + PADDING;
         Height = contentHeight;
         _backgroundBorder.Height = contentHeight;
     }
@@ -363,6 +638,10 @@ public class RelativeWidget : WidgetBase
 
     protected override void UpdateUI(TelemetryData data)
     {
+        // Apply layout changes if toggles were modified
+        if (_layoutDirty)
+            ApplyLayout();
+
         // Determine row counts
         int maxAhead, maxBehind;
         if (UseSmartRowCount && data.LivePosition > 0)
@@ -370,7 +649,7 @@ public class RelativeWidget : WidgetBase
             // Estimate total cars from CarIdxPosition array
             int totalCars = CountActiveCars(data);
             (maxAhead, maxBehind) = RelativeCalculator.GetSmartRowCount(
-                data.LivePosition, totalCars, TOTAL_SMART_ROWS);
+                data.LivePosition, totalCars, MaxAhead + MaxBehind);
         }
         else
         {
@@ -392,10 +671,63 @@ public class RelativeWidget : WidgetBase
         if (newRowCount != _visibleRowCount)
         {
             _visibleRowCount = newRowCount;
+            double infoH = ShowInfoBar ? INFO_BAR_HEIGHT : 0;
             double contentHeight = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 4
-                + (Math.Max(newRowCount, 1) * ROW_HEIGHT) + PADDING;
+                + (Math.Max(newRowCount, 1) * ROW_HEIGHT) + infoH + PADDING;
             Height = contentHeight;
             _backgroundBorder.Height = contentHeight;
+        }
+
+        // Info bar: estimated laps, time remaining, incident points
+        if (ShowInfoBar)
+        {
+            double infoY = HEADER_HEIGHT + SEPARATOR_HEIGHT + 4 + (Math.Max(_visibleRowCount, 1) * ROW_HEIGHT);
+            double barW = _layout.BoxWidth - PADDING * 2;
+
+            _infoBarBorder.Width = barW;
+            Canvas.SetTop(_infoBarBorder, infoY);
+            _infoBarBorder.Visibility = Visibility.Visible;
+
+            // Estimated laps remaining (from session data)
+            double estLaps = data.SessionLapsRemainEx > 0 ? data.SessionLapsRemainEx : 0;
+            _infoEstLaps.Text = estLaps > 0 ? $"~{estLaps:F0} laps" : "";
+            Canvas.SetLeft(_infoEstLaps, 0);
+            Canvas.SetTop(_infoEstLaps, infoY);
+            _infoEstLaps.Visibility = Visibility.Visible;
+
+            // Time remaining
+            double timeRemain = data.SessionTimeRemain;
+            if (timeRemain > 0 && timeRemain < 86400)
+            {
+                int hrs = (int)(timeRemain / 3600);
+                int mins = (int)((timeRemain % 3600) / 60);
+                int secs = (int)(timeRemain % 60);
+                _infoTimeRemain.Text = hrs > 0 ? $"{hrs}:{mins:D2}:{secs:D2}" : $"{mins}:{secs:D2}";
+            }
+            else
+            {
+                _infoTimeRemain.Text = "";
+            }
+            _infoTimeRemain.Width = barW;
+            Canvas.SetLeft(_infoTimeRemain, 0);
+            Canvas.SetTop(_infoTimeRemain, infoY);
+            _infoTimeRemain.Visibility = Visibility.Visible;
+
+            // Player incident count
+            int playerInc = data.PlayerCarMyIncidentCount;
+            _infoIncidents.Text = playerInc > 0 ? $"{playerInc}x" : "0x";
+            _infoIncidents.Foreground = playerInc >= 8 ? BRUSH_ORANGE : BRUSH_MUTED;
+            _infoIncidents.Width = barW;
+            Canvas.SetLeft(_infoIncidents, 0);
+            Canvas.SetTop(_infoIncidents, infoY);
+            _infoIncidents.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _infoBarBorder.Visibility = Visibility.Collapsed;
+            _infoEstLaps.Visibility = Visibility.Collapsed;
+            _infoTimeRemain.Visibility = Visibility.Collapsed;
+            _infoIncidents.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -409,7 +741,7 @@ public class RelativeWidget : WidgetBase
             {
                 var entry = entries[i];
                 ShowRow(row, true);
-                PopulateRow(row, entry);
+                PopulateRow(row, entry, i);
             }
             else
             {
@@ -418,54 +750,146 @@ public class RelativeWidget : WidgetBase
         }
     }
 
-    private void PopulateRow(RowElements row, RelativeEntry entry)
+    private void PopulateRow(RowElements row, RelativeEntry entry, int rowIndex = 0)
     {
-        // Determine dimming
-        bool dimmed = DimDisconnected && !entry.IsConnected && !entry.IsPlayer;
-        var textBrush = dimmed ? BRUSH_DIM : BRUSH_TEXT;
-        var mutedBrush = dimmed ? BRUSH_DIM : BRUSH_MUTED;
+        // ── Reposition elements to match current layout ─────────
+        Canvas.SetLeft(row.Position, _layout.PosX);
+        Canvas.SetLeft(row.CarNumber, _layout.NumX);
+        Canvas.SetLeft(row.CarModel, _layout.CarModelX);
+        Canvas.SetLeft(row.Name, _layout.NameX);
+        Canvas.SetLeft(row.DriverInfo, _layout.InfoX);
+        Canvas.SetLeft(row.Interval, _layout.IntX);
+        Canvas.SetLeft(row.LastLap, _layout.LastX);
+        Canvas.SetLeft(row.Gap, _layout.GapX);
+        // Status is on _canvas — reposition to current layout each frame
+        Canvas.SetLeft(row.Status, _layout.StatusX);
+        Canvas.SetLeft(row.StatusBg, _layout.StatusX);
+        row.Background.Width = _layout.BoxWidth - PADDING * 2;
+
+        // ── Vertical separators between visible columns ─────────
+        double[] colEdges = GetVisibleColumnEdges();
+        for (int s = 0; s < row.Separators.Count; s++)
+        {
+            if (s < colEdges.Length)
+            {
+                Canvas.SetLeft(row.Separators[s], colEdges[s]);
+                row.Separators[s].Visibility = Visibility.Visible;
+            }
+            else
+            {
+                row.Separators[s].Visibility = Visibility.Collapsed;
+            }
+        }
+
+        var textBrush = BRUSH_TEXT;
+        var mutedBrush = BRUSH_MUTED;
 
         // Class stripe
-        row.ClassStripe.Background = GetClassBrush(entry.CarClassId, dimmed);
+        row.ClassStripe.Background = GetClassBrush(entry.CarClassId, false);
 
-        // Player row highlight
-        row.Background.Background = entry.IsPlayer ? BRUSH_PLAYER_BG : BRUSH_TRANSPARENT;
+        // Player row highlight + alternate row shading
+        if (entry.IsPlayer)
+        {
+            row.Background.Background = BRUSH_PLAYER_BG;
+        }
+        else if (ShowAlternateRowShading && rowIndex % 2 == 1)
+        {
+            row.Background.Background = new SolidColorBrush(Color.FromArgb((byte)ALT_ROW_ALPHA, 255, 255, 255));
+        }
+        else
+        {
+            row.Background.Background = BRUSH_TRANSPARENT;
+        }
 
         // Position
         int pos = ShowClassPosition ? entry.ClassPosition : entry.OverallPosition;
         row.Position.Text = pos > 0 ? pos.ToString() : "-";
-        row.Position.Foreground = dimmed ? BRUSH_DIM : (entry.IsPlayer ? BRUSH_TEAL : BRUSH_TEXT);
+        row.Position.Foreground = entry.IsPlayer ? BRUSH_TEAL : textBrush;
 
         // Car number
-        row.CarNumber.Text = $"#{entry.CarNumber}";
+        row.CarNumber.Text = !string.IsNullOrEmpty(entry.CarNumber) ? $"#{entry.CarNumber}" : "-";
         row.CarNumber.Foreground = mutedBrush;
+        row.CarNumber.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
 
-        // Name — use driver name if available, otherwise car number fallback
+        // Car model abbreviation
+        row.CarModel.Text = !string.IsNullOrEmpty(entry.CarModel) ? entry.CarModel : "";
+        row.CarModel.Visibility = ShowCarModel ? Visibility.Visible : Visibility.Collapsed;
+
+        // Name
         string name = !string.IsNullOrEmpty(entry.DriverName)
             ? FormatDriverName(entry.DriverName)
-            : $"#{entry.CarNumber}";
+            : "---";
         row.Name.Text = name;
         row.Name.Foreground = textBrush;
         row.Name.FontWeight = entry.IsPlayer ? FontWeights.Bold : FontWeights.Normal;
 
-        // Interval — SWAPPED: behind (negative) = teal, ahead (positive) = orange
-        if (entry.IsPlayer)
+        // License badge + iRating info
+        if (ShowDriverInfo)
         {
-            row.Interval.Text = "---";
-            row.Interval.Foreground = BRUSH_MUTED;
+            // Colored license badge with letter
+            var licBrush = GetLicenseBrush(entry.LicenseClass);
+            string licLetter = !string.IsNullOrEmpty(entry.LicenseClass) ? entry.LicenseClass : "?";
+            row.LicenseBadge.Background = licBrush;
+            row.LicenseBadge.Visibility = Visibility.Visible;
+            Canvas.SetLeft(row.LicenseBadge, _layout.InfoX);
+            row.LicenseText.Text = licLetter;
+            row.LicenseText.Visibility = Visibility.Visible;
+            Canvas.SetLeft(row.LicenseText, _layout.InfoX);
+
+            // iRating value next to badge
+            string irText = entry.IRating > 0
+                ? string.Format(CultureInfo.InvariantCulture, "{0:F1}k", entry.IRating / 1000f)
+                : "-";
+            row.DriverInfo.Text = irText;
+            row.DriverInfo.Foreground = BRUSH_MUTED;
+            row.DriverInfo.Visibility = Visibility.Visible;
+            Canvas.SetLeft(row.DriverInfo, _layout.InfoX + 17); // offset past badge
         }
         else
         {
-            row.Interval.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
-            if (dimmed)
-                row.Interval.Foreground = BRUSH_DIM;
-            else if (entry.IntervalToPlayer > 0)
-                row.Interval.Foreground = BRUSH_ORANGE;  // ahead = orange
-            else
-                row.Interval.Foreground = BRUSH_TEAL;    // behind = teal
+            row.DriverInfo.Visibility = Visibility.Collapsed;
+            row.LicenseBadge.Visibility = Visibility.Collapsed;
+            row.LicenseText.Visibility = Visibility.Collapsed;
         }
 
-        // Gap to car ahead in race position
+        // Interval to player
+        if (ShowInterval)
+        {
+            row.Interval.Visibility = Visibility.Visible;
+            if (entry.IsPlayer)
+            {
+                row.Interval.Text = "---";
+                row.Interval.Foreground = BRUSH_MUTED;
+            }
+            else
+            {
+                row.Interval.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
+                row.Interval.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
+            }
+        }
+        else
+        {
+            row.Interval.Visibility = Visibility.Collapsed;
+        }
+
+        // Last lap time
+        if (ShowLastLap)
+        {
+            row.LastLap.Visibility = Visibility.Visible;
+            row.LastLap.Text = FormatLapTime(entry.LastLapTime);
+            if (entry.IsSessionBest)
+                row.LastLap.Foreground = BRUSH_PURPLE;
+            else if (entry.IsPersonalBest)
+                row.LastLap.Foreground = BRUSH_TEAL;
+            else
+                row.LastLap.Foreground = mutedBrush;
+        }
+        else
+        {
+            row.LastLap.Visibility = Visibility.Collapsed;
+        }
+
+        // Gap to car ahead (always visible)
         if (entry.IsPlayer || entry.GapToCarAhead <= 0f)
         {
             row.Gap.Text = "---";
@@ -476,37 +900,139 @@ public class RelativeWidget : WidgetBase
             row.Gap.Text = entry.GapToCarAhead < 100f
                 ? string.Format(CultureInfo.InvariantCulture, "{0:F1}", entry.GapToCarAhead)
                 : ">99";
-            row.Gap.Foreground = mutedBrush;
+            row.Gap.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
         }
 
-        // Last lap time — 3 decimals
-        row.LastLap.Text = FormatLapTime(entry.LastLapTime);
-        row.LastLap.Foreground = mutedBrush;
+        // ── Status column: priority-based (OUTSIDE BOX) ────────────
+        bool isBlinkOn = (_frameCount / BLINK_HALF_PERIOD) % 2 == 0;
+        string statusText = string.Empty;
+        SolidColorBrush statusBrush = BRUSH_PIT;
+        bool showStatusBg = false;
 
-        // Status: PIT > OFF > Lap delta
-        if (entry.IsOnPitRoad)
+        if (entry.HasMeatball && !entry.IsPlayer)
         {
-            row.Status.Text = "PIT";
-            row.Status.Foreground = BRUSH_PIT;
+            statusText = isBlinkOn ? "MEATBALL" : "";
+            statusBrush = BRUSH_MEATBALL;
+            showStatusBg = true;
+        }
+        else if (entry.HasBlackFlag && !entry.IsPlayer)
+        {
+            statusText = isBlinkOn ? "BLACK" : "";
+            statusBrush = BRUSH_BLACK_FLAG;
+            showStatusBg = true;
+        }
+        else if (entry.PitState == PitStatus.Pitting)
+        {
+            statusText = "PITTING";
+            statusBrush = BRUSH_PIT;
+            showStatusBg = true;
+        }
+        else if (entry.PitState == PitStatus.InPit)
+        {
+            // Show TOWED if driver was towed in
+            if (entry.WasTowed)
+            {
+                statusText = FormatTowTimer(entry.PitStallDuration);
+            }
+            else
+            {
+                statusText = FormatBoxTimer(entry.PitStallDuration);
+            }
+            statusBrush = BRUSH_PIT;
+            showStatusBg = true;
+        }
+        else if (entry.PitState == PitStatus.ExitingPit)
+        {
+            // Blink the final BOX time for 3 seconds
+            if (entry.FinalBoxDuration > 0f && entry.ExitingPitDuration < 3.0f)
+            {
+                statusText = isBlinkOn ? FormatBoxTimer(entry.FinalBoxDuration) : "";
+            }
+            else
+            {
+                statusText = isBlinkOn ? "EXITING" : "";
+            }
+            statusBrush = BRUSH_PIT;
+            showStatusBg = true;
+        }
+        else if (entry.IsOnOutLap && !entry.IsPlayer)
+        {
+            statusText = "OUTLAP";
+            statusBrush = BRUSH_WHITE;
+            showStatusBg = true;
+        }
+        else if (entry.HasRecentIncident && !entry.IsPlayer)
+        {
+            // Show incident delta severity — highlight 2x+ more prominently
+            int delta = entry.IncidentDelta;
+            string incText;
+            if (delta >= 2)
+            {
+                incText = $"INC +{delta}x";
+                statusBrush = BRUSH_MEATBALL; // orange-red for significant incidents (2-4x)
+            }
+            else
+            {
+                incText = entry.IncidentCount > 0 ? $"INC {entry.IncidentCount}x" : "INC";
+                statusBrush = BRUSH_ORANGE;
+            }
+            statusText = isBlinkOn ? incText : "";
+            showStatusBg = true;
         }
         else if (entry.IsOffTrack && !entry.IsPlayer && entry.OffTrackDuration >= 0.5f)
         {
-            // Flash OFF text when off-track > 2 seconds
-            bool blinkVisible = entry.OffTrackDuration < 2.0f
-                || (_frameCount / BLINK_HALF_PERIOD) % 2 == 0;
-            row.Status.Text = blinkVisible ? "OFF" : "";
-            row.Status.Foreground = BRUSH_ORANGE;
+            bool blinkVisible = entry.OffTrackDuration < 2.0f || isBlinkOn;
+            statusText = blinkVisible ? "OFF TRACK" : "";
+            statusBrush = BRUSH_ORANGE;
+            showStatusBg = true;
         }
-        else if (entry.LapDelta != 0)
-        {
-            row.Status.Text = entry.LapDelta > 0 ? $"+{entry.LapDelta}L" : $"{entry.LapDelta}L";
-            row.Status.Foreground = dimmed ? BRUSH_DIM
-                : entry.LapDelta > 0 ? BRUSH_TEAL : BRUSH_ORANGE;
-        }
-        else
-        {
-            row.Status.Text = string.Empty;
-        }
+
+        row.Status.Text = statusText;
+        row.Status.Foreground = statusBrush;
+        row.StatusBg.Visibility = showStatusBg && !string.IsNullOrEmpty(statusText)
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Get column boundary X positions for vertical separators.</summary>
+    private double[] GetVisibleColumnEdges()
+    {
+        var edges = new List<double>();
+        // After POS column
+        edges.Add(_layout.PosX + COL_W_POS - 2);
+        // After NUM column (if visible)
+        if (ShowCarNumber) edges.Add(_layout.NumX + COL_W_NUM - 2);
+        // After CAR MODEL column (if visible)
+        if (ShowCarModel) edges.Add(_layout.CarModelX + COL_W_CAR_MODEL - 2);
+        // After NAME column
+        edges.Add(_layout.NameX + COL_W_NAME - 2);
+        // After INFO column (if visible)
+        if (ShowDriverInfo) edges.Add(_layout.InfoX + COL_W_INFO - 2);
+        // After INT column (if visible)
+        if (ShowInterval) edges.Add(_layout.IntX + COL_W_INT - 2);
+        // After LAST column (if visible)
+        if (ShowLastLap) edges.Add(_layout.LastX + COL_W_LAST - 2);
+        return edges.ToArray();
+    }
+
+    /// <summary>Format BOX timer as "BOX M:SS.s" (1 decimal ms).</summary>
+    private static string FormatBoxTimer(float seconds)
+    {
+        if (seconds <= 0f) return "BOX 0:00.0";
+        int totalMs = (int)(seconds * 1000f);
+        int min = totalMs / 60000;
+        int sec = (totalMs % 60000) / 1000;
+        int tenths = (totalMs % 1000) / 100;
+        return $"BOX {min}:{sec:D2}.{tenths}";
+    }
+
+    /// <summary>Format TOW timer as "TOW M:SS" for towed cars.</summary>
+    private static string FormatTowTimer(float seconds)
+    {
+        if (seconds <= 0f) return "TOW 0:00";
+        int totalSec = (int)seconds;
+        int min = totalSec / 60;
+        int sec = totalSec % 60;
+        return $"TOW {min}:{sec:D2}";
     }
 
     // ── Row visibility helpers ──────────────────────────────────────
@@ -519,35 +1045,55 @@ public class RelativeWidget : WidgetBase
         row.ClassStripe.Visibility = vis;
         row.Position.Visibility = vis;
         row.CarNumber.Visibility = vis;
+        row.CarModel.Visibility = vis;
         row.Name.Visibility = vis;
+        row.DriverInfo.Visibility = vis;
+        row.LicenseBadge.Visibility = vis;
+        row.LicenseText.Visibility = vis;
         row.Interval.Visibility = vis;
         row.Gap.Visibility = vis;
         row.LastLap.Visibility = vis;
+        // Status and StatusBg are on the main canvas — hide when row hidden
         row.Status.Visibility = vis;
+        if (!visible)
+            row.StatusBg.Visibility = Visibility.Collapsed;
+        // Separators
+        foreach (var sep in row.Separators)
+            sep.Visibility = vis;
     }
 
     // ── Formatting helpers ──────────────────────────────────────────
 
-    /// <summary>Format driver name as "F.Lastname", truncated.</summary>
-    private static string FormatDriverName(string fullName)
+    /// <summary>Format driver name according to DriverNameFormat setting.</summary>
+    private string FormatDriverName(string fullName)
     {
         if (string.IsNullOrWhiteSpace(fullName)) return "---";
 
         var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return "---";
 
-        string formatted;
-        if (parts.Length == 1)
+        string formatted = DriverNameFormat switch
         {
-            formatted = parts[0];
-        }
-        else
-        {
-            // "Joe Smith" → "J.Smith"
-            string initial = parts[0][..1].ToUpperInvariant();
-            string lastName = parts[^1];
-            formatted = $"{initial}.{lastName}";
-        }
+            NameFormat.FullName => fullName.Trim(),
+            NameFormat.InitialsOnly => string.Join(".", parts.Select(p => p[..1].ToUpperInvariant())) + ".",
+            NameFormat.FirstThreeLetters => parts[0].Length >= 3
+                ? parts[0][..3].ToUpperInvariant()
+                : parts[0].ToUpperInvariant(),
+            NameFormat.LastNameOnly => parts[^1],
+            NameFormat.FirstNameOnly => parts[0],
+            NameFormat.ThreeLetterCode => parts[^1].Length >= 3
+                ? parts[^1][..3].ToUpperInvariant()
+                : parts[^1].ToUpperInvariant(),
+            NameFormat.LastCommaFirst => parts.Length == 1
+                ? parts[0]
+                : $"{parts[^1]}, {parts[0][..1]}.",
+            NameFormat.FirstLast4 => parts.Length == 1
+                ? parts[0]
+                : $"{parts[0][..1]}.{parts[^1][..Math.Min(4, parts[^1].Length)]}",
+            _ => parts.Length == 1
+                ? parts[0]
+                : $"{parts[0][..1].ToUpperInvariant()}.{parts[^1]}"
+        };
 
         return formatted.Length > MAX_NAME_LENGTH ? formatted[..MAX_NAME_LENGTH] : formatted;
     }
@@ -562,10 +1108,10 @@ public class RelativeWidget : WidgetBase
         return string.Format(CultureInfo.InvariantCulture, "{0}:{1:00.000}", min, sec);
     }
 
-    /// <summary>Format interval as "+3.2" / "-1.5" with lap delta override.</summary>
+    /// <summary>Format interval as "+3.2" / "-1.5" with lap delta shown alongside.</summary>
     private static string FormatInterval(float intervalSeconds, int lapDelta)
     {
-        // For lapped cars, show lap indicator only
+        // For lapped cars, show both lap indicator and time
         if (Math.Abs(lapDelta) >= 1)
         {
             string lapStr = lapDelta > 0 ? $"+{lapDelta}L" : $"{lapDelta}L";
@@ -592,6 +1138,21 @@ public class RelativeWidget : WidgetBase
         brush.Freeze();
         _classColorCache[classId] = brush;
         return brush;
+    }
+
+    /// <summary>Get iRacing standard license color brush.</summary>
+    private static SolidColorBrush GetLicenseBrush(string licenseClass)
+    {
+        return licenseClass?.ToUpperInvariant() switch
+        {
+            "A" => BRUSH_LIC_A,
+            "B" => BRUSH_LIC_B,
+            "C" => BRUSH_LIC_C,
+            "D" => BRUSH_LIC_D,
+            "R" => BRUSH_LIC_R,
+            "PRO" or "WC" => BRUSH_WHITE,
+            _ => BRUSH_MUTED
+        };
     }
 
     /// <summary>
@@ -651,10 +1212,16 @@ public class RelativeWidget : WidgetBase
         public Border ClassStripe = null!;
         public TextBlock Position = null!;
         public TextBlock CarNumber = null!;
+        public TextBlock CarModel = null!;    // 3-letter car model abbreviation
         public TextBlock Name = null!;
+        public Border LicenseBadge = null!;   // colored background for license letter
+        public TextBlock LicenseText = null!;  // license letter on colored badge
+        public TextBlock DriverInfo = null!;  // iRating value next to badge
         public TextBlock Interval = null!;
         public TextBlock Gap = null!;
         public TextBlock LastLap = null!;
-        public TextBlock Status = null!;
+        public TextBlock Status = null!;      // placed on _canvas (outside box)
+        public Border StatusBg = null!;       // semi-transparent bg behind status
+        public List<Border> Separators = new(); // vertical column separators
     }
 }

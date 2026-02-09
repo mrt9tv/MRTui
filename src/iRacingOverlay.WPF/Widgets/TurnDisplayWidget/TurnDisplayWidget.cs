@@ -48,7 +48,8 @@ public class TurnDisplayWidget : WidgetBase
 
     #region Sizing Constants
 
-    private const double WIDGET_WIDTH = 170;
+    private const double WIDGET_WIDTH = 180;
+    private const double WIDGET_WIDTH_COMPACT = 70;
     private const double WIDGET_HEIGHT = 110;
     private const double ROW_HEIGHT = 44;
     private const double PADDING = 6;
@@ -142,7 +143,7 @@ public class TurnDisplayWidget : WidgetBase
         _contentGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         // NEXT TURN (top, teal)
-        _nextRow = CreateTurnRow(out _nextTurnNumber, out _nextTurnName, "NXT", COLOR_TEAL);
+        _nextRow = CreateTurnRow(out _nextTurnNumber, out _nextTurnName, "NEXT", COLOR_TEAL);
         Grid.SetRow(_nextRow, 0);
         _contentGrid.Children.Add(_nextRow);
 
@@ -152,7 +153,7 @@ public class TurnDisplayWidget : WidgetBase
         _contentGrid.Children.Add(sep);
 
         // LAST TURN (bottom, orange)
-        _lastRow = CreateTurnRow(out _lastTurnNumber, out _lastTurnName, "LST", COLOR_ORANGE);
+        _lastRow = CreateTurnRow(out _lastTurnNumber, out _lastTurnName, "LAST", COLOR_ORANGE);
         Grid.SetRow(_lastRow, 2);
         _contentGrid.Children.Add(_lastRow);
 
@@ -170,10 +171,10 @@ public class TurnDisplayWidget : WidgetBase
         };
 
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32, GridUnitType.Pixel) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42, GridUnitType.Pixel) }); // wider for T23
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // Label + Number stack (left)
+        // Label + Number stack (left) — left-aligned
         var leftStack = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -186,7 +187,7 @@ public class TurnDisplayWidget : WidgetBase
             FontSize = 7,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(COLOR_MUTED),
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Left
         };
         leftStack.Children.Add(labelBlock);
 
@@ -196,14 +197,15 @@ public class TurnDisplayWidget : WidgetBase
             FontSize = 16,
             FontWeight = FontWeights.Bold,
             Foreground = new SolidColorBrush(accentColor),
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, -2, 0, 0) // tighten spacing between NEXT/LAST and T#
         };
         leftStack.Children.Add(numberBlock);
 
         Grid.SetColumn(leftStack, 0);
         grid.Children.Add(leftStack);
 
-        // Turn name (right)
+        // Turn name (right) — vertically centered with the label+number stack
         nameBlock = new TextBlock
         {
             Text = "",
@@ -213,8 +215,8 @@ public class TurnDisplayWidget : WidgetBase
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(6, 0, 0, 0),
-            MaxWidth = 110,
+            Margin = new Thickness(4, 0, 0, 0),
+            MaxWidth = 120,
             Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed
         };
         Grid.SetColumn(nameBlock, 1);
@@ -237,9 +239,19 @@ public class TurnDisplayWidget : WidgetBase
 
     protected override void UpdateUI(TelemetryData data)
     {
-        // Update turn name visibility
-        _nextTurnName.Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed;
-        _lastTurnName.Visibility = ShowTurnName ? Visibility.Visible : Visibility.Collapsed;
+        // Update turn name visibility and resize widget
+        bool showNames = ShowTurnName;
+        _nextTurnName.Visibility = showNames ? Visibility.Visible : Visibility.Collapsed;
+        _lastTurnName.Visibility = showNames ? Visibility.Visible : Visibility.Collapsed;
+
+        // Compact width when names are off (just show T# and label)
+        double targetWidth = showNames ? WIDGET_WIDTH : WIDGET_WIDTH_COMPACT;
+        if (Math.Abs(_mainCanvas.Width - targetWidth) > 1)
+        {
+            _mainCanvas.Width = targetWidth;
+            _backgroundBorder.Width = targetWidth;
+            Width = targetWidth;
+        }
 
         // Border animation (optional — off by default)
         if (AnimateBorder && data.IsInTurn && data.TurnNumber > 0)

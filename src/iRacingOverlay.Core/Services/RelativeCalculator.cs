@@ -27,6 +27,15 @@ public class RelativeCalculator
     /// <summary>iRacing TrackSurface = OffTrack value</summary>
     private const int TRACK_SURFACE_OFF_TRACK = 0;
 
+    /// <summary>iRacing TrackSurface = InPitStall (at pit box)</summary>
+    private const int TRACK_SURFACE_IN_PIT_STALL = 1;
+
+    /// <summary>iRacing TrackSurface = ApproachingPits (entering/exiting pit lane)</summary>
+    private const int TRACK_SURFACE_APPROACHING_PITS = 2;
+
+    /// <summary>iRacing TrackSurface = OnTrack</summary>
+    private const int TRACK_SURFACE_ON_TRACK = 3;
+
     // ── Reusable scratch buffers (avoid allocations on the hot path) ────
 
     private readonly List<RelativeEntry> _result = new(MAX_CARS);
@@ -38,6 +47,39 @@ public class RelativeCalculator
 
     /// <summary>Track off-track duration per car index (seconds). Reset when on-track.</summary>
     private readonly float[] _offTrackDuration = new float[MAX_CARS];
+
+    /// <summary>Track whether each car has visited pit stall this pit stop (for exit detection).</summary>
+    private readonly bool[] _wasInPitStall = new bool[MAX_CARS];
+
+    /// <summary>Track pit stall entry time for BOX timer.</summary>
+    private readonly DateTime?[] _pitStallEntryTime = new DateTime?[MAX_CARS];
+
+    /// <summary>Track whether each car was serviced in the pit (for OUTLAP detection).</summary>
+    private readonly bool[] _wasServiced = new bool[MAX_CARS];
+
+    /// <summary>Track whether each car is on an out-lap after pit exit.</summary>
+    private readonly bool[] _isOnOutLap = new bool[MAX_CARS];
+
+    /// <summary>Track LapDistPct when each car exited the pit (for OUTLAP 85% tracking).</summary>
+    private readonly float[] _pitExitLapDistPct = new float[MAX_CARS];
+
+    /// <summary>Final BOX duration when driver left pit stall (for blink on exit).</summary>
+    private readonly float[] _finalBoxDuration = new float[MAX_CARS];
+
+    /// <summary>UTC time when driver started exiting pit (for 3-second blink).</summary>
+    private readonly DateTime?[] _exitingPitStartTime = new DateTime?[MAX_CARS];
+
+    /// <summary>iRacing flag bit: Meatball / Repair required</summary>
+    private const int FLAG_REPAIR = 0x100000;
+
+    /// <summary>iRacing flag bit: Black flag</summary>
+    private const int FLAG_BLACK = 0x10000;
+
+    /// <summary>Track last non-NotInWorld surface per car (for tow detection).</summary>
+    private readonly int[] _lastTrackSurface = new int[MAX_CARS];
+
+    /// <summary>Track whether each car was towed (skipped pit road approach).</summary>
+    private readonly bool[] _wasTowed = new bool[MAX_CARS];
 
     /// <summary>Timestamp of last Calculate call (for delta timing)</summary>
     private DateTime _lastCalcTime = DateTime.UtcNow;
@@ -52,7 +94,7 @@ public class RelativeCalculator
     /// Ordered list: farthest-ahead → closest-ahead → PLAYER → closest-behind → farthest-behind.
     /// The returned list reference is reused — copy it if you need to hold it across calls.
     /// </returns>
-    public List<RelativeEntry> Calculate(TelemetryData data, int maxAhead = 6, int maxBehind = 6)
+    public List<RelativeEntry> Calculate(TelemetryData data, int maxAhead = 3, int maxBehind = 3)
     {
         _result.Clear();
         _ahead.Clear();
@@ -75,8 +117,20 @@ public class RelativeCalculator
 
         UpdateReferenceLapTime(data);
 
-        RelativeEntry? playerEntry = null;
+        // ── Find session best lap time for purple highlighting ─────
+        float sessionBestLapTime = float.MaxValue;
         int carCount = Math.Min(data.CarIdxLapDistPct.Length, MAX_CARS);
+        if (data.CarIdxBestLapTime != null)
+        {
+            for (int i = 0; i < Math.Min(data.CarIdxBestLapTime.Length, MAX_CARS); i++)
+            {
+                float best = data.CarIdxBestLapTime[i];
+                if (best > 1.0f && best < sessionBestLapTime)
+                    sessionBestLapTime = best;
+            }
+        }
+
+        RelativeEntry? playerEntry = null;
 
         for (int i = 0; i < carCount; i++)
         {
@@ -91,7 +145,96 @@ public class RelativeCalculator
             if (surface == TRACK_SURFACE_NOT_IN_WORLD)
                 continue;
 
+            bool isOnPitRoad = ArrayBool(data.CarIdxOnPitRoad, i, false);
+
+            // Track last valid surface for tow detection
+            if (surface != TRACK_SURFACE_NOT_IN_WORLD)
+                _lastTrackSurface[i] = surface;
+
+            // ── Determine pit status ───────────────────────────────
+            PitStatus pitState = PitStatus.None;
+            if (surface == TRACK_SURFACE_IN_PIT_STALL)
+            {
+                pitState = PitStatus.InPit;
+                if (!_wasInPitStall[i])
+                {
+                    _pitStallEntryTime[i] = now; // record entry time
+                    _wasServiced[i] = true; // assume service when entering stall
+                    // Tow detection: entering pit stall from on-track without approaching pits
+                    int lastSurf = _lastTrackSurface[i];
+                    if (lastSurf == TRACK_SURFACE_ON_TRACK || lastSurf == TRACK_SURFACE_OFF_TRACK)
+                        _wasTowed[i] = true;
+                    else
+                        _wasTowed[i] = false;
+                }
+                _wasInPitStall[i] = true;
+            }
+            else if (isOnPitRoad)
+            {
+                if (_wasInPitStall[i])
+                {
+                    pitState = PitStatus.ExitingPit; // was in stall, now on pit road = exiting
+                    // Record final BOX duration and exit start time
+                    if (_exitingPitStartTime[i] == null)
+                    {
+                        _exitingPitStartTime[i] = now;
+                        _finalBoxDuration[i] = _pitStallEntryTime[i] is DateTime entryDt
+                            ? (float)(now - entryDt).TotalSeconds : 0f;
+                    }
+                }
+                else
+                    pitState = PitStatus.Pitting; // on pit road, haven't reached stall = entering
+            }
+            else
+            {
+                // Not on pit road anymore — clear tow state
+                _wasTowed[i] = false;
+                if (_wasInPitStall[i] && _wasServiced[i])
+                {
+                    _isOnOutLap[i] = true; // just left pits after service → out-lap
+                    _pitExitLapDistPct[i] = pct; // record where they exited
+                }
+                _wasInPitStall[i] = false;
+                _pitStallEntryTime[i] = null;
+                // Clear exiting state after 3 seconds
+                if (_exitingPitStartTime[i] is DateTime exitStart && (now - exitStart).TotalSeconds > 3.5)
+                {
+                    _exitingPitStartTime[i] = null;
+                    _finalBoxDuration[i] = 0f;
+                }
+            }
+
+            // Out-lap ends when the car has traveled 85% of the remaining track distance.
+            // This makes OUTLAP visible for ~85% of the outlap, then disappears.
+            if (_isOnOutLap[i] && !isOnPitRoad && surface == TRACK_SURFACE_ON_TRACK)
+            {
+                float exitPct = _pitExitLapDistPct[i];
+                float outlaplength = 1.0f - exitPct; // distance from pit exit to S/F
+                float threshold = exitPct + 0.85f * outlaplength; // 85% of outlap
+                
+                if (threshold <= 1.0f)
+                {
+                    if (pct >= threshold)
+                        _isOnOutLap[i] = false;
+                }
+                else
+                {
+                    // Wrapped past S/F — threshold is in the next lap
+                    float wrapThreshold = threshold - 1.0f;
+                    if (pct < exitPct && pct >= wrapThreshold)
+                        _isOnOutLap[i] = false;
+                }
+            }
+
+            // ── Per-car flags (meatball, black) ────────────────────
+            int carFlags = ArrayInt(data.CarIdxSessionFlags, i, 0);
+            bool hasMeatball = (carFlags & FLAG_REPAIR) != 0;
+            bool hasBlackFlag = (carFlags & FLAG_BLACK) != 0;
+
             // ── Build entry ────────────────────────────────────────
+            float lastLap = ArrayFloat(data.CarIdxLastLapTime, i, 0f);
+            float bestLap = ArrayFloat(data.CarIdxBestLapTime, i, 0f);
+
             var entry = new RelativeEntry
             {
                 CarIdx = i,
@@ -100,14 +243,39 @@ public class RelativeCalculator
                 OverallPosition = ArrayInt(data.CarIdxPosition, i, 0),
                 ClassPosition = ArrayInt(data.CarIdxClassPosition, i, 0),
                 CarClassId = ArrayInt(data.CarIdxClass, i, 0),
-                LastLapTime = ArrayFloat(data.CarIdxLastLapTime, i, 0f),
-                BestLapTime = ArrayFloat(data.CarIdxBestLapTime, i, 0f),
-                IsOnPitRoad = ArrayBool(data.CarIdxOnPitRoad, i, false),
+                LastLapTime = lastLap,
+                BestLapTime = bestLap,
+                IsOnPitRoad = isOnPitRoad,
                 DriverName = DictString(data.CarIdxToDriverName, i, string.Empty),
-                CarNumber = DictString(data.CarIdxToCarNumber, i, i.ToString()),
+                CarNumber = DictString(data.CarIdxToCarNumber, i, string.Empty),
                 IsPlayer = (i == playerIdx),
                 IsConnected = surface >= 0,
-                IsOffTrack = surface == TRACK_SURFACE_OFF_TRACK
+                IsOffTrack = surface == TRACK_SURFACE_OFF_TRACK,
+                PitState = pitState,
+                // Personal best: last lap matches their best lap (within tolerance)
+                IsPersonalBest = lastLap > 1.0f && bestLap > 1.0f && Math.Abs(lastLap - bestLap) < 0.01f,
+                // Session best: last lap matches overall session best (within tolerance)
+                IsSessionBest = lastLap > 1.0f && sessionBestLapTime < float.MaxValue && Math.Abs(lastLap - sessionBestLapTime) < 0.01f,
+                // iRating, Safety Rating, License Class from YAML
+                IRating = DictInt(data.CarIdxToIRating, i, 0),
+                SafetyRating = DictFloat(data.CarIdxToSafetyRating, i, 0f),
+                LicenseClass = DictString(data.CarIdxToLicenseClass, i, string.Empty),
+                // Per-car flags
+                HasMeatball = hasMeatball,
+                HasBlackFlag = hasBlackFlag,
+                HasRecentIncident = data.CarIdxRecentIncident != null && i < data.CarIdxRecentIncident.Length && data.CarIdxRecentIncident[i],
+                IncidentCount = DictInt(data.CarIdxToIncidentCount, i, 0),
+                IncidentDelta = ArrayInt(data.CarIdxRecentIncidentDelta, i, 0),
+                WasTowed = _wasTowed[i],
+                CarModel = DictString(data.CarIdxToCarModel, i, string.Empty),
+                // Out-lap & pit stall timer
+                IsOnOutLap = _isOnOutLap[i],
+                PitStallEntryTime = _pitStallEntryTime[i],
+                PitStallDuration = _pitStallEntryTime[i] is DateTime entry_dt
+                    ? (float)(now - entry_dt).TotalSeconds : 0f,
+                FinalBoxDuration = _finalBoxDuration[i],
+                ExitingPitDuration = _exitingPitStartTime[i] is DateTime exitDt
+                    ? (float)(now - exitDt).TotalSeconds : 0f
             };
 
             // ── Off-track duration accumulation ────────────────────
@@ -116,6 +284,18 @@ public class RelativeCalculator
             else
                 _offTrackDuration[i] = 0f;
             entry.OffTrackDuration = _offTrackDuration[i];
+
+            // ── Out-lap progress (0.0 → 1.0 through outlap) ───────
+            if (entry.IsOnOutLap)
+            {
+                float exitPct = _pitExitLapDistPct[i];
+                float lapLen = 1.0f - exitPct;
+                if (lapLen > 0.01f)
+                {
+                    float outDist = pct >= exitPct ? pct - exitPct : (1.0f - exitPct) + pct;
+                    entry.OutLapProgress = Math.Clamp(outDist / lapLen, 0f, 1f);
+                }
+            }
 
             // ── Player row ─────────────────────────────────────────
             if (i == playerIdx)
@@ -164,15 +344,16 @@ public class RelativeCalculator
         for (int i = takeAhead - 1; i >= 0; i--)
             _result.Add(_ahead[i]);
 
-        // ── Player row ─────────────────────────────────────────────
-        if (playerEntry != null)
-            _result.Add(playerEntry);
-
         // ── Select and order behind cars ───────────────────────────
         // Sort descending by interval (closest behind = least negative first)
         _behind.Sort((a, b) => b.IntervalToPlayer.CompareTo(a.IntervalToPlayer));
-        // Take the N closest
         int takeBehind = Math.Min(_behind.Count, maxBehind);
+
+        // ── Player row in MIDDLE (between ahead and behind) ─────────
+        if (playerEntry != null)
+            _result.Add(playerEntry);
+
+        // Behind cars (closest to farthest)
         for (int i = 0; i < takeBehind; i++)
             _result.Add(_behind[i]);
 
@@ -249,5 +430,11 @@ public class RelativeCalculator
         => arr != null && (uint)idx < (uint)arr.Length ? arr[idx] : def;
 
     private static string DictString(Dictionary<int, string>? dict, int key, string def)
+        => dict != null && dict.TryGetValue(key, out var v) ? v : def;
+
+    private static int DictInt(Dictionary<int, int>? dict, int key, int def)
+        => dict != null && dict.TryGetValue(key, out var v) ? v : def;
+
+    private static float DictFloat(Dictionary<int, float>? dict, int key, float def)
         => dict != null && dict.TryGetValue(key, out var v) ? v : def;
 }

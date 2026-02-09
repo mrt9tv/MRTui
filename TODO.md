@@ -581,6 +581,26 @@ ML-based pit window optimizer replacing simple fuel calculations.
 
 ---
 
+## 💡 Future Ideas — Noted for Consideration
+
+> Ideas discussed during development that deserve future exploration.
+
+### Analysis & Strategy
+- [ ] **Predictive Pit Window** — Calculate optimal pit lap range based on current fuel burn, remaining fuel, and race distance. Highlight when in the window vs. too early/late.
+- [ ] **Delta-to-Best Sector Breakdown** — Per-sector time deltas using `LapDeltaToSessionBestLap` and sector split data. Red/green badges per corner.
+- [ ] **Weather/Track Temp Overlay** — Small ambient conditions bar showing `TrackTempCrew`, `AirTemp`, `WindSpeed`, `WindDir`, `Skies` for tire strategy decisions.
+
+### Driving Intelligence
+- [ ] **Braking Heatmap** — Using `Brake` (0-1) + `LapDistPct`, build per-corner braking point comparison vs. your fastest lap. Show where you're braking early/late.
+- [ ] **Draft Detection** — Using `CarIdxLapDistPct` proximity + `Speed` comparison, highlight when in a draft (within ~0.5s of car ahead on a straight).
+- [ ] **Time Lost in Corners** — Compare speed traces through turn zones against best lap. Show per-corner time delta as red/green badges.
+
+### UI/UX Enhancements
+- [ ] **Drag-to-Reorder Columns/Rows** — Let users drag column headers or row order in any widget, persisted in settings.
+- [ ] **Quick-Glance Mode** — Relative widget compact mode: only 2 cars ahead + 2 behind, larger text for peripheral vision at speed.
+
+---
+
 ## ✅ Completed
 
 ### Turn Display Widget (v0.7.0)

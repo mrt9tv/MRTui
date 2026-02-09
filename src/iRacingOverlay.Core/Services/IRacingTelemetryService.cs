@@ -161,6 +161,9 @@ namespace iRacingOverlay.Core.Services;
     TelemetryVar.CarIdxLastLapTime,     // float[64] - Last lap time
     TelemetryVar.CarIdxBestLapTime,     // float[64] - Best lap time (for qualifying position)
 
+    // Per-Car Session Flags (meatball, black flag, etc.)
+    TelemetryVar.CarIdxSessionFlags,    // int[64]   - Bitfield flags per car (irsdk_Flags)
+
     // Player Orientation (for future enhancements)
     TelemetryVar.Yaw,                   // float - Player heading angle (radians)
     TelemetryVar.YawRate,               // float - Rate of heading change (rad/s)
@@ -220,6 +223,15 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private bool _sessionInfoParsed = false;
     private Dictionary<int, string> _carIdxToCarNumber = new(); // CarIdx -> Car Number mapping (for pit exit display)
     private Dictionary<int, string> _carIdxToDriverName = new(); // CarIdx -> Driver Name mapping (for competitor intelligence)
+    private Dictionary<int, int> _carIdxToIRating = new(); // CarIdx -> iRating mapping
+    private Dictionary<int, float> _carIdxToSafetyRating = new(); // CarIdx -> Safety Rating mapping
+    private Dictionary<int, string> _carIdxToLicenseClass = new(); // CarIdx -> License Class mapping
+    private Dictionary<int, int> _carIdxToIncidentCount = new();  // CarIdx -> CurDriverIncidentCount
+    private bool[] _carIdxRecentIncident = new bool[64];          // true = gained incidents recently
+    private int[] _carIdxRecentIncidentDelta = new int[64];       // how many x incidents gained (e.g. 2 = 2x)
+    private DateTime[] _carIdxIncidentTime = new DateTime[64];    // when the incident flag was set
+    private Dictionary<int, string> _carIdxToCarModel = new();    // CarIdx -> 3-letter car model abbreviation
+    private readonly object _driverDataLock = new(); // Thread safety for async session callbacks
     
     // Tier 2: SessionInfo version tracking - Only parse when SDK increments SessionInfoUpdate
     // Note: Weather data (TrackTemp, AirTemp, WeatherType) comes from SDK real-time telemetry (60Hz),
@@ -340,18 +352,21 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     OnTelemetryUpdate(null, data);
                     await Task.CompletedTask;
                 },
+                onSessionInfoUpdate: async session =>
+                {
+                    ProcessTypedSessionInfo(session);
+                    await Task.CompletedTask;
+                },
                 onConnectStateChanged: async state => 
                 {
                     _logger.LogInformation("Connection state changed: {State}", state);
                     Status = state == ConnectState.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
                     StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(Status));
                     
-                    // Parse session info and dump variables on connect
+                    // Parse session info on connect (YAML fallback for track data)
                     if (state == ConnectState.Connected)
                     {
                         TryParseSessionInfo();
-                        
-                        // Variable dump removed during clean restart
                     }
                     
                     await Task.CompletedTask;
@@ -650,8 +665,16 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 SessionType = _sessionType,
                 TrackLength = _trackLength,
                 TrackPitSpeedLimit = _trackPitSpeedLimit,
-                CarIdxToCarNumber = _carIdxToCarNumber.Count > 0 ? new Dictionary<int, string>(_carIdxToCarNumber) : null,
-                CarIdxToDriverName = _carIdxToDriverName.Count > 0 ? new Dictionary<int, string>(_carIdxToDriverName) : null,
+                // Thread-safe copy of driver data (populated by typed session callback)
+                CarIdxToCarNumber = CopyDictSafe(_carIdxToCarNumber),
+                CarIdxToDriverName = CopyDictSafe(_carIdxToDriverName),
+                CarIdxToIRating = CopyDictSafe(_carIdxToIRating),
+                CarIdxToSafetyRating = CopyDictSafe(_carIdxToSafetyRating),
+                CarIdxToLicenseClass = CopyDictSafe(_carIdxToLicenseClass),
+                CarIdxToIncidentCount = CopyDictSafe(_carIdxToIncidentCount),
+                CarIdxRecentIncident = CopyRecentIncidents(out var recentDelta),
+                CarIdxRecentIncidentDelta = recentDelta,
+                CarIdxToCarModel = CopyDictSafe(_carIdxToCarModel),
 
                 // Live Position Calculation
                 SessionState = (int)sdkData.SessionState.GetValueOrDefault(),
@@ -677,6 +700,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxF2Time = sdkData.CarIdxF2Time,
                 CarIdxLastLapTime = sdkData.CarIdxLastLapTime,
                 CarIdxBestLapTime = sdkData.CarIdxBestLapTime,
+                CarIdxSessionFlags = sdkData.CarIdxSessionFlags?.Select(f => (int)f).ToArray(),
 
                 // Player Orientation
                 Yaw = sdkData.Yaw.GetValueOrDefault(),
@@ -801,6 +825,169 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         
         // Add more fields as needed by widgets (tire temps, position, etc.)
         // Only track fields that are actively checked by widgets to minimize overhead
+    }
+
+    // ── Thread-safe dictionary copy helpers ──────────────────────────────
+
+    private Dictionary<int, string>? CopyDictSafe(Dictionary<int, string> src)
+    {
+        lock (_driverDataLock)
+            return src.Count > 0 ? new Dictionary<int, string>(src) : null;
+    }
+
+    private Dictionary<int, int>? CopyDictSafe(Dictionary<int, int> src)
+    {
+        lock (_driverDataLock)
+            return src.Count > 0 ? new Dictionary<int, int>(src) : null;
+    }
+
+    private Dictionary<int, float>? CopyDictSafe(Dictionary<int, float> src)
+    {
+        lock (_driverDataLock)
+            return src.Count > 0 ? new Dictionary<int, float>(src) : null;
+    }
+
+    /// <summary>Copy recent incident flags and deltas, clearing any that are older than 8 seconds.</summary>
+    private bool[] CopyRecentIncidents(out int[] deltas)
+    {
+        var now = DateTime.UtcNow;
+        var result = new bool[64];
+        deltas = new int[64];
+        lock (_driverDataLock)
+        {
+            for (int i = 0; i < 64; i++)
+            {
+                if (_carIdxRecentIncident[i])
+                {
+                    if ((now - _carIdxIncidentTime[i]).TotalSeconds > 8.0)
+                    {
+                        _carIdxRecentIncident[i] = false; // auto-clear after 8s
+                        _carIdxRecentIncidentDelta[i] = 0;
+                    }
+                    else
+                    {
+                        result[i] = true;
+                        deltas[i] = _carIdxRecentIncidentDelta[i];
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    /// <summary>Make a 3-letter car model abbreviation from the full car name.</summary>
+    private static string MakeCarAbbreviation(string carName)
+    {
+        if (string.IsNullOrWhiteSpace(carName)) return "---";
+        // Try to extract meaningful abbreviation:
+        // "Ferrari 488 GT3" → "488"
+        // "Mercedes-AMG GT3" → "AMG"
+        // "Porsche 911 GT3 R" → "911"
+        // "BMW M4 GT3" → "M4G"
+        // Strategy: prefer numeric model numbers, then uppercase word starts
+        var parts = carName.Split(new[] { ' ', '-', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        
+        // Look for a 3-digit number first (most iconic: 488, 911, 720)
+        foreach (var p in parts)
+        {
+            if (p.Length == 3 && int.TryParse(p, out _)) return p;
+        }
+        
+        // Look for short model identifiers (M4, RS, GT, AMG, etc.)
+        foreach (var p in parts)
+        {
+            if (p.Length >= 2 && p.Length <= 3 && p != "GT3" && p != "GT4" && p != "GTE" && p != "LMP" 
+                && p.ToUpperInvariant() == p) // all uppercase = model code
+                return p.Length == 3 ? p : p + parts.LastOrDefault(x => x.Length >= 1)?[..1] ?? "";
+        }
+        
+        // Fallback: first 3 chars of the most significant word (skip brand)
+        if (parts.Length >= 2)
+            return parts[1].Length >= 3 ? parts[1][..3].ToUpperInvariant() : parts[1].ToUpperInvariant();
+        
+        return carName.Length >= 3 ? carName[..3].ToUpperInvariant() : carName.ToUpperInvariant();
+    }
+
+    // ── Typed session info processing (SDK v1.0 ChannelReader) ──────────
+
+    /// <summary>
+    /// Process typed session info from SDK SessionDataStream.
+    /// This is the primary source for driver data — far more reliable than YAML parsing.
+    /// Called automatically when iRacing updates session info (driver joins/leaves, qualifying, etc.)
+    /// </summary>
+    private void ProcessTypedSessionInfo(SVappsLAB.iRacingTelemetrySDK.TelemetrySessionInfo session)
+    {
+        try
+        {
+            if (session?.DriverInfo?.Drivers == null) return;
+
+            int driverCarIdx = session.DriverInfo.DriverCarIdx;
+
+            lock (_driverDataLock)
+            {
+                _carIdxToCarNumber.Clear();
+                _carIdxToDriverName.Clear();
+                _carIdxToIRating.Clear();
+                _carIdxToSafetyRating.Clear();
+                _carIdxToLicenseClass.Clear();
+                _carIdxToCarModel.Clear();
+
+                foreach (var driver in session.DriverInfo.Drivers)
+                {
+                    int idx = driver.CarIdx;
+                    if (idx < 0 || idx >= 64) continue;
+                    if (driver.CarIsPaceCar == 1) continue; // skip pace car
+
+                    _carIdxToCarNumber[idx] = driver.CarNumber ?? string.Empty;
+                    _carIdxToDriverName[idx] = driver.UserName ?? string.Empty;
+                    _carIdxToIRating[idx] = driver.IRating;
+                    _carIdxToSafetyRating[idx] = driver.LicLevel / 100f;
+
+                    // Incident count tracking — detect changes and track delta
+                    int prevInc = _carIdxToIncidentCount.GetValueOrDefault(idx, 0);
+                    int curInc = driver.CurDriverIncidentCount;
+                    if (curInc > prevInc && prevInc > 0) // gained incidents (skip first load)
+                    {
+                        int delta = curInc - prevInc;
+                        _carIdxRecentIncident[idx] = true;
+                        _carIdxRecentIncidentDelta[idx] = delta;
+                        _carIdxIncidentTime[idx] = DateTime.UtcNow;
+                    }
+                    _carIdxToIncidentCount[idx] = curInc;
+
+                    // Car model — extract 3-letter abbreviation from CarScreenNameShort or CarScreenName
+                    string carName = driver.CarScreenNameShort ?? driver.CarScreenName ?? string.Empty;
+                    if (!string.IsNullOrEmpty(carName))
+                        _carIdxToCarModel[idx] = MakeCarAbbreviation(carName);
+
+                    // License class from LicString (e.g., "A 3.45" → "A")
+                    if (!string.IsNullOrEmpty(driver.LicString))
+                    {
+                        var parts = driver.LicString.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length > 0)
+                            _carIdxToLicenseClass[idx] = parts[0];
+                    }
+
+                    // Player-specific data
+                    if (idx == driverCarIdx)
+                    {
+                        _driverName = driver.UserName ?? string.Empty;
+                        _carNumber = driver.CarNumber ?? string.Empty;
+                        if (!string.IsNullOrEmpty(driver.CarScreenName))
+                            _carScreenName = driver.CarScreenName;
+                        else if (!string.IsNullOrEmpty(driver.CarScreenNameShort))
+                            _carScreenName = driver.CarScreenNameShort;
+                    }
+                }
+            }
+
+            _logger.LogInformation("Typed session info: {Count} drivers, player CarIdx={PlayerIdx}",
+                session.DriverInfo.Drivers.Count, driverCarIdx);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error processing typed session info");
+        }
     }
     
     /// <summary>
@@ -933,6 +1120,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         inDriversArray = true;
                         _carIdxToCarNumber.Clear(); // Reset car number mapping for new session
                         _carIdxToDriverName.Clear(); // Reset driver name mapping for new session
+                        _carIdxToIRating.Clear();
+                        _carIdxToSafetyRating.Clear();
+                        _carIdxToLicenseClass.Clear();
                     }
                     else if (inDriversArray)
                     {
@@ -971,6 +1161,32 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             if (currentDriverCarIdx >= 0)
                             {
                                 _carIdxToDriverName[currentDriverCarIdx] = userName;
+                            }
+                        }
+                        else if (trimmed.StartsWith("IRating:"))
+                        {
+                            if (currentDriverCarIdx >= 0 && int.TryParse(ExtractYamlValue(trimmed), out var iRating))
+                            {
+                                _carIdxToIRating[currentDriverCarIdx] = iRating;
+                            }
+                        }
+                        else if (trimmed.StartsWith("LicLevel:"))
+                        {
+                            // LicLevel is the safety rating * 100 (e.g., 345 = 3.45 SR)
+                            if (currentDriverCarIdx >= 0 && int.TryParse(ExtractYamlValue(trimmed), out var licLevel))
+                            {
+                                _carIdxToSafetyRating[currentDriverCarIdx] = licLevel / 100f;
+                            }
+                        }
+                        else if (trimmed.StartsWith("LicString:"))
+                        {
+                            // LicString is like "A 3.45" or "B 2.12" — extract just the letter
+                            if (currentDriverCarIdx >= 0)
+                            {
+                                var licStr = ExtractYamlValue(trimmed).Trim('"', '\'');
+                                var licClass = licStr.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                                if (licClass.Length > 0)
+                                    _carIdxToLicenseClass[currentDriverCarIdx] = licClass[0];
                             }
                         }
                         else if (trimmed.StartsWith("CarScreenName:") || trimmed.StartsWith("CarScreenNameShort:"))

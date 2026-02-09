@@ -57,13 +57,13 @@ public class RelativeEntry
 
     /// <summary>
     /// Whether the car is currently off-track (iRacing TrackSurface = OffTrack).
-    /// Used for OFF indicator in status column.
+    /// Used for OFF TRACK indicator in status column.
     /// </summary>
     public bool IsOffTrack { get; set; }
 
     /// <summary>
     /// Continuous seconds the car has been off-track.
-    /// &gt; 0.5s to show OFF indicator, &gt; 2.0s to flash it.
+    /// &gt; 0.5s to show OFF TRACK indicator, &gt; 2.0s to flash it.
     /// Reset to 0 when back on track.
     /// </summary>
     public float OffTrackDuration { get; set; }
@@ -80,4 +80,126 @@ public class RelativeEntry
     /// Zero = same lap.
     /// </summary>
     public int LapDelta { get; set; }
+
+    /// <summary>
+    /// Detailed pit status based on TrackSurface enum.
+    /// None = not pitting, Approaching = entering pit lane, InStall = at pit box,
+    /// Exiting = leaving pit lane back to track.
+    /// </summary>
+    public PitStatus PitState { get; set; } = PitStatus.None;
+
+    /// <summary>
+    /// Whether this driver's last lap is their personal best.
+    /// Used for teal coloring in LAST column.
+    /// </summary>
+    public bool IsPersonalBest { get; set; }
+
+    /// <summary>
+    /// Whether this driver's last lap is the session best (overall fastest).
+    /// Used for purple coloring in LAST column.
+    /// </summary>
+    public bool IsSessionBest { get; set; }
+
+    /// <summary>
+    /// iRating of the driver (from session YAML). 0 = unavailable.
+    /// </summary>
+    public int IRating { get; set; }
+
+    /// <summary>
+    /// Safety rating of the driver (e.g., 3.45). 0 = unavailable.
+    /// </summary>
+    public float SafetyRating { get; set; }
+
+    /// <summary>
+    /// License class letter (e.g., "A", "B", "C", "D", "R", "Pro", "WC").
+    /// </summary>
+    public string LicenseClass { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this car has a meatball/repair flag (CarIdxSessionFlags bit 0x100000).
+    /// </summary>
+    public bool HasMeatball { get; set; }
+
+    /// <summary>
+    /// Whether this car has a black flag (CarIdxSessionFlags bit 0x10000).
+    /// </summary>
+    public bool HasBlackFlag { get; set; }
+
+    /// <summary>
+    /// Whether this car gained incidents recently (CurDriverIncidentCount increased).
+    /// Auto-clears after approximately 8 seconds.
+    /// </summary>
+    public bool HasRecentIncident { get; set; }
+
+    /// <summary>
+    /// Cumulative incident count for this driver (from session info).
+    /// </summary>
+    public int IncidentCount { get; set; }
+
+    /// <summary>
+    /// How many incidents gained in the last incident event (e.g. 2 = 2x, 4 = 4x).
+    /// Only set when HasRecentIncident is true.
+    /// </summary>
+    public int IncidentDelta { get; set; }
+
+    /// <summary>
+    /// Whether this car was towed to pits (went from on-track to pit stall
+    /// without going through pit road approach).
+    /// </summary>
+    public bool WasTowed { get; set; }
+
+    /// <summary>
+    /// Car model short name (3-letter abbreviation from session YAML).
+    /// </summary>
+    public string CarModel { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this car is on an out-lap after a pit stop with tire change.
+    /// Shows "OUTLAP" in status column.
+    /// </summary>
+    public bool IsOnOutLap { get; set; }
+
+    /// <summary>
+    /// UTC time when the car entered the pit stall (InPitStall surface).
+    /// Used to compute BOX MM:SS timer.
+    /// </summary>
+    public DateTime? PitStallEntryTime { get; set; }
+
+    /// <summary>
+    /// Elapsed seconds in pit stall (only valid when PitState == InPit).
+    /// </summary>
+    public float PitStallDuration { get; set; }
+
+    /// <summary>
+    /// The final BOX duration when the driver exited the pit (seconds).
+    /// Used to blink the time for 3 seconds after leaving the box.
+    /// </summary>
+    public float FinalBoxDuration { get; set; }
+
+    /// <summary>
+    /// Elapsed seconds since the driver started exiting pit.
+    /// Used to control the 3-second blink duration.
+    /// </summary>
+    public float ExitingPitDuration { get; set; }
+
+    /// <summary>
+    /// How far through the outlap this car is (0.0 - 1.0).
+    /// Used for dimming/hiding OUTLAP indicator past 85%.
+    /// </summary>
+    public float OutLapProgress { get; set; }
+}
+
+/// <summary>
+/// Detailed pit status derived from iRacing TrackSurface + OnPitRoad.
+/// </summary>
+public enum PitStatus
+{
+    /// <summary>Not on pit road</summary>
+    None,
+    /// <summary>Entering pit lane (OnPitRoad=true, TrackSurface=ApproachingPits or OnTrack)</summary>
+    Pitting,
+    /// <summary>Stopped in pit box (TrackSurface=InPitStall)</summary>
+    InPit,
+    /// <summary>Leaving pit stall but still on pit road</summary>
+    ExitingPit
 }

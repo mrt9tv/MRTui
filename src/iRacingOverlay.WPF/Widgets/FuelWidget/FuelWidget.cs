@@ -35,11 +35,12 @@ public class FuelWidget : WidgetBase
     private static readonly Color COLOR_TEAL = Color.FromRgb(0, 128, 128);
     private static readonly Color COLOR_ORANGE = Color.FromRgb(255, 128, 0);
     private static readonly Color COLOR_DARK_BG = Color.FromArgb(245, 18, 18, 18);
-    private static readonly Color COLOR_TEXT = Color.FromRgb(240, 240, 240);
-    private static readonly Color COLOR_MUTED = Color.FromRgb(136, 136, 136);
+    private static readonly Color COLOR_TEXT = Color.FromRgb(185, 185, 185);
+    private static readonly Color COLOR_MUTED = Color.FromRgb(120, 120, 120);
     private static readonly Color COLOR_GREEN = Color.FromRgb(0, 200, 83);
     private static readonly Color COLOR_YELLOW = Color.FromRgb(255, 255, 0);
     private static readonly Color COLOR_RED = Color.FromRgb(255, 50, 50);
+    private static readonly Color COLOR_DIM = Color.FromRgb(60, 60, 60);
 
     private static readonly SolidColorBrush BRUSH_TEAL = new(COLOR_TEAL);
     private static readonly SolidColorBrush BRUSH_ORANGE = new(COLOR_ORANGE);
@@ -48,6 +49,7 @@ public class FuelWidget : WidgetBase
     private static readonly SolidColorBrush BRUSH_GREEN = new(COLOR_GREEN);
     private static readonly SolidColorBrush BRUSH_YELLOW = new(COLOR_YELLOW);
     private static readonly SolidColorBrush BRUSH_RED = new(COLOR_RED);
+    private static readonly SolidColorBrush BRUSH_DIM = new(COLOR_DIM);
 
     #endregion
 
@@ -72,6 +74,14 @@ public class FuelWidget : WidgetBase
     // Splutter buffer row
     private Grid _rowBuffer = null!;
     private TextBlock _valBuffer = null!;
+
+    // Predicted pit lap row
+    private Grid _rowPitLap = null!;
+    private TextBlock _valPitLap = null!;
+
+    // Fill amount calculator row
+    private Grid _rowFillAmount = null!;
+    private TextBlock _valFillAmount = null!;
 
     // Saving section
     private TextBlock _valDelta = null!;
@@ -98,7 +108,7 @@ public class FuelWidget : WidgetBase
     /// <summary>Show Last 5 lap average row</summary>
     public bool ShowL5Average { get; set; } = true;
 
-    /// <summary>Show splutter buffer row</summary>
+    /// <summary>Show splutter buffer row (hidden by default — buffer is used in background calculations)</summary>
     public bool ShowBuffer { get; set; } = false;
 
     /// <summary>Show fuel saving section (delta, target, rate, strategy)</summary>
@@ -109,6 +119,18 @@ public class FuelWidget : WidgetBase
 
     /// <summary>Show alert bar</summary>
     public bool ShowAlert { get; set; } = true;
+
+    /// <summary>Show predicted pit lap row</summary>
+    public bool ShowPitLap { get; set; } = false;
+
+    /// <summary>Show fill amount calculator row (fuel needed to finish)</summary>
+    public bool ShowFillAmount { get; set; } = false;
+
+    /// <summary>Buffer laps for fuel calculation (synced with MRT One settings)</summary>
+    public float BufferLaps { get; set; } = 1.0f;
+
+    /// <summary>Manual save target override (L/lap reduction). 0 = auto-calculate.</summary>
+    public float ManualSaveTarget { get; set; } = 0f;
 
     #endregion
 
@@ -159,6 +181,16 @@ public class FuelWidget : WidgetBase
             if (v6 is JsonElement je) ShowAlert = je.ValueKind == JsonValueKind.True;
             else if (v6 is bool b) ShowAlert = b;
         }
+        if (Config.Settings.TryGetValue("showPitLap", out var v7))
+        {
+            if (v7 is JsonElement je) ShowPitLap = je.ValueKind == JsonValueKind.True;
+            else if (v7 is bool b) ShowPitLap = b;
+        }
+        if (Config.Settings.TryGetValue("showFillAmount", out var v8))
+        {
+            if (v8 is JsonElement je) ShowFillAmount = je.ValueKind == JsonValueKind.True;
+            else if (v8 is bool b) ShowFillAmount = b;
+        }
     }
 
     public void SaveSettings()
@@ -170,6 +202,8 @@ public class FuelWidget : WidgetBase
         Config.Settings["showSavingSection"] = ShowSavingSection;
         Config.Settings["showTankPct"] = ShowTankPct;
         Config.Settings["showAlert"] = ShowAlert;
+        Config.Settings["showPitLap"] = ShowPitLap;
+        Config.Settings["showFillAmount"] = ShowFillAmount;
     }
 
     private void InitializeWidget()
@@ -238,6 +272,14 @@ public class FuelWidget : WidgetBase
         _valBuffer = CreateToggleRow("BUFFER", out _rowBuffer);
         _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
 
+        // Predicted pit lap row
+        _valPitLap = CreateToggleRow("PIT LAP", out _rowPitLap);
+        _rowPitLap.Visibility = ShowPitLap ? Visibility.Visible : Visibility.Collapsed;
+
+        // Fill amount calculator row
+        _valFillAmount = CreateToggleRow("FILL AMT", out _rowFillAmount);
+        _rowFillAmount.Visibility = ShowFillAmount ? Visibility.Visible : Visibility.Collapsed;
+
         // Toggleable saving section (separator + 4 rows)
         _savingContainer = new StackPanel();
         _savingContainer.Children.Add(CreateSeparator());
@@ -282,6 +324,8 @@ public class FuelWidget : WidgetBase
         if (ShowL5Average) extraRows++;
         if (ShowBuffer) extraRows++;
         if (ShowTankPct) extraRows++;
+        if (ShowPitLap) extraRows++;
+        if (ShowFillAmount) extraRows++;
 
         // Saving section = separator(5) + 4 rows; alert = separator(5) + alert bar(22)
         double savingHeight = ShowSavingSection ? 5 + (4 * (ROW_HEIGHT + 2)) : 0;
@@ -300,6 +344,8 @@ public class FuelWidget : WidgetBase
         _rowL3.Visibility = ShowL3Average ? Visibility.Visible : Visibility.Collapsed;
         _rowL5.Visibility = ShowL5Average ? Visibility.Visible : Visibility.Collapsed;
         _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
+        _rowPitLap.Visibility = ShowPitLap ? Visibility.Visible : Visibility.Collapsed;
+        _rowFillAmount.Visibility = ShowFillAmount ? Visibility.Visible : Visibility.Collapsed;
         _tankPctContainer.Visibility = ShowTankPct ? Visibility.Visible : Visibility.Collapsed;
         _savingContainer.Visibility = ShowSavingSection ? Visibility.Visible : Visibility.Collapsed;
         _alertContainer.Visibility = ShowAlert ? Visibility.Visible : Visibility.Collapsed;
@@ -393,6 +439,8 @@ public class FuelWidget : WidgetBase
 
         // ── Basic fuel info ─────────────────────────────────────
         _valFuelLevel.Text = fuel.CurrentFuel.ToString("F3", CultureInfo.InvariantCulture) + " L";
+        _valFuelLevel.FontWeight = FontWeights.Normal;
+        _valFuelLevel.Foreground = BRUSH_TEXT;
 
         _valFuelPct.Text = (fuel.FuelPct * 100f).ToString("F0", CultureInfo.InvariantCulture) + "%";
         _valFuelPct.Foreground = fuel.FuelPct switch
@@ -402,17 +450,40 @@ public class FuelWidget : WidgetBase
             _ => BRUSH_TEXT
         };
 
-        // L/Lap (using selected method)
+        // L/Lap — use iRacing SDK estimate until we have real measured data
         float lPerLap = fuel.AvgFuelPerLap;
+        bool usingEstimate = false;
+        if (lPerLap <= 0)
+        {
+            // Try SDK FuelUsePerHour estimate
+            if (data.FuelUsePerHour > 0)
+            {
+                float estLapTime = data.LapBestLapTime > 1.0f ? data.LapBestLapTime
+                    : data.LapLastLapTime > 1.0f ? data.LapLastLapTime
+                    : 90f;
+                lPerLap = (data.FuelUsePerHour / 3600f) * estLapTime;
+                usingEstimate = true;
+            }
+            // Fallback: tank capacity / expected stint laps
+            else if (fuel.CurrentFuel > 0 && fuel.FuelPct > 0)
+            {
+                float tankCapacity = fuel.CurrentFuel / Math.Max(fuel.FuelPct, 0.01f);
+                lPerLap = tankCapacity / 30f; // assume ~30 lap stint
+                usingEstimate = true;
+            }
+        }
         _valLPerLap.Text = lPerLap > 0
-            ? lPerLap.ToString("F3", CultureInfo.InvariantCulture)
+            ? lPerLap.ToString("F3", CultureInfo.InvariantCulture) + (usingEstimate ? " ~est" : "")
             : "--";
+        _valLPerLap.FontWeight = FontWeights.Normal;
+        _valLPerLap.Foreground = BRUSH_TEAL;
 
         // Laps left (already accounts for splutter buffer in calculator)
         float lapsLeft = fuel.LapsRemaining;
         _valLapsLeft.Text = lapsLeft > 0
             ? lapsLeft.ToString("F1", CultureInfo.InvariantCulture)
             : "--";
+        _valLapsLeft.FontWeight = FontWeights.Normal;
         _valLapsLeft.Foreground = lapsLeft switch
         {
             < 1f => BRUSH_RED,
@@ -421,26 +492,66 @@ public class FuelWidget : WidgetBase
             _ => BRUSH_TEXT
         };
 
-        // ── Toggleable average rows ─────────────────────────────
+        // ── Toggleable average rows (dimmed until enough laps) ────
         if (ShowL3Average)
         {
             float l3 = fuel.AvgFuelPerLap_L3;
+            bool hasEnoughL3 = fuel.StintLapCount >= 3;
             _valL3.Text = l3 > 0 ? l3.ToString("F3", CultureInfo.InvariantCulture) : "--";
+            _valL3.Foreground = hasEnoughL3 ? BRUSH_TEXT : BRUSH_DIM;
         }
 
         if (ShowL5Average)
         {
             float l5 = fuel.AvgFuelPerLap_L5;
+            bool hasEnoughL5 = fuel.StintLapCount >= 5;
             _valL5.Text = l5 > 0 ? l5.ToString("F3", CultureInfo.InvariantCulture) : "--";
+            _valL5.Foreground = hasEnoughL5 ? BRUSH_TEXT : BRUSH_DIM;
         }
 
-        // Splutter buffer display
+        // Splutter buffer display (hidden by default — buffer used in background only)
         if (ShowBuffer)
         {
             float threshold = fuel.FuelSputteringThreshold;
             float usable = Math.Max(0, fuel.CurrentFuel - threshold);
             _valBuffer.Text = $"{threshold:F1}L ({usable:F1} usable)";
             _valBuffer.Foreground = usable < 1f ? BRUSH_RED : BRUSH_TEXT;
+        }
+
+        // Predicted pit lap (current lap + fuel laps remaining)
+        if (ShowPitLap)
+        {
+            if (fuel.LapsRemaining > 0 && data.Lap > 0)
+            {
+                int pitLap = data.Lap + (int)Math.Floor(fuel.LapsRemaining);
+                _valPitLap.Text = $"Lap {pitLap}";
+                _valPitLap.Foreground = BRUSH_MUTED; // not highlighted per user request
+            }
+            else
+            {
+                _valPitLap.Text = "--";
+                _valPitLap.Foreground = BRUSH_MUTED;
+            }
+        }
+
+        // Fill amount calculator (fuel needed to finish from current state)
+        if (ShowFillAmount)
+        {
+            if (fuel.HasSufficientData && fuel.FuelToAddAtPit > 0)
+            {
+                _valFillAmount.Text = fuel.FuelToAddAtPit.ToString("F1", CultureInfo.InvariantCulture) + " L";
+                _valFillAmount.Foreground = BRUSH_ORANGE;
+            }
+            else if (fuel.HasSufficientData && fuel.CanFinishWithoutStop)
+            {
+                _valFillAmount.Text = "0 L";
+                _valFillAmount.Foreground = BRUSH_GREEN;
+            }
+            else
+            {
+                _valFillAmount.Text = "--";
+                _valFillAmount.Foreground = BRUSH_MUTED;
+            }
         }
 
         // ── Fuel saving section ─────────────────────────────────
@@ -450,6 +561,7 @@ public class FuelWidget : WidgetBase
         {
             string sign = projDelta >= 0 ? "+" : "";
             _valDelta.Text = sign + projDelta.ToString("F2", CultureInfo.InvariantCulture) + " L";
+            _valDelta.FontWeight = FontWeights.Normal;
             _valDelta.Foreground = projDelta switch
             {
                 >= 1f => BRUSH_GREEN,
@@ -460,18 +572,25 @@ public class FuelWidget : WidgetBase
         else
         {
             _valDelta.Text = "--";
+            _valDelta.FontWeight = FontWeights.Normal;
             _valDelta.Foreground = BRUSH_MUTED;
         }
 
         // Saving target (L/lap reduction needed)
-        if (fuel.NeedsFuelSaving && fuel.FuelSavingTarget > 0)
+        // Use manual override if set, otherwise auto-calculated
+        float savingTarget = ManualSaveTarget > 0 ? ManualSaveTarget : fuel.FuelSavingTarget;
+        bool needsSaving = ManualSaveTarget > 0 || fuel.NeedsFuelSaving;
+        if (needsSaving && savingTarget > 0)
         {
-            _valSavingTarget.Text = "-" + fuel.FuelSavingTarget.ToString("F3", CultureInfo.InvariantCulture) + " L";
+            string prefix = ManualSaveTarget > 0 ? "*-" : "-";
+            _valSavingTarget.Text = prefix + savingTarget.ToString("F3", CultureInfo.InvariantCulture) + " L";
+            _valSavingTarget.FontWeight = FontWeights.Normal;
             _valSavingTarget.Foreground = fuel.CanSaveFuelToFinish ? BRUSH_ORANGE : BRUSH_RED;
         }
         else
         {
             _valSavingTarget.Text = fuel.HasSufficientData ? "OK" : "--";
+            _valSavingTarget.FontWeight = FontWeights.Normal;
             _valSavingTarget.Foreground = fuel.HasSufficientData ? BRUSH_GREEN : BRUSH_MUTED;
         }
 
@@ -502,23 +621,27 @@ public class FuelWidget : WidgetBase
             if (!fuel.CanSaveFuelToFinish)
             {
                 _valStrategy.Text = "PIT";
+                _valStrategy.FontWeight = FontWeights.Bold;
                 _valStrategy.Foreground = BRUSH_RED;
             }
             else if (fuel.IsPittingFaster)
             {
                 float delta = fuel.StrategyTimeDelta;
                 _valStrategy.Text = $"PIT +{delta:F1}s";
+                _valStrategy.FontWeight = FontWeights.SemiBold;
                 _valStrategy.Foreground = BRUSH_ORANGE;
             }
             else
             {
                 _valStrategy.Text = "SAVE";
+                _valStrategy.FontWeight = FontWeights.SemiBold;
                 _valStrategy.Foreground = BRUSH_GREEN;
             }
         }
         else
         {
             _valStrategy.Text = fuel.HasSufficientData ? "CLEAR" : "--";
+            _valStrategy.FontWeight = FontWeights.Normal;
             _valStrategy.Foreground = fuel.HasSufficientData ? BRUSH_GREEN : BRUSH_MUTED;
         }
 

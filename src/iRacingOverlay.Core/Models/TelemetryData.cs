@@ -789,6 +789,12 @@ public class TelemetryData
     /// Used for qualifying/practice position calculation
     /// </summary>
     public float[]? CarIdxBestLapTime { get; set; }
+
+    /// <summary>
+    /// Per-car session flags bitfield (irsdk_Flags). Array of 64 ints.
+    /// Bits: Black=0x10000, DSQ=0x20000, Repair/Meatball=0x100000
+    /// </summary>
+    public int[]? CarIdxSessionFlags { get; set; }
     
     /// <summary>
     /// Map of CarIdx to Car Number string (from YAML DriverInfo:Drivers)
@@ -801,6 +807,44 @@ public class TelemetryData
     /// Used for competitor intelligence (e.g., "Lewis Hamilton pitting on Lap 12")
     /// </summary>
     public Dictionary<int, string>? CarIdxToDriverName { get; set; }
+
+    /// <summary>
+    /// Map of CarIdx to iRating (from YAML DriverInfo:Drivers)
+    /// </summary>
+    public Dictionary<int, int>? CarIdxToIRating { get; set; }
+
+    /// <summary>
+    /// Map of CarIdx to Safety Rating float (from YAML DriverInfo:Drivers)
+    /// </summary>
+    public Dictionary<int, float>? CarIdxToSafetyRating { get; set; }
+
+    /// <summary>
+    /// Map of CarIdx to License Class string (from YAML DriverInfo:Drivers)
+    /// e.g., "A", "B", "C", "D", "R", "Pro", "WC"
+    /// </summary>
+    public Dictionary<int, string>? CarIdxToLicenseClass { get; set; }
+
+    /// <summary>
+    /// Map of CarIdx to cumulative incident count (CurDriverIncidentCount from session info).
+    /// Updates on each session info refresh.
+    /// </summary>
+    public Dictionary<int, int>? CarIdxToIncidentCount { get; set; }
+
+    /// <summary>
+    /// Flags per CarIdx: true if driver gained incidents since last session info update.
+    /// Cleared automatically after a few seconds. Only for non-player cars.
+    /// </summary>
+    public bool[]? CarIdxRecentIncident { get; set; }
+
+    /// <summary>
+    /// Per-car recent incident delta (how many x incidents gained in the last event, e.g. 2 = 2x, 4 = 4x).
+    /// </summary>
+    public int[]? CarIdxRecentIncidentDelta { get; set; }
+
+    /// <summary>
+    /// Map of CarIdx to short car model name (3-letter abbreviation from session info).
+    /// </summary>
+    public Dictionary<int, string>? CarIdxToCarModel { get; set; }
 
     /// <summary>
     /// Player heading angle in radians (yaw around Z-axis)

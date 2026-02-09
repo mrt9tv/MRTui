@@ -149,6 +149,11 @@ public static class ShiftPointCalculator
             return RPMZone.Safe;
         }
         
+        // Guard: If SDK hasn't provided ANY shift light data yet (session loading, garage exit),
+        // stay Safe (Teal) to avoid false Warning color from stale learning data
+        if (shiftFirstRPM <= 0 && shiftOptimalRPM <= 0 && shiftBlinkRPM <= 0)
+            return RPMZone.Safe;
+
         // PHASE 1: Use iRacing's professional shift light values if available
         // These are car-specific and based on actual engine physics/torque curves
         if (shiftOptimalRPM > 0 && shiftBlinkRPM > 0)

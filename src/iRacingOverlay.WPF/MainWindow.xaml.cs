@@ -14,6 +14,7 @@ using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Utils;
 using MRTOne = iRacingOverlay.WPF.Widgets.MRTOneWidget.MRTOneWidget;
 using TurnDisplay = iRacingOverlay.WPF.Widgets.TurnDisplayWidget.TurnDisplayWidget;
+using RelativeW = iRacingOverlay.WPF.Widgets.RelativeWidget.RelativeWidget;
 
 namespace iRacingOverlay.WPF;
 
@@ -78,39 +79,53 @@ public partial class MainWindow : Window
 
     // ── Widget selector ─────────────────────────────────────────────────
 
-    /// <summary>
-    /// Display item for the widget type selector combo box.
-    /// </summary>
-    private record WidgetTypeItem(string DisplayName, WidgetType Type);
+    /// <summary>Currently selected widget type from menu buttons.</summary>
+    private WidgetType _selectedWidgetType = WidgetType.MRTOne;
+
+    /// <summary>Map menu buttons to widget types.</summary>
+    private readonly Dictionary<string, WidgetType> _widgetButtonMap = new()
+    {
+        { "BtnWidgetMRTOne", WidgetType.MRTOne },
+        { "BtnWidgetTurnDisplay", WidgetType.TurnDisplay },
+        { "BtnWidgetFuel", WidgetType.FuelCalculator },
+        { "BtnWidgetRelative", WidgetType.Relative },
+    };
 
     private void PopulateWidgetSelector()
     {
-        // Register all known widget types (add new ones here as they're created)
-        var items = new List<WidgetTypeItem>
-        {
-            new("MRT One", WidgetType.MRTOne),
-            new("Turn Display", WidgetType.TurnDisplay),
-            new("Fuel Calculator", WidgetType.FuelCalculator),
-            new("Relative", WidgetType.Relative),
-        };
-
-        CboActiveWidget.ItemsSource = items;
-        CboActiveWidget.DisplayMemberPath = "DisplayName";
-
-        // Select first by default
-        if (items.Count > 0)
-            CboActiveWidget.SelectedIndex = 0;
+        // Highlight the default button
+        HighlightActiveMenuButton();
     }
 
-    private void CboActiveWidget_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void WidgetMenuButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_suppressControlEvents) return;
-        SyncPanelToActiveWidget();
+        if (sender is not Button btn) return;
+        if (_widgetButtonMap.TryGetValue(btn.Name, out var type))
+        {
+            _selectedWidgetType = type;
+            HighlightActiveMenuButton();
+            SyncPanelToActiveWidget();
+        }
     }
+
+    /// <summary>Highlight the active widget menu button with teal foreground.</summary>
+    private void HighlightActiveMenuButton()
+    {
+        var tealBrush = FindResource("TealPrimary") as SolidColorBrush ?? BRUSH_TEAL_STATIC;
+        var normalBrush = FindResource("LightText") as SolidColorBrush ?? new SolidColorBrush(Colors.White);
+        foreach (var kvp in _widgetButtonMap)
+        {
+            var btn = FindName(kvp.Key) as Button;
+            if (btn != null)
+                btn.Foreground = kvp.Value == _selectedWidgetType ? tealBrush : normalBrush;
+        }
+    }
+
+    private static readonly SolidColorBrush BRUSH_TEAL_STATIC = new(Color.FromRgb(0, 128, 128));
 
     private WidgetType? GetSelectedWidgetType()
     {
-        return (CboActiveWidget?.SelectedItem as WidgetTypeItem)?.Type;
+        return _selectedWidgetType;
     }
 
     // ── Field combo population ──────────────────────────────────────────
@@ -153,6 +168,9 @@ public partial class MainWindow : Window
         MRTOneRightPanel.Visibility = widgetType == WidgetType.MRTOne ? Visibility.Visible : Visibility.Collapsed;
         TurnDisplayPanel.Visibility = widgetType == WidgetType.TurnDisplay ? Visibility.Visible : Visibility.Collapsed;
         FuelCalculatorPanel.Visibility = widgetType == WidgetType.FuelCalculator ? Visibility.Visible : Visibility.Collapsed;
+        FuelCalcRightPanel.Visibility = widgetType == WidgetType.FuelCalculator ? Visibility.Visible : Visibility.Collapsed;
+        RelativePanel.Visibility = widgetType == WidgetType.Relative ? Visibility.Visible : Visibility.Collapsed;
+        RelativeRightPanel.Visibility = widgetType == WidgetType.Relative ? Visibility.Visible : Visibility.Collapsed;
 
         if (widgetType == WidgetType.MRTOne)
             SyncPanelToMRTOne();
@@ -160,6 +178,8 @@ public partial class MainWindow : Window
             SyncPanelToTurnDisplay();
         else if (widgetType == WidgetType.FuelCalculator)
             SyncPanelToFuelCalculator();
+        else if (widgetType == WidgetType.Relative)
+            SyncPanelToRelative();
     }
 
     private void SyncPanelToMRTOne()
@@ -189,6 +209,10 @@ public partial class MainWindow : Window
             ChkGlow.IsChecked = s.EnableGlowEffects;
             ChkPitLimiter.IsChecked = s.EnablePitLimiterIndicator;
             ChkEnhancedRadar.IsChecked = s.EnableEnhancedRadar;
+
+            // Opacity
+            SliderMRTOneOpacity.Value = widget.Opacity * 100;
+            TxtMRTOneOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
 
             // Fuel alert toggles and sliders
             ChkFuelYellow.IsChecked = _fuelAlertSettings.EnableYellowAlert;
@@ -243,6 +267,8 @@ public partial class MainWindow : Window
         {
             ChkShowTurnNames.IsChecked = widget.ShowTurnName;
             ChkAnimateBorder.IsChecked = widget.AnimateBorder;
+            SliderTurnOpacity.Value = widget.Opacity * 100;
+            TxtTurnOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
         }
         finally
         {
@@ -447,7 +473,11 @@ public partial class MainWindow : Window
         {
             ChkFuelL3.IsChecked = widget.ShowL3Average;
             ChkFuelL5.IsChecked = widget.ShowL5Average;
-            ChkFuelBuffer.IsChecked = widget.ShowBuffer;
+            ChkFuelSaving.IsChecked = widget.ShowSavingSection;
+            ChkFuelPitLap.IsChecked = widget.ShowPitLap;
+            ChkFuelFillAmount.IsChecked = widget.ShowFillAmount;
+            SliderFuelOpacity.Value = widget.Opacity * 100;
+            TxtFuelOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
         }
         finally
         {
@@ -471,10 +501,166 @@ public partial class MainWindow : Window
 
         widget.ShowL3Average = ChkFuelL3.IsChecked == true;
         widget.ShowL5Average = ChkFuelL5.IsChecked == true;
-        widget.ShowBuffer = ChkFuelBuffer.IsChecked == true;
+        widget.ShowSavingSection = ChkFuelSaving.IsChecked == true;
+        widget.ShowPitLap = ChkFuelPitLap.IsChecked == true;
+        widget.ShowFillAmount = ChkFuelFillAmount.IsChecked == true;
         widget.ApplyToggles();
         widget.SaveSettings();
         _widgetManager.SaveCurrentLayout();
+    }
+
+    // ── Relative panel sync ─────────────────────────────────────────────
+
+    private void SyncPanelToRelative()
+    {
+        var widget = GetActiveRelativeWidget();
+        if (widget == null) return;
+
+        _suppressControlEvents = true;
+        try
+        {
+            SliderMaxAhead.Value = widget.MaxAhead;
+            SliderMaxBehind.Value = widget.MaxBehind;
+            TxtMaxAhead.Text = widget.MaxAhead.ToString();
+            TxtMaxBehind.Text = widget.MaxBehind.ToString();
+            ChkSmartRowCount.IsChecked = widget.UseSmartRowCount;
+            ChkShowClassPosition.IsChecked = widget.ShowClassPosition;
+            ChkShowDriverInfo.IsChecked = widget.ShowDriverInfo;
+            ChkShowCarNumber.IsChecked = widget.ShowCarNumber;
+            ChkShowCarModel.IsChecked = widget.ShowCarModel;
+            ChkShowInterval.IsChecked = widget.ShowInterval;
+            ChkShowLastLap.IsChecked = widget.ShowLastLap;
+            ChkShowAltRowShading.IsChecked = widget.ShowAlternateRowShading;
+            ChkShowInfoBar.IsChecked = widget.ShowInfoBar;
+            CboNameFormat.SelectedIndex = (int)widget.DriverNameFormat;
+            SliderRelativeOpacity.Value = widget.Opacity * 100;
+            TxtRelativeOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
+        }
+        finally
+        {
+            _suppressControlEvents = false;
+        }
+    }
+
+    private RelativeW? GetActiveRelativeWidget()
+    {
+        if (_widgetManager == null) return null;
+        if (!_widgetManager.HasWidgetType(WidgetType.Relative)) return null;
+        return _widgetManager.GetWidgetsByType(WidgetType.Relative)
+                             .FirstOrDefault() as RelativeW;
+    }
+
+    private void RelativeToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveRelativeWidget();
+        if (widget == null) return;
+
+        widget.UseSmartRowCount = ChkSmartRowCount.IsChecked == true;
+        widget.ShowClassPosition = ChkShowClassPosition.IsChecked == true;
+        widget.ShowDriverInfo = ChkShowDriverInfo.IsChecked == true;
+        widget.ShowCarNumber = ChkShowCarNumber.IsChecked == true;
+        widget.ShowCarModel = ChkShowCarModel.IsChecked == true;
+        widget.ShowInterval = ChkShowInterval.IsChecked == true;
+        widget.ShowLastLap = ChkShowLastLap.IsChecked == true;
+        widget.ShowAlternateRowShading = ChkShowAltRowShading.IsChecked == true;
+        widget.ShowInfoBar = ChkShowInfoBar.IsChecked == true;
+        widget.RecalcLayout();
+        widget.RecalcHeight();
+        widget.SaveSettings();
+        _widgetManager.SaveCurrentLayout();
+    }
+
+    private void RelativeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveRelativeWidget();
+        if (widget == null) return;
+
+        widget.MaxAhead = (int)SliderMaxAhead.Value;
+        widget.MaxBehind = (int)SliderMaxBehind.Value;
+
+        // Update display labels
+        if (TxtMaxAhead != null) TxtMaxAhead.Text = widget.MaxAhead.ToString();
+        if (TxtMaxBehind != null) TxtMaxBehind.Text = widget.MaxBehind.ToString();
+
+        widget.SaveSettings();
+        _widgetManager.SaveCurrentLayout();
+    }
+
+    private void CboNameFormat_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveRelativeWidget();
+        if (widget == null) return;
+
+        if (CboNameFormat.SelectedItem is ComboBoxItem item && item.Tag is string tagStr && int.TryParse(tagStr, out var idx))
+        {
+            widget.DriverNameFormat = (RelativeW.NameFormat)idx;
+            widget.SaveSettings();
+            _widgetManager.SaveCurrentLayout();
+        }
+    }
+
+    // ── Per-widget opacity sliders ──────────────────────────────────────
+
+    private void MRTOneOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        if (TxtMRTOneOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtMRTOneOpacity.Text = $"{pct}%";
+        var widget = GetActiveMRTOneWidget();
+        if (widget != null) widget.Opacity = pct / 100.0;
+    }
+
+    private void TurnOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        if (TxtTurnOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtTurnOpacity.Text = $"{pct}%";
+        var widget = GetActiveTurnDisplayWidget();
+        if (widget != null) widget.Opacity = pct / 100.0;
+    }
+
+    private void FuelOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        if (TxtFuelOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtFuelOpacity.Text = $"{pct}%";
+        var widget = GetActiveFuelWidget();
+        if (widget != null) widget.Opacity = pct / 100.0;
+    }
+
+    private void RelativeOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        if (TxtRelativeOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtRelativeOpacity.Text = $"{pct}%";
+        var widget = GetActiveRelativeWidget();
+        if (widget != null) widget.Opacity = pct / 100.0;
+    }
+
+    // ── Menu column collapse ────────────────────────────────────────────
+
+    private bool _menuCollapsed = false;
+
+    private void BtnToggleMenu_Click(object sender, RoutedEventArgs e)
+    {
+        _menuCollapsed = !_menuCollapsed;
+        if (_menuCollapsed)
+        {
+            MenuColumn.Width = new GridLength(0);
+            MenuBorder.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            MenuColumn.Width = new GridLength(160);
+            MenuBorder.Visibility = Visibility.Visible;
+        }
     }
 
     // ── Connection status ───────────────────────────────────────────────
@@ -486,7 +672,7 @@ public partial class MainWindow : Window
 
     private void UpdateConnectionStatus(ConnectionStatus status)
     {
-        ConnectionStatusText.Text = status switch
+        var text = status switch
         {
             ConnectionStatus.Connected => "Connected",
             ConnectionStatus.Connecting => "Connecting...",
@@ -494,18 +680,27 @@ public partial class MainWindow : Window
             _ => "Unknown"
         };
 
-        ConnectionStatusText.Foreground = new SolidColorBrush(status switch
+        var brush = new SolidColorBrush(status switch
         {
             ConnectionStatus.Connected => Color.FromRgb(0, 188, 212),
             ConnectionStatus.Connecting => Color.FromRgb(255, 152, 0),
             _ => Color.FromRgb(136, 136, 136)
         });
+
+        ConnectionStatusText.Text = text;
+        ConnectionStatusText.Foreground = brush;
+
+        // Mirror to sidebar
+        MenuConnectionText.Text = text;
+        MenuConnectionText.Foreground = brush;
     }
 
     private void UpdateUpdateRateDisplay()
     {
         var rate = _telemetryService.UpdateRate;
-        UpdateRateText.Text = rate > 0 ? $"{rate:F0} Hz" : "0 Hz";
+        var rateText = rate > 0 ? $"{rate:F0} Hz" : "0 Hz";
+        UpdateRateText.Text = rateText;
+        MenuRateText.Text = rateText;
     }
 
     // ── Global hotkeys ──────────────────────────────────────────────────
