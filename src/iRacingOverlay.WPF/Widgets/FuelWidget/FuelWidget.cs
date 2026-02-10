@@ -450,25 +450,21 @@ public class FuelWidget : WidgetBase
             _ => BRUSH_TEXT
         };
 
-        // L/Lap — use iRacing SDK estimate until we have real measured data
+        // L/Lap — prefer measured data, fall back to blended estimate from calculator
         float lPerLap = fuel.AvgFuelPerLap;
         bool usingEstimate = false;
         if (lPerLap <= 0)
         {
-            // Try SDK FuelUsePerHour estimate
-            if (data.FuelUsePerHour > 0)
+            // Use the calculator's effective average (includes SDK early-lap blending)
+            if (fuel.EffectiveAvgFuelPerLap > 0)
             {
-                float estLapTime = data.LapBestLapTime > 1.0f ? data.LapBestLapTime
-                    : data.LapLastLapTime > 1.0f ? data.LapLastLapTime
-                    : 90f;
-                lPerLap = (data.FuelUsePerHour / 3600f) * estLapTime;
-                usingEstimate = true;
+                lPerLap = fuel.EffectiveAvgFuelPerLap;
+                usingEstimate = fuel.LapsCompleted < 3; // mark as estimate until 3 clean laps
             }
-            // Fallback: tank capacity / expected stint laps
-            else if (fuel.CurrentFuel > 0 && fuel.FuelPct > 0)
+            // Last resort: raw SDK estimate
+            else if (fuel.SdkFuelEstimate > 0)
             {
-                float tankCapacity = fuel.CurrentFuel / Math.Max(fuel.FuelPct, 0.01f);
-                lPerLap = tankCapacity / 30f; // assume ~30 lap stint
+                lPerLap = fuel.SdkFuelEstimate;
                 usingEstimate = true;
             }
         }
@@ -555,9 +551,16 @@ public class FuelWidget : WidgetBase
         }
 
         // ── Fuel saving section ─────────────────────────────────
-        // Projected delta (surplus/deficit at finish)
+        // Projected delta (surplus/deficit at finish, accounting for sputtering)
+        // SavingService sets ProjectedFuelDelta; fall back to Calculator's FuelDeltaToFinish
         float projDelta = fuel.ProjectedFuelDelta;
-        if (fuel.HasSufficientData && (fuel.RaceLapsRemaining > 0 || fuel.IsTimedSession))
+        bool hasDelta = fuel.HasSufficientData && (fuel.RaceLapsRemaining > 0 || fuel.IsTimedSession || fuel.EstimatedTotalRaceLaps > 0);
+        if (hasDelta && Math.Abs(projDelta) < 0.001f && Math.Abs(fuel.FuelDeltaToFinish) > 0.001f)
+        {
+            // SavingService didn't compute a delta but Calculator did — use that
+            projDelta = fuel.FuelDeltaToFinish;
+        }
+        if (hasDelta)
         {
             string sign = projDelta >= 0 ? "+" : "";
             _valDelta.Text = sign + projDelta.ToString("F2", CultureInfo.InvariantCulture) + " L";

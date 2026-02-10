@@ -39,10 +39,26 @@ public sealed class FuelSavingService
     private int _lastLapSeen = -1;
 
     /// <summary>
+    /// Reset all fuel saving state. Called when session/car/track changes.
+    /// </summary>
+    public void Reset()
+    {
+        _recentConsumption.Clear();
+        _lastLapFuelUsed = 0;
+        _lastLapSeen = -1;
+    }
+
+    /// <summary>
     /// Update fuel saving calculations. Call after FuelCalculatorService.Update().
     /// </summary>
     public void Update(FuelData fuel)
     {
+        // ── auto-detect session reset (FuelCalculatorService resets LapsCompleted to 0) ──
+        if (fuel.LapsCompleted == 0 && _lastLapSeen > 0)
+        {
+            Reset();
+        }
+
         // ── guard: not enough data yet ──────────────────────────────
         // Allow through if SDK estimate is available (early-lap support)
         if (!fuel.HasSufficientData || fuel.AvgFuelPerLap <= 0)
@@ -58,9 +74,15 @@ public sealed class FuelSavingService
         // Track per-lap actual consumption for recent window
         TrackRecentConsumption(fuel);
 
-        float avg = fuel.AvgFuelPerLap > 0 ? fuel.AvgFuelPerLap : fuel.SdkFuelEstimate; // fallback to SDK for early laps
+        // Use the blended effective average (accounts for SDK early-lap blending)
+        // Falls back to SDK estimate if no measured data at all.
+        float avg = fuel.EffectiveAvgFuelPerLap > 0
+            ? fuel.EffectiveAvgFuelPerLap
+            : (fuel.AvgFuelPerLap > 0 ? fuel.AvgFuelPerLap : fuel.SdkFuelEstimate);
         float min = fuel.MinFuelPerLap;           // best efficiency ever achieved
         float current = fuel.CurrentFuel;
+        float sputterThreshold = fuel.FuelSputteringThreshold;
+        float usableFuel = Math.Max(0, current - sputterThreshold);
         float avgLapTime = fuel.AverageLapTime;
 
         // ── determine effective laps remaining ──────────────────────
@@ -72,7 +94,11 @@ public sealed class FuelSavingService
         }
 
         // ── core: can we finish at current pace? ────────────────────
-        float fuelNeededAtAvg = effectiveRaceLaps * avg;
+        // Include buffer laps in the projection so PROJ DELTA and FILL AMT agree.
+        // Without this, PROJ DELTA shows a surplus while FILL AMT shows fuel needed,
+        // which is confusing (FILL AMT includes buffer, PROJ DELTA didn't).
+        float bufferFuel = fuel.FuelBufferLaps * avg;
+        float fuelNeededAtAvg = effectiveRaceLaps * avg + bufferFuel + sputterThreshold;
         float fuelDelta = current - fuelNeededAtAvg;
 
         fuel.NeedsFuelSaving = fuelDelta < 0;
@@ -102,7 +128,10 @@ public sealed class FuelSavingService
         // The saving range is between average and minimum ever achieved.
         // Allow a small extrapolation (10%) beyond min, since lift & coast
         // at additional corners can beat the historical min.
-        float savableRange = avg - (min * 0.90f);
+        // Guard: if min is 0 (no laps yet), cap savable range to MAX_SAVING_FRACTION
+        // to avoid falsely suggesting 100% saving is possible.
+        float effectiveMin = min > 0 ? min : avg * (1f - MAX_SAVING_FRACTION);
+        float savableRange = avg - (effectiveMin * 0.90f);
         fuel.CanSaveFuelToFinish = savableRange > 0 && savingNeeded <= savableRange;
 
         // ── current saving rate (recent laps vs average) ────────────
@@ -121,8 +150,10 @@ public sealed class FuelSavingService
         fuel.FuelSavingWorking = fuel.CurrentSavingRate >= savingNeeded;
 
         // ── projected fuel at finish ────────────────────────────────
+        // Use usable fuel (minus sputtering) and include buffer at RACE PACE (avg),
+        // not at saving rate. Buffer is a safety margin for resuming normal pace.
         float effectiveRate = recentAvg > 0 ? recentAvg : avg;
-        float projectedFuelAtFinish = current - (effectiveRate * effectiveRaceLaps);
+        float projectedFuelAtFinish = usableFuel - (effectiveRate * effectiveRaceLaps) - (fuel.FuelBufferLaps * avg);
         fuel.ProjectedFuelDelta = projectedFuelAtFinish;
 
         // ── saving progress (0-100%) ────────────────────────────────
@@ -192,8 +223,8 @@ public sealed class FuelSavingService
         if (fuel.IsTimedSession && fuel.AverageLapTime > 10f)
             return (int)Math.Ceiling(fuel.SessionTimeRemaining / fuel.AverageLapTime);
 
-        // Early in session with estimated total available
-        if (fuel.EstimatedTotalRaceLaps > 0 && fuel.CurrentLap > 0)
+        // Early in session with estimated total available (CurrentLap can be 0 on first lap)
+        if (fuel.EstimatedTotalRaceLaps > 0 && fuel.CurrentLap >= 0)
         {
             int remaining = fuel.EstimatedTotalRaceLaps - fuel.CurrentLap;
             return remaining > 0 ? remaining : 0;

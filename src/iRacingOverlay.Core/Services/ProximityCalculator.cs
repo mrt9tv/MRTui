@@ -7,18 +7,23 @@ namespace iRacingOverlay.Core.Services;
 /// </summary>
 public class ProximityCalculator
 {
-    // Distance thresholds in METERS for color zones - RACING-TIGHT
-    // Tuned for earlier detection to prevent rear-end collisions
-    private const float VERY_CLOSE_THRESHOLD = 5f;    // <5m - CRITICAL (blinking red, whole radar blinks)
-    private const float CLOSE_THRESHOLD = 9f;         // 5-9m - WARNING (red arcs, slow blink)
-    private const float NEAR_THRESHOLD = 14f;         // 9-14m - CAUTION (orange)
-    private const float CAREFUL_THRESHOLD = 20f;      // 14-20m - CAREFUL (yellow, first ring as early warning)
+    // Distance thresholds in METERS for color zones - ORIGINAL (proven in testing)
+    // Rings activate late and blink just before contact — no false alarms
+    private const float VERY_CLOSE_THRESHOLD = 4f;    // <4m - CRITICAL (all 6 rings, intense blink)
+    private const float CLOSE_THRESHOLD = 7f;         // 4-7m - WARNING (5 rings, slow blink)
+    private const float NEAR_THRESHOLD = 12f;         // 7-12m - CAUTION (3 rings, orange)
+    private const float CAREFUL_THRESHOLD = 16f;      // 12-16m - CAREFUL (1 ring, yellow)
     
     // Detection range: Use PERCENTAGE of track, not fixed meters!
     // This works on all track sizes (small ovals to Nordschleife)
     private const float DETECTION_PERCENTAGE = 0.25f;  // Detect cars within 25% of track ahead/behind
     private const float MIN_DETECTION_DISTANCE = 300f; // Minimum 300m even on tiny tracks
     private const float MAX_DETECTION_DISTANCE = 2000f; // Maximum 2000m even on huge tracks
+
+    // Per-frame cache to avoid scanning all 64 cars multiple times per tick
+    // (GetFrontZone + GetRearZone both call GetNearbyCars — cache avoids double scan)
+    private double _cachedSessionTime = -1;
+    private List<ProximityInfo>? _cachedNearbyCars;
     
     /// <summary>
     /// Calculate relative distance between player and another car in METERS
@@ -60,20 +65,20 @@ public class ProximityCalculator
     public ProximityZone ClassifyDistance(float absoluteDistance)
     {
         if (absoluteDistance < VERY_CLOSE_THRESHOLD)
-            return ProximityZone.VeryClose;  // <5m - Blinking Red (whole radar)
+            return ProximityZone.VeryClose;  // <4m - All rings, intense blink
         
         if (absoluteDistance < CLOSE_THRESHOLD)
-            return ProximityZone.Close;      // 5-9m - Red (slow blink innermost ring)
+            return ProximityZone.Close;      // 4-7m - 5 rings, slow blink
         
         if (absoluteDistance < NEAR_THRESHOLD)
-            return ProximityZone.Near;       // 9-14m - Orange
+            return ProximityZone.Near;       // 7-12m - 3 rings, orange
         
         if (absoluteDistance < CAREFUL_THRESHOLD)
-            return ProximityZone.Careful;    // 14-20m - Yellow
+            return ProximityZone.Careful;    // 12-16m - 1 ring, yellow
         
         // Far zone is anything beyond CAREFUL but still within detection range
         // (detection range is dynamically calculated based on track length)
-        return ProximityZone.Far;            // >16m - Green
+        return ProximityZone.Far;            // >16m - No rings (just detection)
     }
     
     /// <summary>
@@ -101,6 +106,14 @@ public class ProximityCalculator
         int maxCars = 5,
         bool sameClassOnly = false)
     {
+        // Per-frame cache: if same telemetry tick, reuse previous scan result
+        // SessionTime advances each tick at 60Hz, so same value = same frame
+        double sessionTime = data.SessionTime;
+        if (sessionTime == _cachedSessionTime && _cachedNearbyCars != null)
+        {
+            return _cachedNearbyCars.Take(maxCars).ToList();
+        }
+
         var nearbyCars = new List<ProximityInfo>();
         
         // Validate data
@@ -125,17 +138,7 @@ public class ProximityCalculator
         int playerLap = data.CarIdxLap[playerIdx];
         int playerClass = data.PlayerCarClass;
         
-        // DEBUG: Log detection parameters
-        bool enableDebug = trackLength > 3000 && trackLength < 3200; // Only log on this specific track
-        if (enableDebug)
-        {
-            Console.WriteLine($"[PROXIMITY_DEBUG] TrackLength={trackLength:F1}m, DetectionRange={detectionRange:F0}m");
-            Console.WriteLine($"[PROXIMITY_DEBUG] Player: Idx={playerIdx}, Pct={playerPct:F4}, Lap={playerLap}");
-        }
-        
         int carsScanned = 0;
-        int carsSkippedInvalid = 0;
-        int carsSkippedPit = 0;
         int carsSkippedDistance = 0;
         
         // Scan all cars
@@ -149,17 +152,11 @@ public class ProximityCalculator
             
             // Skip invalid positions (car not on track)
             if (carPct < 0 || carPct > 1.0f)
-            {
-                carsSkippedInvalid++;
                 continue;
-            }
             
             // Skip cars on pit road if data available
             if (data.CarIdxOnPitRoad?[carIdx] == true)
-            {
-                carsSkippedPit++;
                 continue;
-            }
             
             int carLap = data.CarIdxLap?[carIdx] ?? 0;
             int carClass = data.CarIdxClass?[carIdx] ?? 0;
@@ -173,11 +170,6 @@ public class ProximityCalculator
             // Calculate relative distance in METERS (LAP-INDEPENDENT - uses circular track logic)
             float relativeDistance = CalculateRelativeDistance(playerPct, carPct, trackLength);
             float absoluteDistance = Math.Abs(relativeDistance);
-            
-            if (enableDebug && carsScanned <= 5)
-            {
-                Console.WriteLine($"[PROXIMITY_DEBUG] Car#{carIdx}: Pct={carPct:F4}, Lap={carLap}, RelDist={relativeDistance:F0}m, AbsDist={absoluteDistance:F0}m vs Range={detectionRange:F0}m");
-            }
             
             // Skip cars outside detection range (dynamic based on track length)
             if (absoluteDistance > detectionRange)
@@ -206,12 +198,10 @@ public class ProximityCalculator
         // Sort by absolute distance (closest first)
         nearbyCars.Sort((a, b) => a.AbsoluteDistance.CompareTo(b.AbsoluteDistance));
         
-        // DEBUG: Log summary
-        if (enableDebug)
-        {
-            Console.WriteLine($"[PROXIMITY_DEBUG] SUMMARY: Scanned={carsScanned}, Found={nearbyCars.Count}, SkippedInvalid={carsSkippedInvalid}, SkippedPit={carsSkippedPit}, SkippedDistance={carsSkippedDistance}");
-        }
-        
+        // Cache for this frame (avoids re-scanning in GetFrontZone + GetRearZone)
+        _cachedSessionTime = sessionTime;
+        _cachedNearbyCars = nearbyCars;
+
         // Return top N cars
         return nearbyCars.Take(maxCars).ToList();
     }

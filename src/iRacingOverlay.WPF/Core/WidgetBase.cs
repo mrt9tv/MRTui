@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Models;
@@ -248,13 +249,17 @@ public abstract class WidgetBase : Window
 
     /// <summary>
     /// Handle telemetry updates (thread-safe via Dispatcher)
+    /// Uses BeginInvoke (async) instead of Invoke (blocking) so the 60Hz telemetry
+    /// thread isn't held up waiting for each widget's UI update to complete.
+    /// This ensures radar and other time-critical visuals run at full 60Hz rate.
     /// </summary>
     private void OnTelemetryUpdated(object? sender, TelemetryData data)
     {
         _lastTelemetryData = data;
 
-        // Update UI on UI thread
-        Dispatcher.Invoke(() =>
+        // Queue UI update asynchronously at Render priority (high but below Input)
+        // This prevents the telemetry thread from blocking on each widget
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
         {
             UpdateUI(data);
         });

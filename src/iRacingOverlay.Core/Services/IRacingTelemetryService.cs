@@ -760,6 +760,11 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // Update fuel saving calculations (lift & coast requirements)
             _fuelSavingService.Update(_fuelCalculatorService.CurrentData);
 
+            // Propagate calculated estimates from fuel calculator back to telemetry data
+            // so downstream widgets (Relative, etc.) can use them without accessing FuelData directly
+            data.EstimatedTotalRaceLaps = _fuelCalculatorService.CurrentData.EstimatedTotalRaceLaps;
+            data.SessionLapsRemainEx = _fuelCalculatorService.CurrentData.EstimatedLapsFromTime;
+
             // Fire our telemetry event
             TelemetryUpdated?.Invoke(this, data);
         }

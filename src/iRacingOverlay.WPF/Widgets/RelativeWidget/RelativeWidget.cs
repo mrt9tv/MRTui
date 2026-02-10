@@ -46,7 +46,7 @@ public class RelativeWidget : WidgetBase
     private const double COL_W_GAP = 44;       // "+3.2" (relative interval)
     private const double COL_W_STATUS = 72;    // "BOX 1:23.4" (outside the box)
     private const double STATUS_GAP = 8;       // gap between box edge and status
-    private const double STATUS_BG_OPACITY = 0.65; // status background ~65%
+    private const double STATUS_BG_OPACITY = 1.0; // status background matches widget opacity
     private const double MIN_WIDGET_WIDTH = 250;
     private const double ALT_ROW_ALPHA = 12;    // alternate row shading alpha (subtle)
     private const double COL_W_CAR_MODEL = 30;  // "488" car model abbreviation
@@ -65,7 +65,7 @@ public class RelativeWidget : WidgetBase
     // ── Lapped car dim / danger glow ────────────────────────────────
     private const double LAPPED_DIM_OPACITY = 0.40;  // opacity for lapped cars
     private const float DANGER_CLOSING_RATE = 0.35f;  // m/s threshold for danger glow
-    private static readonly Color COLOR_DANGER_GLOW = Color.FromArgb(35, 220, 50, 50); // subtle red tint
+    private static readonly Color COLOR_DANGER_GLOW = Color.FromArgb(80, 220, 50, 50); // noticeable red tint
 
     // ── Row animation ───────────────────────────────────────────────
     private const double ROW_ANIM_DURATION_MS = 150; // animation duration per row slide
@@ -106,7 +106,7 @@ public class RelativeWidget : WidgetBase
     private static readonly Color COLOR_DARK_BG = Color.FromArgb(245, 18, 18, 18);
     private static readonly Color COLOR_PLAYER_BG = Color.FromArgb(40, 0, 128, 128);
     private static readonly Color COLOR_TEXT = Color.FromRgb(240, 240, 240);
-    private static readonly Color COLOR_MUTED = Color.FromRgb(100, 100, 100);
+    private static readonly Color COLOR_MUTED = Color.FromRgb(140, 140, 140);
     private static readonly Color COLOR_DIM = Color.FromRgb(70, 70, 70);
     private static readonly Color COLOR_PIT = Color.FromRgb(255, 200, 50);
     private static readonly Color COLOR_PURPLE = Color.FromRgb(180, 0, 255);
@@ -128,7 +128,7 @@ public class RelativeWidget : WidgetBase
     private static readonly SolidColorBrush BRUSH_BLACK_FLAG = Freeze(new SolidColorBrush(COLOR_BLACK_FLAG));
     private static readonly SolidColorBrush BRUSH_WHITE = Freeze(new SolidColorBrush(Colors.White));
     private static readonly SolidColorBrush BRUSH_DARK_TEXT = Freeze(new SolidColorBrush(Color.FromRgb(20, 20, 20)));
-    private static readonly SolidColorBrush BRUSH_STATUS_BG_DEFAULT = Freeze(new SolidColorBrush(Color.FromArgb(170, 18, 18, 18)));
+    private static readonly SolidColorBrush BRUSH_STATUS_BG_DEFAULT = Freeze(new SolidColorBrush(Color.FromArgb(245, 18, 18, 18)));
     private static readonly SolidColorBrush BRUSH_STATUS_BG_BLACK = Freeze(new SolidColorBrush(Color.FromArgb(240, 0, 0, 0)));
     private static readonly SolidColorBrush BRUSH_GREEN = Freeze(new SolidColorBrush(Color.FromRgb(0, 200, 80)));
     private static readonly SolidColorBrush BRUSH_RED = Freeze(new SolidColorBrush(Color.FromRgb(220, 50, 50)));
@@ -260,10 +260,10 @@ public class RelativeWidget : WidgetBase
     public bool ShowLappedDim { get; set; } = false;
 
     /// <summary>Show danger glow on rows with high closing rate</summary>
-    public bool ShowDangerGlow { get; set; } = false;
+    public bool ShowDangerGlow { get; set; } = true;
 
     /// <summary>Enable smooth row slide animation when positions change</summary>
-    public bool EnableRowAnimation { get; set; } = false;
+    public bool EnableRowAnimation { get; set; } = true;
 
     #endregion
 
@@ -528,7 +528,8 @@ public class RelativeWidget : WidgetBase
             FontSize = 9.5,
             Foreground = BRUSH_TEXT,
             FontFamily = new FontFamily("Segoe UI"),
-            Padding = new Thickness(4, 2, 0, 0)
+            TextAlignment = TextAlignment.Center,
+            Padding = new Thickness(0, 2, 0, 0)
         };
         _rowCanvas.Children.Add(_infoEstLaps);
 
@@ -537,7 +538,7 @@ public class RelativeWidget : WidgetBase
             FontSize = 9.5,
             Foreground = BRUSH_TEXT,
             FontFamily = new FontFamily("Segoe UI"),
-            TextAlignment = TextAlignment.Center,
+            TextAlignment = TextAlignment.Left,
             Padding = new Thickness(0, 2, 0, 0)
         };
         _rowCanvas.Children.Add(_infoTimeRemain);
@@ -711,7 +712,7 @@ public class RelativeWidget : WidgetBase
         {
             Width = COL_W_STATUS,
             Height = ROW_HEIGHT,
-            Background = new SolidColorBrush(Color.FromArgb(170, 18, 18, 18)),
+            Background = new SolidColorBrush(Color.FromArgb(245, 18, 18, 18)),
             CornerRadius = new CornerRadius(3),
             Opacity = STATUS_BG_OPACITY
         };
@@ -850,7 +851,7 @@ public class RelativeWidget : WidgetBase
             _backgroundBorder.Height = contentHeight;
         }
 
-        // Info bar: estimated laps, time remaining, incident points
+        // Info bar: time remaining (left), X/Y laps (center), incidents (right)
         if (ShowInfoBar)
         {
             double infoY = HEADER_HEIGHT + SEPARATOR_HEIGHT + 4 + (Math.Max(_visibleRowCount, 1) * ROW_HEIGHT);
@@ -860,14 +861,7 @@ public class RelativeWidget : WidgetBase
             Canvas.SetTop(_infoBarBorder, infoY);
             _infoBarBorder.Visibility = Visibility.Visible;
 
-            // Estimated laps remaining (from session data)
-            double estLaps = data.SessionLapsRemainEx > 0 ? data.SessionLapsRemainEx : 0;
-            _infoEstLaps.Text = estLaps > 0 ? $"~{estLaps:F0} laps" : "";
-            Canvas.SetLeft(_infoEstLaps, 0);
-            Canvas.SetTop(_infoEstLaps, infoY);
-            _infoEstLaps.Visibility = Visibility.Visible;
-
-            // Time remaining
+            // Time remaining (LEFT aligned)
             double timeRemain = data.SessionTimeRemain;
             if (timeRemain > 0 && timeRemain < 86400)
             {
@@ -881,11 +875,47 @@ public class RelativeWidget : WidgetBase
                 _infoTimeRemain.Text = "";
             }
             _infoTimeRemain.Width = barW;
-            Canvas.SetLeft(_infoTimeRemain, 0);
+            Canvas.SetLeft(_infoTimeRemain, 4);
             Canvas.SetTop(_infoTimeRemain, infoY);
             _infoTimeRemain.Visibility = Visibility.Visible;
 
-            // Player incident count (format: Inc: X/17x)
+            // X/Y laps (CENTER): current lap / estimated total laps
+            // For timed sessions, Y is estimated; for lap races, Y is session total.
+            int currentLap = data.Lap;
+            int totalLaps = data.SessionLapsTotal > 0 && data.SessionLapsTotal <= 500
+                ? data.SessionLapsTotal : 0;
+            int estimatedTotal = data.EstimatedTotalRaceLaps; // from fuel calculator (works for both timed & lap races)
+            double estLapsRemain = data.SessionLapsRemainEx > 0 ? data.SessionLapsRemainEx : 0;
+
+            if (totalLaps > 0)
+            {
+                // Lap-based race: X/Y is current/total
+                _infoEstLaps.Text = $"{currentLap}/{totalLaps}";
+            }
+            else if (estimatedTotal > 0)
+            {
+                // Timed race: use fuel calculator's estimated total (includes leader-based estimation)
+                double fractionalTotal = estLapsRemain > 0
+                    ? currentLap + estLapsRemain
+                    : (double)estimatedTotal;
+                _infoEstLaps.Text = $"{currentLap}/~{fractionalTotal:F1}";
+            }
+            else if (estLapsRemain > 0)
+            {
+                // Fallback: SDK estimated laps remaining
+                double estTotal = currentLap + estLapsRemain;
+                _infoEstLaps.Text = $"{currentLap}/~{estTotal:F1}";
+            }
+            else
+            {
+                _infoEstLaps.Text = currentLap > 0 ? $"Lap {currentLap}" : "";
+            }
+            Canvas.SetLeft(_infoEstLaps, 0);
+            Canvas.SetTop(_infoEstLaps, infoY);
+            _infoEstLaps.Width = barW;
+            _infoEstLaps.Visibility = Visibility.Visible;
+
+            // Player incident count (RIGHT aligned — format: Inc: X/17x)
             int playerInc = data.PlayerCarMyIncidentCount;
             int incLimit = 17; // iRacing standard incident limit
             _infoIncidents.Text = $"Inc: {playerInc}/{incLimit}x";
@@ -918,35 +948,15 @@ public class RelativeWidget : WidgetBase
                 var entry = entries[i];
                 double targetY = yStart + (i * ROW_HEIGHT);
 
-                // Smooth row slide animation: animate Container Y when position changes
+                // Smooth row slide animation: animate all row elements when a car changes position
                 if (EnableRowAnimation && entry.CarIdx >= 0)
                 {
-                    double currentY = Canvas.GetTop(row.Container);
                     if (_previousRowPositions.TryGetValue(entry.CarIdx, out double prevY)
-                        && Math.Abs(prevY - targetY) > 0.5
-                        && Math.Abs(currentY - targetY) > 0.5)
+                        && Math.Abs(prevY - targetY) > 0.5)
                     {
-                        // Animate from previous position to new position
-                        var anim = new DoubleAnimation
-                        {
-                            From = prevY,
-                            To = targetY,
-                            Duration = TimeSpan.FromMilliseconds(ROW_ANIM_DURATION_MS),
-                            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        row.Container.BeginAnimation(Canvas.TopProperty, anim);
-
-                        // Also animate the status elements (on _canvas, not _rowCanvas)
-                        double statusTargetY = PADDING + targetY;
-                        var statusAnim = new DoubleAnimation
-                        {
-                            From = PADDING + prevY,
-                            To = statusTargetY,
-                            Duration = TimeSpan.FromMilliseconds(ROW_ANIM_DURATION_MS),
-                            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-                        };
-                        row.Status.BeginAnimation(Canvas.TopProperty, statusAnim);
-                        row.StatusBg.BeginAnimation(Canvas.TopProperty, statusAnim);
+                        // Compute the Y delta between old and new positions
+                        double delta = prevY - targetY;
+                        AnimateRowSlide(row, delta, targetY);
                     }
 
                     _previousRowPositions[entry.CarIdx] = targetY;
@@ -1421,6 +1431,68 @@ public class RelativeWidget : WidgetBase
         // Separators
         foreach (var sep in row.Separators)
             sep.Visibility = vis;
+    }
+
+    /// <summary>
+    /// Animate all elements of a row from an offset (delta) back to their home positions.
+    /// Delta is the Y difference: positive = animating down from above, negative = up from below.
+    /// Each element's Canvas.Top is temporarily offset by delta, then animated back to its current position.
+    /// </summary>
+    private void AnimateRowSlide(RowElements row, double delta, double targetY)
+    {
+        var duration = TimeSpan.FromMilliseconds(ROW_ANIM_DURATION_MS);
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+
+        // Collect all rowCanvas-based elements that need animation
+        UIElement[] rowElements = {
+            row.Background, row.ClassStripe, row.Position, row.CarNumber,
+            row.CarModel, row.Name, row.InfoBackground, row.LicenseBadge,
+            row.LicenseText, row.DriverInfo, row.Interval, row.Gap, row.LastLap,
+            row.ClosingArrow, row.PitStops, row.PositionDelta, row.Nationality
+        };
+
+        foreach (var elem in rowElements)
+        {
+            if (elem == null) continue;
+            double currentTop = Canvas.GetTop(elem);
+            var anim = new DoubleAnimation
+            {
+                From = currentTop + delta,
+                To = currentTop,
+                Duration = duration,
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop  // Release property after animation so Canvas.SetTop() works
+            };
+            elem.BeginAnimation(Canvas.TopProperty, anim);
+        }
+
+        // Separators
+        foreach (var sep in row.Separators)
+        {
+            double currentTop = Canvas.GetTop(sep);
+            var anim = new DoubleAnimation
+            {
+                From = currentTop + delta,
+                To = currentTop,
+                Duration = duration,
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            sep.BeginAnimation(Canvas.TopProperty, anim);
+        }
+
+        // Status elements are on _canvas (different parent), offset by PADDING
+        double statusCurrentY = Canvas.GetTop(row.Status);
+        var statusAnim = new DoubleAnimation
+        {
+            From = statusCurrentY + delta,
+            To = statusCurrentY,
+            Duration = duration,
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        row.Status.BeginAnimation(Canvas.TopProperty, statusAnim);
+        row.StatusBg.BeginAnimation(Canvas.TopProperty, statusAnim);
     }
 
     // ── Formatting helpers ──────────────────────────────────────────

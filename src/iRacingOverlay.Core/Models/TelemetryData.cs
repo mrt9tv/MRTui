@@ -257,6 +257,14 @@ public class TelemetryData
     public int SessionLapsRemain { get; set; }
 
     /// <summary>
+    /// Estimated total race laps (from FuelCalculatorService).
+    /// For lap-based races: equals SessionLapsTotal.
+    /// For timed races: leader's lap + estimated remaining laps from time.
+    /// Propagated from FuelData after fuel calculator update.
+    /// </summary>
+    public int EstimatedTotalRaceLaps { get; set; }
+
+    /// <summary>
     /// DIRECT FROM SDK: Total session time in seconds
     /// Used with SessionTimeRemain for timed session calculations
     /// </summary>

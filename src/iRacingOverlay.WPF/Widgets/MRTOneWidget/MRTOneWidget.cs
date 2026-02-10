@@ -139,10 +139,10 @@ public class MRTOneWidget : WidgetBase
         // Ring max opacity per layer: 0.85 (innermost) stepping down to 0.25 (outermost)
         public static readonly double[] ARC_RING_MAX_OPACITY = { 0.85, 0.73, 0.61, 0.49, 0.37, 0.25 };
 
-        /// <summary>Slow blink interval for Close zone (ms)</summary>
-        public const int ARC_SLOW_BLINK_INTERVAL_MS = 400;
-        /// <summary>Fast blink interval for VeryClose (ms) — normal</summary>
-        public const int ARC_FAST_BLINK_INTERVAL_MS = 125;
+        /// <summary>Slow blink interval for Close zone (ms) — visible on/off pulsing</summary>
+        public const int ARC_SLOW_BLINK_INTERVAL_MS = 350;
+        /// <summary>Fast blink interval for VeryClose (ms) — urgent rapid flash</summary>
+        public const int ARC_FAST_BLINK_INTERVAL_MS = 100;
         /// <summary>Multiplier for last-lap blink speed (2× faster)</summary>
         public const double ARC_LAST_LAP_BLINK_MULTIPLIER = 0.5;
 
@@ -898,6 +898,18 @@ public class MRTOneWidget : WidgetBase
             _radarBack.Opacity = 1.0;
             // Restore gauge circle to normal color (will be updated next frame by shift point logic)
         }
+
+        // Side arc flashing: red flash when car is alongside
+        // Side arcs are set to red (s_radarSideCritical) by UpdateSideArc;
+        // we blink them here for maximum visibility
+        if (_arcLeftSide.Fill != s_radarTransparent)
+        {
+            _arcLeftSide.Opacity = _radarBlinkState ? 0.90 : 0.25;
+        }
+        if (_arcRightSide.Fill != s_radarTransparent)
+        {
+            _arcRightSide.Opacity = _radarBlinkState ? 0.90 : 0.25;
+        }
     }
 
     private void OnArcSlowBlinkTimerTick(object? sender, EventArgs e)
@@ -907,12 +919,12 @@ public class MRTOneWidget : WidgetBase
 
         _arcSlowBlinkState = !_arcSlowBlinkState;
 
-        // SLOW blink: Close zone — pulse the innermost active ring as a warning
+        // SLOW blink: Close zone — pulse ALL active rings for high visibility
         var (frontZone, rearZone) = _stateManager.GetCurrentZones();
         if (frontZone == ProximityZone.Close)
-            SlowBlinkInnermostRing(_arcFrontRings, _arcSlowBlinkState);
+            BlinkArcRings(_arcFrontRings, _arcSlowBlinkState, slowBlink: true);
         if (rearZone == ProximityZone.Close)
-            SlowBlinkInnermostRing(_arcBackRings, _arcSlowBlinkState);
+            BlinkArcRings(_arcBackRings, _arcSlowBlinkState, slowBlink: true);
     }
     
     private void OnPitLimiterBlinkTimerTick(object? sender, EventArgs e)
@@ -1254,9 +1266,14 @@ public class MRTOneWidget : WidgetBase
             _pitLimiterBlinkState = false;
         }
 
-        // Only update RPM zone color if pit limiter is NOT active (or feature is disabled)
-        // When pit limiter is active and feature enabled, the blink timer handles the color
-        if (!_settings.EnablePitLimiterIndicator || !_stateManager.IsPitLimiterActive)
+        // Only update RPM zone color if neither pit limiter NOR VeryClose radar blink is active
+        // When pit limiter is active, the pit limiter blink timer handles the color
+        // When VeryClose radar is active, the radar blink timer handles the color (red flash)
+        var (currentFrontZone, currentRearZone) = _stateManager.GetCurrentZones();
+        bool radarBlinkActive = currentFrontZone == ProximityZone.VeryClose || currentRearZone == ProximityZone.VeryClose;
+        bool pitLimiterBlinkActive = _settings.EnablePitLimiterIndicator && _stateManager.IsPitLimiterActive;
+        
+        if (!pitLimiterBlinkActive && !radarBlinkActive)
         {
             // Update gauge circle color based on RPM zone
             var rpm = data.RPM;
@@ -1651,18 +1668,17 @@ public class MRTOneWidget : WidgetBase
 
     /// <summary>
     /// Map ProximityZone to how many rings (counting from outermost) should be active.
-    /// Map ProximityZone to how many rings (counting from outermost) should be active.
-    /// Progressive activation: each zone adds 1 ring for clear visual feedback.
-    /// Far = 1 (earliest warning), Careful = 2, Near = 3-4, Close = 5, VeryClose = 6.
+    /// Progressive activation: starts from 0, builds up as threat increases.
+    /// Far = 0 (no rings), Careful = 1, Near = 3, Close = 5 (slow blink), VeryClose = 6 (intense blink).
     /// </summary>
     private static int GetActiveRingCount(ProximityZone zone) => zone switch
     {
-        ProximityZone.VeryClose => 6,
-        ProximityZone.Close => 5,
-        ProximityZone.Near => 3,
-        ProximityZone.Careful => 2,
-        ProximityZone.Far => 1,  // Single outermost ring as first awareness indicator
-        _ => 0  // Clear = no rings
+        ProximityZone.VeryClose => 6,  // All rings + intense fast blink
+        ProximityZone.Close => 5,       // 5 rings + slow blink on innermost
+        ProximityZone.Near => 3,        // 3 rings, solid
+        ProximityZone.Careful => 1,     // 1 ring, first warning
+        ProximityZone.Far => 0,         // No rings — just square indicator
+        _ => 0                          // Clear = no rings
     };
 
     /// <summary>
@@ -1683,11 +1699,14 @@ public class MRTOneWidget : WidgetBase
     /// Update a set of 6 concentric arc rings for a front/back quadrant.
     /// Rings activate from outside→inside as zone increases.
     /// Each ring gets the zone colour with per-layer max opacity (0.25→0.85).
+    /// For Close/VeryClose zones, opacity is controlled by blink timers — only set Fill here.
     /// </summary>
     private static void UpdateArcRings(System.Windows.Shapes.Path[] rings, ProximityZone zone)
     {
         int activeCount = GetActiveRingCount(zone);
         var fillBrush = GetRingColor(zone);
+        // Don't override opacity for zones where blink timers control it
+        bool isBlinkingZone = zone == ProximityZone.Close || zone == ProximityZone.VeryClose;
 
         for (int i = 0; i < rings.Length; i++)
         {
@@ -1699,7 +1718,9 @@ public class MRTOneWidget : WidgetBase
             if (isActive)
             {
                 rings[i].Fill = fillBrush;
-                rings[i].Opacity = LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                // Only set opacity for non-blinking zones; blink timers handle Close/VeryClose
+                if (!isBlinkingZone)
+                    rings[i].Opacity = LayoutConstants.ARC_RING_MAX_OPACITY[i];
             }
             else
             {
@@ -1710,21 +1731,20 @@ public class MRTOneWidget : WidgetBase
     }
 
     /// <summary>
-    /// Update a single side arc (left/right). High-contrast colors.
-    /// Binary presence: prominent when car present, two cars = red critical.
-    /// Increased opacity for better visibility at a glance.
+    /// Update a single side arc (left/right). RED for all car-present states.
+    /// Flashing is handled by the blink timer (OnRadarBlinkTimerTick).
     /// </summary>
     private static void UpdateSideArc(System.Windows.Shapes.Path arc, bool carPresent, bool twoCars)
     {
         if (twoCars)
         {
-            arc.Fill = s_radarSideCritical;
-            arc.Opacity = 0.90;
+            arc.Fill = s_radarSideCritical; // Bright red (255,40,40) for two cars
+            arc.Opacity = 0.95;
         }
         else if (carPresent)
         {
-            arc.Fill = s_radarSideOrange;
-            arc.Opacity = 0.75;
+            arc.Fill = s_radarSideCritical; // RED for single car too (was orange)
+            arc.Opacity = 0.85;
         }
         else
         {
@@ -1734,38 +1754,24 @@ public class MRTOneWidget : WidgetBase
     }
 
     /// <summary>
-    /// Fast blink all active rings in a front/back ring set (VeryClose animation).
-    /// High contrast: full opacity ↔ near-invisible for maximum urgency.
+    /// Blink all active rings in a front/back ring set.
+    /// Fast mode (VeryClose): high contrast full ↔ near-invisible.
+    /// Slow mode (Close): moderate contrast full ↔ dimmed.
     /// </summary>
-    private static void BlinkArcRings(System.Windows.Shapes.Path[] rings, bool blinkState)
+    private static void BlinkArcRings(System.Windows.Shapes.Path[] rings, bool blinkState, bool slowBlink = false)
     {
+        double offFactor = slowBlink ? 0.20 : 0.08; // slow blink less extreme than fast
         for (int i = 0; i < rings.Length; i++)
         {
             if (rings[i].Fill != s_radarTransparent)
             {
                 double maxOp = LayoutConstants.ARC_RING_MAX_OPACITY[i];
-                rings[i].Opacity = blinkState ? maxOp : maxOp * 0.10;
+                rings[i].Opacity = blinkState ? maxOp : maxOp * offFactor;
             }
         }
     }
 
-    /// <summary>
-    /// Slow pulse the innermost active ring in a Close-zone ring set.
-    /// Provides a gentle warning pulse as a "heads up" before VeryClose.
-    /// </summary>
-    private static void SlowBlinkInnermostRing(System.Windows.Shapes.Path[] rings, bool blinkState)
-    {
-        // Find the innermost active ring (lowest index with a non-transparent fill)
-        for (int i = 0; i < rings.Length; i++)
-        {
-            if (rings[i].Fill != s_radarTransparent)
-            {
-                double maxOp = LayoutConstants.ARC_RING_MAX_OPACITY[i];
-                rings[i].Opacity = blinkState ? maxOp : maxOp * 0.4;
-                break; // only the innermost
-            }
-        }
-    }
+    // SlowBlinkInnermostRing removed — BlinkArcRings with slowBlink=true now handles Close zone
 
     // ── Arc geometry helper ──────────────────────────────────────────────────
 

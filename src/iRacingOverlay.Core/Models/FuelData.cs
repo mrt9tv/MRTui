@@ -180,6 +180,14 @@ public class FuelData
     /// </summary>
     public float SdkFuelEstimate { get; set; }
     
+    /// <summary>
+    /// Effective average fuel per lap after early-lap blending with SDK estimate.
+    /// This is the authoritative value used for laps-remaining and strategy calculations.
+    /// Downstream consumers (FuelSavingService, widgets) should prefer this over AvgFuelPerLap
+    /// when they need the blended/best-available estimate.
+    /// </summary>
+    public float EffectiveAvgFuelPerLap { get; set; }
+    
     /// <summary>Fuel needed to finish race (with current average)</summary>
     public float FuelNeededToFinish { get; set; }
     
