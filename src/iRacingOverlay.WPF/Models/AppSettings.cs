@@ -256,6 +256,14 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public bool StartMinimized { get; set; } = false;
 
+    // ===== GLOBAL FONT SCALE =====
+    
+    /// <summary>
+    /// Global font size multiplier applied to all overlays (0.7 to 1.5, default 1.0).
+    /// Each widget multiplies its base font sizes by this value.
+    /// </summary>
+    public double GlobalFontScale { get; set; } = 1.0;
+
     // ===== SNAP-TO-GRID SETTINGS (Phase 3.1) =====
     
     /// <summary>

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
@@ -60,6 +61,14 @@ public class RelativeWidget : WidgetBase
     private const int DEFAULT_BEHIND = 3;
     private const int MAX_DISPLAY_ROWS = 15; // absolute maximum pre-allocated rows
     private const int TOTAL_SMART_ROWS = 6; // total non-player rows for smart distribution
+
+    // ── Lapped car dim / danger glow ────────────────────────────────
+    private const double LAPPED_DIM_OPACITY = 0.40;  // opacity for lapped cars
+    private const float DANGER_CLOSING_RATE = 0.35f;  // m/s threshold for danger glow
+    private static readonly Color COLOR_DANGER_GLOW = Color.FromArgb(35, 220, 50, 50); // subtle red tint
+
+    // ── Row animation ───────────────────────────────────────────────
+    private const double ROW_ANIM_DURATION_MS = 150; // animation duration per row slide
 
     // ── Font sizes ──────────────────────────────────────────────────
     private const double FONT_DATA = 11.5;
@@ -183,6 +192,9 @@ public class RelativeWidget : WidgetBase
     private int _frameCount;
     private const int BLINK_HALF_PERIOD = 30; // frames per blink half-cycle
 
+    /// <summary>Tracks previous Y position per CarIdx for smooth row slide animation</summary>
+    private readonly Dictionary<int, double> _previousRowPositions = new();
+
     #endregion
 
     #region Settings
@@ -244,6 +256,15 @@ public class RelativeWidget : WidgetBase
     /// <summary>Show full iRating (e.g. 2035) instead of compact (e.g. 2.0k)</summary>
     public bool UseFullIRating { get; set; } = false;
 
+    /// <summary>Dim lapped cars (opacity fade when 1+ laps behind/ahead)</summary>
+    public bool ShowLappedDim { get; set; } = false;
+
+    /// <summary>Show danger glow on rows with high closing rate</summary>
+    public bool ShowDangerGlow { get; set; } = false;
+
+    /// <summary>Enable smooth row slide animation when positions change</summary>
+    public bool EnableRowAnimation { get; set; } = false;
+
     #endregion
 
     #region Services
@@ -252,6 +273,9 @@ public class RelativeWidget : WidgetBase
 
     /// <summary>Cache of class ID → color brush (generated from hash)</summary>
     private readonly Dictionary<int, SolidColorBrush> _classColorCache = new();
+
+    /// <summary>Current global font scale (cached from AppSettings to avoid per-frame lookup overhead)</summary>
+    private double _fontScale = 1.0;
 
     #endregion
 
@@ -297,6 +321,9 @@ public class RelativeWidget : WidgetBase
         if (TryGetBool("showNationality", out var nat)) ShowNationality = nat;
         if (TryGetBool("showClassLegend", out var cl)) ShowClassLegend = cl;
         if (TryGetBool("useFullIRating", out var fir)) UseFullIRating = fir;
+        if (TryGetBool("showLappedDim", out var ld)) ShowLappedDim = ld;
+        if (TryGetBool("showDangerGlow", out var dg)) ShowDangerGlow = dg;
+        if (TryGetBool("enableRowAnimation", out var ra)) EnableRowAnimation = ra;
         // Migration: old showIRating/showSafetyRating → showDriverInfo
         if (TryGetBool("showIRating", out var oldIr) && oldIr) ShowDriverInfo = true;
         if (TryGetBool("showSafetyRating", out var oldSr) && oldSr) ShowDriverInfo = true;
@@ -324,6 +351,9 @@ public class RelativeWidget : WidgetBase
         Config.Settings["showNationality"] = ShowNationality;
         Config.Settings["showClassLegend"] = ShowClassLegend;
         Config.Settings["useFullIRating"] = UseFullIRating;
+        Config.Settings["showLappedDim"] = ShowLappedDim;
+        Config.Settings["showDangerGlow"] = ShowDangerGlow;
+        Config.Settings["enableRowAnimation"] = EnableRowAnimation;
     }
 
     private bool TryGetBool(string key, out bool value)
@@ -766,6 +796,9 @@ public class RelativeWidget : WidgetBase
         if (_layoutDirty)
             ApplyLayout();
 
+        // Refresh global font scale
+        _fontScale = AppSettings.Instance.GlobalFontScale;
+
         // Determine row counts
         int maxAhead, maxBehind;
         if (UseSmartRowCount && data.LivePosition > 0)
@@ -866,6 +899,8 @@ public class RelativeWidget : WidgetBase
 
     private void UpdateRows(List<RelativeEntry> entries)
     {
+        double yStart = HEADER_HEIGHT + SEPARATOR_HEIGHT + 4;
+
         for (int i = 0; i < MAX_DISPLAY_ROWS; i++)
         {
             var row = _rows[i];
@@ -873,6 +908,42 @@ public class RelativeWidget : WidgetBase
             if (i < entries.Count)
             {
                 var entry = entries[i];
+                double targetY = yStart + (i * ROW_HEIGHT);
+
+                // Smooth row slide animation: animate Container Y when position changes
+                if (EnableRowAnimation && entry.CarIdx >= 0)
+                {
+                    double currentY = Canvas.GetTop(row.Container);
+                    if (_previousRowPositions.TryGetValue(entry.CarIdx, out double prevY)
+                        && Math.Abs(prevY - targetY) > 0.5
+                        && Math.Abs(currentY - targetY) > 0.5)
+                    {
+                        // Animate from previous position to new position
+                        var anim = new DoubleAnimation
+                        {
+                            From = prevY,
+                            To = targetY,
+                            Duration = TimeSpan.FromMilliseconds(ROW_ANIM_DURATION_MS),
+                            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                        };
+                        row.Container.BeginAnimation(Canvas.TopProperty, anim);
+
+                        // Also animate the status elements (on _canvas, not _rowCanvas)
+                        double statusTargetY = PADDING + targetY;
+                        var statusAnim = new DoubleAnimation
+                        {
+                            From = PADDING + prevY,
+                            To = statusTargetY,
+                            Duration = TimeSpan.FromMilliseconds(ROW_ANIM_DURATION_MS),
+                            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                        };
+                        row.Status.BeginAnimation(Canvas.TopProperty, statusAnim);
+                        row.StatusBg.BeginAnimation(Canvas.TopProperty, statusAnim);
+                    }
+
+                    _previousRowPositions[entry.CarIdx] = targetY;
+                }
+
                 ShowRow(row, true);
                 PopulateRow(row, entry, i);
             }
@@ -885,6 +956,22 @@ public class RelativeWidget : WidgetBase
 
     private void PopulateRow(RowElements row, RelativeEntry entry, int rowIndex = 0)
     {
+        // ── Apply global font scale to row text elements ────────
+        double scaledData = FONT_DATA * _fontScale;
+        double scaledStatus = FONT_STATUS * _fontScale;
+        row.Position.FontSize = scaledData;
+        row.CarNumber.FontSize = scaledData;
+        row.CarModel.FontSize = scaledData;
+        row.Name.FontSize = scaledData;
+        row.Interval.FontSize = scaledData;
+        row.LastLap.FontSize = scaledData;
+        row.Gap.FontSize = scaledData;
+        row.ClosingArrow.FontSize = scaledData;
+        row.PitStops.FontSize = scaledData;
+        row.PositionDelta.FontSize = scaledData;
+        row.Nationality.FontSize = scaledData;
+        row.Status.FontSize = scaledStatus;
+
         // ── Reposition elements to match current layout ─────────
         Canvas.SetLeft(row.Position, _layout.PosX);
         Canvas.SetLeft(row.CarNumber, _layout.NumX);
@@ -920,10 +1007,21 @@ public class RelativeWidget : WidgetBase
         // Class stripe
         row.ClassStripe.Background = GetClassBrush(entry.CarClassId, false);
 
-        // Player row highlight + alternate row shading
+        // Determine if this car is lapped (1+ laps difference)
+        bool isLapped = ShowLappedDim && !entry.IsPlayer && Math.Abs(entry.LapDelta) >= 1;
+
+        // Determine if this car has dangerous closing rate
+        bool isDanger = ShowDangerGlow && !entry.IsPlayer && entry.ClosingRate > DANGER_CLOSING_RATE;
+
+        // Player row highlight + alternate row shading + danger glow
         if (entry.IsPlayer)
         {
             row.Background.Background = BRUSH_PLAYER_BG;
+        }
+        else if (isDanger)
+        {
+            // Danger glow: subtle red tint background
+            row.Background.Background = new SolidColorBrush(COLOR_DANGER_GLOW);
         }
         else if (ShowAlternateRowShading && rowIndex % 2 == 1)
         {
@@ -933,6 +1031,10 @@ public class RelativeWidget : WidgetBase
         {
             row.Background.Background = BRUSH_TRANSPARENT;
         }
+
+        // Apply lapped dim opacity (affects all text in row)
+        double rowOpacity = isLapped ? LAPPED_DIM_OPACITY : 1.0;
+        row.Container.Opacity = rowOpacity;
 
         // Position
         int pos = ShowClassPosition ? entry.ClassPosition : entry.OverallPosition;
@@ -1205,6 +1307,10 @@ public class RelativeWidget : WidgetBase
             ? BRUSH_STATUS_BG_BLACK : BRUSH_STATUS_BG_DEFAULT;
         row.StatusBg.Visibility = showStatusBg && !string.IsNullOrEmpty(statusText)
             ? Visibility.Visible : Visibility.Collapsed;
+
+        // Apply lapped dim to status elements too (they live on _canvas, outside Container)
+        row.Status.Opacity = rowOpacity;
+        row.StatusBg.Opacity = rowOpacity;
     }
 
     /// <summary>Get column boundary X positions for vertical separators.</summary>

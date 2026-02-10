@@ -230,6 +230,11 @@ public class MRTOneWidget : WidgetBase
     private readonly DispatcherTimer _pitLimiterBlinkTimer;
     private bool _pitLimiterBlinkState = false;
 
+    // Auto-swap state tracking
+    private string? _autoSwapOverrideText = null;   // Text override for center (null = use normal field)
+    private Color? _autoSwapOverrideColor = null;    // Color override for center text
+    private DateTime _autoSwapTriggerEndTime = DateTime.MinValue;  // When the last trigger ended (for hold time)
+
     // Theme colors
     private System.Windows.Media.Color _primaryColor;   // Teal #008080
     private System.Windows.Media.Color _secondaryColor; // Orange #FF8000
@@ -1177,6 +1182,12 @@ public class MRTOneWidget : WidgetBase
         {
             UpdateSection(_centerValueText, null, _dataBinding.PrimaryField, data);
         }
+
+        // CONTEXTUAL AUTO-SWAP: Priority engine overrides center display
+        if (_settings.EnableAutoSwap)
+        {
+            EvaluateAutoSwapPriority(data);
+        }
         
         // Dynamically adjust center font size based on content length
         UpdateCenterFontSize();
@@ -1917,6 +1928,104 @@ public class MRTOneWidget : WidgetBase
     // PHASE 2: TOGGLEABLE VISUAL ENHANCEMENTS
     // All features can be enabled/disabled via settings
     // Easy rollback: Set all Enable* flags to false
+    // ============================================
+    // Contextual Center Auto-Swap Priority Engine
+    // ============================================
+
+    /// <summary>
+    /// iRacing SessionFlags bitmask for yellow/caution flag
+    /// </summary>
+    private const uint FLAG_YELLOW = 0x00000008;
+
+    /// <summary>
+    /// Evaluate priority cascade and override center text if any trigger is active.
+    /// Priority (highest wins):
+    ///   1. PIT NOW — fuel critical
+    ///   2. Pit service — in pit stall
+    ///   3. Yellow/Caution — show fuel remaining
+    ///   4. Car alongside — lateral indicator
+    ///   5. (none) — revert to user default after hold time
+    /// </summary>
+    private void EvaluateAutoSwapPriority(TelemetryData data)
+    {
+        string? overrideText = null;
+        Color? overrideColor = null;
+
+        // Priority 1: Fuel critical — "PIT NOW"
+        if (_settings.AutoSwapFuelCritical)
+        {
+            var fuelLapsObj = TelemetryDataMapper.GetValue(TelemetryField.FuelLapsRemaining, data, _telemetryService);
+            float fuelLaps = fuelLapsObj is float fl ? fl : 0f;
+            if (fuelLaps > 0 && fuelLaps < _settings.AutoSwapFuelThreshold)
+            {
+                overrideText = "PIT";
+                overrideColor = Colors.Red;
+            }
+        }
+
+        // Priority 2: Pit service — "PIT" with fuel info
+        if (overrideText == null && _settings.AutoSwapPitService && data.OnPitRoad && data.PitSpeedLimiterActive)
+        {
+            overrideText = $"{data.FuelLevel:F1}L";
+            overrideColor = _secondaryColor; // orange
+        }
+
+        // Priority 3: Yellow flag — show fuel level
+        if (overrideText == null && _settings.AutoSwapYellowFlag && (data.SessionFlags & FLAG_YELLOW) != 0)
+        {
+            overrideText = $"{data.FuelLevel:F1}L";
+            overrideColor = Colors.Yellow;
+        }
+
+        // Priority 4: Car alongside — show LEFT / RIGHT / BOTH
+        if (overrideText == null && _settings.AutoSwapCarAlongside)
+        {
+            var lateral = _lateralSpotter.GetLateralPosition(data);
+            string? dirText = lateral switch
+            {
+                LateralPosition.CarLeft or LateralPosition.TwoCarsLeft => "LEFT",
+                LateralPosition.CarRight or LateralPosition.TwoCarsRight => "RIGHT",
+                LateralPosition.CarBothSides => "BOTH",
+                _ => null
+            };
+            if (dirText != null)
+            {
+                overrideText = dirText;
+                overrideColor = Colors.OrangeRed;
+            }
+        }
+
+        // Apply or revert
+        if (overrideText != null)
+        {
+            _autoSwapOverrideText = overrideText;
+            _autoSwapOverrideColor = overrideColor;
+            _autoSwapTriggerEndTime = DateTime.UtcNow; // reset hold timer
+
+            _centerValueText.Text = overrideText;
+            if (overrideColor.HasValue)
+                _centerValueText.Foreground = new SolidColorBrush(overrideColor.Value);
+        }
+        else if (_autoSwapOverrideText != null)
+        {
+            // Hold time: keep override visible for configured seconds after trigger clears
+            double elapsedSinceEnd = (DateTime.UtcNow - _autoSwapTriggerEndTime).TotalSeconds;
+            if (elapsedSinceEnd >= _settings.AutoSwapHoldSeconds)
+            {
+                _autoSwapOverrideText = null;
+                _autoSwapOverrideColor = null;
+                // Normal section update already happened above — no action needed
+            }
+            else
+            {
+                // Still in hold period — keep showing override
+                _centerValueText.Text = _autoSwapOverrideText;
+                if (_autoSwapOverrideColor.HasValue)
+                    _centerValueText.Foreground = new SolidColorBrush(_autoSwapOverrideColor.Value);
+            }
+        }
+    }
+
     // ============================================
     
     /// <summary>

@@ -629,6 +629,9 @@ ML-based pit window optimizer replacing simple fuel calculations.
 ### Turn Display Widget (v0.7.0)
 Compact vertical bar showing NEXT turn (teal) and LAST turn (orange). Turn number + name display with optional border animation. 5 tracks supported: Imola, Monza, Long Beach, Bathurst, Spa.
 
+**Roadmap:**
+- [ ] **Distance-to-Next-Turn** — Show distance in meters (or percentage) to upcoming turn. Use `LapDistPct` delta between player position and next turn's `LapDistPct` from `TrackTurnDatabase.json`. Display as "120m" or progress bar under turn name. Requires extending `TurnTrackingService` to emit distance-to-next as a property. Good candidate for combining with braking point indicator later.
+
 ### Fuel Saving Service (v0.7.1)
 Lift & coast calculation engine: saving target, current saving rate, pit-vs-save strategy, strategic alerts, projected fuel delta. Integrated into Fuel Calculator Widget.
 

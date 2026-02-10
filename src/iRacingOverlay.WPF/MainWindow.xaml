@@ -220,6 +220,26 @@
                                       Foreground="{StaticResource LightText}" Margin="0,0,4,2"
                                       Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
                         </WrapPanel>
+                        
+                        <Border Height="1" Background="{StaticResource DarkBorder}" Margin="0,6,0,6"/>
+                        
+                        <!-- GLOBAL FONT SCALE -->
+                        <TextBlock Text="FONT SCALE" Style="{StaticResource MRT.Text.Label}" Margin="4,0,0,4"/>
+                        <Grid Margin="4,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="36"/>
+                            </Grid.ColumnDefinitions>
+                            <Slider x:Name="SliderGlobalFontScale"
+                                    Style="{StaticResource MRT.Slider}"
+                                    Minimum="70" Maximum="150" Value="100"
+                                    TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="GlobalFontScale_ValueChanged"/>
+                            <TextBlock x:Name="TxtGlobalFontScale" Grid.Column="1"
+                                       Text="100%" FontSize="10"
+                                       Foreground="{StaticResource TealPrimary}"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        </Grid>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -506,6 +526,11 @@
                                               Style="{StaticResource MRT.ToggleButton}"
                                               Margin="0,0,8,4"
                                               Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
+                                    <CheckBox x:Name="ChkAutoSwap" Content="Auto-Swap"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Priority-based center field override (PIT NOW, yellow, car alongside)"
+                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
@@ -775,6 +800,21 @@
                                               Style="{StaticResource MRT.ToggleButton}"
                                               IsChecked="False" Margin="0,0,8,4"
                                               ToolTip="Show class color legend with car counts in header"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowLappedDim" Content="Dim Lapped"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Dim cars that are 1+ laps behind or ahead"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowDangerGlow" Content="Danger Glow"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Red tint on rows with high closing rate"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkEnableRowAnimation" Content="Animate"
+                                              Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4"
+                                              ToolTip="Smooth row slide animation when positions change"
                                               Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                 </WrapPanel>
                             </StackPanel>

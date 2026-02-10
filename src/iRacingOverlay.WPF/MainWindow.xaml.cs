@@ -81,6 +81,11 @@ public partial class MainWindow : Window
         // Sync panel to widget state (if widget was restored from saved layout)
         SyncPanelToActiveWidget();
         SyncSessionPanel();
+        // Sync global font scale slider
+        _suppressControlEvents = true;
+        SliderGlobalFontScale.Value = AppSettings.Instance.GlobalFontScale * 100;
+        TxtGlobalFontScale.Text = $"{(int)(AppSettings.Instance.GlobalFontScale * 100)}%";
+        _suppressControlEvents = false;
     }
 
     // ── Widget selector ─────────────────────────────────────────────────
@@ -215,6 +220,7 @@ public partial class MainWindow : Window
             ChkGlow.IsChecked = s.EnableGlowEffects;
             ChkPitLimiter.IsChecked = s.EnablePitLimiterIndicator;
             ChkEnhancedRadar.IsChecked = s.EnableEnhancedRadar;
+            ChkAutoSwap.IsChecked = s.EnableAutoSwap;
 
             // Opacity
             SliderMRTOneOpacity.Value = widget.Opacity * 100;
@@ -408,6 +414,7 @@ public partial class MainWindow : Window
         s.EnableGlowEffects = ChkGlow.IsChecked == true;
         s.EnablePitLimiterIndicator = ChkPitLimiter.IsChecked == true;
         s.EnableEnhancedRadar = ChkEnhancedRadar.IsChecked == true;
+        s.EnableAutoSwap = ChkAutoSwap.IsChecked == true;
         widget.UpdateWidgetSettings(s);
         _widgetManager.SaveCurrentLayout();
     }
@@ -545,6 +552,9 @@ public partial class MainWindow : Window
             ChkShowNationality.IsChecked = widget.ShowNationality;
             ChkShowClassLegend.IsChecked = widget.ShowClassLegend;
             ChkUseFullIRating.IsChecked = widget.UseFullIRating;
+            ChkShowLappedDim.IsChecked = widget.ShowLappedDim;
+            ChkShowDangerGlow.IsChecked = widget.ShowDangerGlow;
+            ChkEnableRowAnimation.IsChecked = widget.EnableRowAnimation;
             CboNameFormat.SelectedIndex = (int)widget.DriverNameFormat;
             SliderRelativeOpacity.Value = widget.Opacity * 100;
             TxtRelativeOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
@@ -585,6 +595,9 @@ public partial class MainWindow : Window
         widget.ShowNationality = ChkShowNationality.IsChecked == true;
         widget.ShowClassLegend = ChkShowClassLegend.IsChecked == true;
         widget.UseFullIRating = ChkUseFullIRating.IsChecked == true;
+        widget.ShowLappedDim = ChkShowLappedDim.IsChecked == true;
+        widget.ShowDangerGlow = ChkShowDangerGlow.IsChecked == true;
+        widget.EnableRowAnimation = ChkEnableRowAnimation.IsChecked == true;
         widget.RecalcLayout();
         widget.RecalcHeight();
         widget.SaveSettings();
@@ -667,6 +680,16 @@ public partial class MainWindow : Window
     // ── Menu column collapse ────────────────────────────────────────────
 
     private bool _menuCollapsed = false;
+
+    private void GlobalFontScale_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        if (TxtGlobalFontScale == null) return;
+        int pct = (int)e.NewValue;
+        TxtGlobalFontScale.Text = $"{pct}%";
+        AppSettings.Instance.GlobalFontScale = pct / 100.0;
+        AppSettings.Instance.Save();
+    }
 
     private void BtnToggleMenu_Click(object sender, RoutedEventArgs e)
     {

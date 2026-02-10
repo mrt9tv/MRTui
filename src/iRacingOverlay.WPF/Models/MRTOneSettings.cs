@@ -114,6 +114,53 @@ public class MRTOneSettings
     [JsonPropertyName("enableEnhancedRadar")]
     public bool EnableEnhancedRadar { get; set; } = false;
 
+    // ============================================
+    // Contextual Center Auto-Swap (Priority Engine)
+    // ============================================
+
+    /// <summary>
+    /// Master toggle for contextual center auto-swap — when enabled, a priority engine
+    /// temporarily overrides the center field based on race conditions.
+    /// </summary>
+    [JsonPropertyName("enableAutoSwap")]
+    public bool EnableAutoSwap { get; set; } = false;
+
+    /// <summary>
+    /// Auto-swap trigger: show "PIT NOW" when fuel is critical (below threshold laps)
+    /// </summary>
+    [JsonPropertyName("autoSwapFuelCritical")]
+    public bool AutoSwapFuelCritical { get; set; } = true;
+
+    /// <summary>
+    /// Auto-swap trigger: show fuel remaining during yellow/caution flag
+    /// </summary>
+    [JsonPropertyName("autoSwapYellowFlag")]
+    public bool AutoSwapYellowFlag { get; set; } = true;
+
+    /// <summary>
+    /// Auto-swap trigger: show lateral indicator (LEFT/RIGHT/BOTH) when car alongside
+    /// </summary>
+    [JsonPropertyName("autoSwapCarAlongside")]
+    public bool AutoSwapCarAlongside { get; set; } = true;
+
+    /// <summary>
+    /// Auto-swap trigger: show pit service status when in pit stall
+    /// </summary>
+    [JsonPropertyName("autoSwapPitService")]
+    public bool AutoSwapPitService { get; set; } = true;
+
+    /// <summary>
+    /// Fuel critical threshold in doable laps for PIT NOW trigger (default 1.5L)
+    /// </summary>
+    [JsonPropertyName("autoSwapFuelThreshold")]
+    public float AutoSwapFuelThreshold { get; set; } = 1.5f;
+
+    /// <summary>
+    /// Hold time in seconds before reverting to default after trigger clears
+    /// </summary>
+    [JsonPropertyName("autoSwapHoldSeconds")]
+    public float AutoSwapHoldSeconds { get; set; } = 2.0f;
+
     /// <summary>
     /// Create default settings
     /// </summary>
@@ -136,7 +183,15 @@ public class MRTOneSettings
         EnablePitLimiterIndicator = true,  // ON by default for safety
         EnableFuelDisplay = true,  // ON by default
         EnableFuelStrategy = false,  // OFF by default (advanced feature)
-        EnableEnhancedRadar = false  // OFF by default (legacy mode 12px squares)
+        EnableEnhancedRadar = false,  // OFF by default (legacy mode 12px squares)
+        // Auto-swap settings
+        EnableAutoSwap = false,  // OFF by default (must opt-in)
+        AutoSwapFuelCritical = true,
+        AutoSwapYellowFlag = true,
+        AutoSwapCarAlongside = true,
+        AutoSwapPitService = true,
+        AutoSwapFuelThreshold = 1.5f,
+        AutoSwapHoldSeconds = 2.0f
     };
     
     /// <summary>
