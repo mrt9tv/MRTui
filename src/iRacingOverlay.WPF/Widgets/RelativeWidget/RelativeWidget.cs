@@ -814,9 +814,17 @@ public class RelativeWidget : WidgetBase
             maxBehind = MaxBehind;
         }
 
-        // Calculate relative entries (filter out disconnected drivers)
-        var entries = _calculator.Calculate(data, maxAhead, maxBehind);
+        // Over-request from calculator to compensate for pit/disconnected cars
+        // that will be filtered out, ensuring we always fill the requested row count.
+        int overRequestAhead = maxAhead + 4;
+        int overRequestBehind = maxBehind + 4;
+        var entries = _calculator.Calculate(data, overRequestAhead, overRequestBehind);
+
+        // Remove disconnected (not-in-world) entries, but keep pit road cars
         entries.RemoveAll(e => !e.IsConnected && !e.IsPlayer);
+
+        // Trim back to desired display count: maxAhead ahead + player + maxBehind behind
+        TrimToDisplayCount(entries, maxAhead, maxBehind);
 
         // Advance blink frame counter
         _frameCount++;
@@ -1058,9 +1066,19 @@ public class RelativeWidget : WidgetBase
         else
             row.PositionDelta.Visibility = Visibility.Collapsed;
 
-        // Car number
-        row.CarNumber.Text = !string.IsNullOrEmpty(entry.CarNumber) ? $"#{entry.CarNumber}" : "-";
-        row.CarNumber.Foreground = mutedBrush;
+        // Car number — Safety Car shows "SC" with orange highlight
+        if (entry.IsSafetyCar)
+        {
+            row.CarNumber.Text = "SC";
+            row.CarNumber.Foreground = BRUSH_ORANGE;
+            row.CarNumber.FontWeight = FontWeights.Bold;
+        }
+        else
+        {
+            row.CarNumber.Text = !string.IsNullOrEmpty(entry.CarNumber) ? $"#{entry.CarNumber}" : "-";
+            row.CarNumber.Foreground = mutedBrush;
+            row.CarNumber.FontWeight = FontWeights.Normal;
+        }
         row.CarNumber.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
 
         // Car model abbreviation
@@ -1077,16 +1095,25 @@ public class RelativeWidget : WidgetBase
         else
             row.Nationality.Visibility = Visibility.Collapsed;
 
-        // Name
-        string name = !string.IsNullOrEmpty(entry.DriverName)
-            ? FormatDriverName(entry.DriverName)
-            : "---";
-        row.Name.Text = name;
-        row.Name.Foreground = textBrush;
-        row.Name.FontWeight = entry.IsPlayer ? FontWeights.Bold : FontWeights.Normal;
+        // Name — Safety Car shows "Safety Car" with orange accent
+        if (entry.IsSafetyCar)
+        {
+            row.Name.Text = "Safety Car";
+            row.Name.Foreground = BRUSH_ORANGE;
+            row.Name.FontWeight = FontWeights.Bold;
+        }
+        else
+        {
+            string name = !string.IsNullOrEmpty(entry.DriverName)
+                ? FormatDriverName(entry.DriverName)
+                : "---";
+            row.Name.Text = name;
+            row.Name.Foreground = textBrush;
+            row.Name.FontWeight = entry.IsPlayer ? FontWeights.Bold : FontWeights.Normal;
+        }
 
-        // License badge + iRating info
-        if (ShowDriverInfo)
+        // License badge + iRating info (suppress for safety car — no driver data)
+        if (ShowDriverInfo && !entry.IsSafetyCar)
         {
             // Colored license badge with letter
             var licBrush = GetLicenseBrush(entry.LicenseClass);
@@ -1591,6 +1618,48 @@ public class RelativeWidget : WidgetBase
     }
 
     // ── Utility ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Trim entries list to display exactly maxAhead cars above and maxBehind cars below the player.
+    /// The calculator over-requests to ensure enough valid cars survive filtering.
+    /// </summary>
+    private static void TrimToDisplayCount(List<RelativeEntry> entries, int maxAhead, int maxBehind)
+    {
+        // Find the player row index
+        int playerIdx = -1;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].IsPlayer) { playerIdx = i; break; }
+        }
+        if (playerIdx < 0) return; // no player found
+
+        // Count actual ahead and behind entries
+        int actualAhead = playerIdx;
+        int actualBehind = entries.Count - playerIdx - 1;
+
+        // Remove excess ahead entries (from the top / farthest ahead)
+        if (actualAhead > maxAhead)
+        {
+            int removeCount = actualAhead - maxAhead;
+            entries.RemoveRange(0, removeCount);
+        }
+
+        // Recalculate player index after removal
+        playerIdx = -1;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            if (entries[i].IsPlayer) { playerIdx = i; break; }
+        }
+        if (playerIdx < 0) return;
+
+        // Remove excess behind entries (from the bottom / farthest behind)
+        actualBehind = entries.Count - playerIdx - 1;
+        if (actualBehind > maxBehind)
+        {
+            int removeCount = actualBehind - maxBehind;
+            entries.RemoveRange(entries.Count - removeCount, removeCount);
+        }
+    }
 
     /// <summary>Count active cars (valid position > 0) in the field.</summary>
     private static int CountActiveCars(TelemetryData data)

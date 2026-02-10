@@ -209,6 +209,9 @@ public class RelativeEntry
 
     /// <summary>2-letter country code from iRacing Club data (approximate mapping).</summary>
     public string CountryCode { get; set; } = string.Empty;
+
+    /// <summary>Whether this entry is the safety/pace car. Display as "SC" with no driver info.</summary>
+    public bool IsSafetyCar { get; set; }
 }
 
 /// <summary>

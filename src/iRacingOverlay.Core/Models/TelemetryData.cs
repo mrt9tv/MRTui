@@ -862,6 +862,17 @@ public class TelemetryData
     public float YawRate { get; set; }
 
     /// <summary>
+    /// Car index of the pace/safety car (-1 if none). Set from YAML DriverInfo.
+    /// </summary>
+    public int PaceCarIdx { get; set; } = -1;
+
+    /// <summary>
+    /// Whether a full-course caution (safety car) is currently active.
+    /// Derived from SessionFlags bit 0x4000 (Caution) or 0x8 (Yellow).
+    /// </summary>
+    public bool IsCautionActive { get; set; }
+
+    /// <summary>
     /// Speed in km/h (calculated from m/s)
     /// </summary>
     public float SpeedKmh => Telemetry.UnitConversions.MpsToKmh(Speed);

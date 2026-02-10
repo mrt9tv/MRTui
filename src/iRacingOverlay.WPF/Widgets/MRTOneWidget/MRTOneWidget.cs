@@ -865,26 +865,38 @@ public class MRTOneWidget : WidgetBase
 
         _radarBlinkState = !_radarBlinkState;
 
-        // FAST blink: VeryClose only — just before contact
+        // FAST blink: VeryClose — entire radar system blinks for maximum urgency
         var (frontZone, rearZone) = _stateManager.GetCurrentZones();
-        if (frontZone == ProximityZone.VeryClose)
+        bool anyVeryClose = frontZone == ProximityZone.VeryClose || rearZone == ProximityZone.VeryClose;
+
+        if (anyVeryClose)
         {
-            _radarFront.Opacity = _radarBlinkState ? 1.0 : 0.3;
-            BlinkArcRings(_arcFrontRings, _radarBlinkState);
+            // Blink the WHOLE radar — gauge circle border, all arcs, all squares
+            double blinkOp = _radarBlinkState ? 1.0 : 0.15;
+
+            // Gauge circle border blinks red
+            if (_radarBlinkState)
+                _gaugeCircle.Stroke = new SolidColorBrush(Colors.Red);
+            else
+                _gaugeCircle.Stroke = new SolidColorBrush(Color.FromArgb(60, 255, 0, 0));
+
+            // Front/back squares blink with high contrast
+            if (frontZone == ProximityZone.VeryClose)
+            {
+                _radarFront.Opacity = blinkOp;
+                BlinkArcRings(_arcFrontRings, _radarBlinkState);
+            }
+            if (rearZone == ProximityZone.VeryClose)
+            {
+                _radarBack.Opacity = blinkOp;
+                BlinkArcRings(_arcBackRings, _radarBlinkState);
+            }
         }
         else
         {
             _radarFront.Opacity = 1.0;
-        }
-
-        if (rearZone == ProximityZone.VeryClose)
-        {
-            _radarBack.Opacity = _radarBlinkState ? 1.0 : 0.3;
-            BlinkArcRings(_arcBackRings, _radarBlinkState);
-        }
-        else
-        {
             _radarBack.Opacity = 1.0;
+            // Restore gauge circle to normal color (will be updated next frame by shift point logic)
         }
     }
 
@@ -1528,7 +1540,8 @@ public class MRTOneWidget : WidgetBase
     private static readonly SolidColorBrush s_radarOrange = new(Color.FromRgb(255, 140, 0));
     private static readonly SolidColorBrush s_radarOrangeRed = new(Color.FromRgb(255, 80, 0));
     private static readonly SolidColorBrush s_radarRed = new(Color.FromRgb(255, 20, 20));
-    private static readonly SolidColorBrush s_radarSideOrange = new(Color.FromRgb(255, 128, 128)); // #FF8080 — side arc
+    private static readonly SolidColorBrush s_radarSideOrange = new(Color.FromRgb(255, 165, 0)); // Bright orange — high visibility for side radar
+    private static readonly SolidColorBrush s_radarSideCritical = new(Color.FromRgb(255, 40, 40)); // Bright red for two cars alongside
     private static readonly SolidColorBrush s_radarTransparent = new(Colors.Transparent);
 
     static MRTOneWidget()
@@ -1541,6 +1554,7 @@ public class MRTOneWidget : WidgetBase
         s_radarOrangeRed.Freeze();
         s_radarRed.Freeze();
         s_radarSideOrange.Freeze();
+        s_radarSideCritical.Freeze();
         s_radarTransparent.Freeze();
     }
 
@@ -1637,16 +1651,18 @@ public class MRTOneWidget : WidgetBase
 
     /// <summary>
     /// Map ProximityZone to how many rings (counting from outermost) should be active.
-    /// VeryClose = all 6, Close = 5, Near = 4, Careful = 3, Far = 0 (safe), Clear = 0.
-    /// Far is >16m — too far for visual warning, keep arcs clean.
+    /// Map ProximityZone to how many rings (counting from outermost) should be active.
+    /// Progressive activation: each zone adds 1 ring for clear visual feedback.
+    /// Far = 1 (earliest warning), Careful = 2, Near = 3-4, Close = 5, VeryClose = 6.
     /// </summary>
     private static int GetActiveRingCount(ProximityZone zone) => zone switch
     {
         ProximityZone.VeryClose => 6,
         ProximityZone.Close => 5,
-        ProximityZone.Near => 4,
-        ProximityZone.Careful => 3,
-        _ => 0  // Far + Clear = no rings
+        ProximityZone.Near => 3,
+        ProximityZone.Careful => 2,
+        ProximityZone.Far => 1,  // Single outermost ring as first awareness indicator
+        _ => 0  // Clear = no rings
     };
 
     /// <summary>
@@ -1659,6 +1675,7 @@ public class MRTOneWidget : WidgetBase
         ProximityZone.Close => s_radarOrangeRed,
         ProximityZone.Near => s_radarOrange,
         ProximityZone.Careful => s_radarYellow,
+        ProximityZone.Far => s_radarYellowGreen,
         _ => s_radarTransparent
     };
 
@@ -1693,20 +1710,21 @@ public class MRTOneWidget : WidgetBase
     }
 
     /// <summary>
-    /// Update a single side arc (left/right). Always #FF8080 orange.
-    /// Binary presence: fades in when car present, two cars = higher opacity.
+    /// Update a single side arc (left/right). High-contrast colors.
+    /// Binary presence: prominent when car present, two cars = red critical.
+    /// Increased opacity for better visibility at a glance.
     /// </summary>
     private static void UpdateSideArc(System.Windows.Shapes.Path arc, bool carPresent, bool twoCars)
     {
         if (twoCars)
         {
-            arc.Fill = s_radarSideOrange;
-            arc.Opacity = 0.70;
+            arc.Fill = s_radarSideCritical;
+            arc.Opacity = 0.90;
         }
         else if (carPresent)
         {
             arc.Fill = s_radarSideOrange;
-            arc.Opacity = 0.50;
+            arc.Opacity = 0.75;
         }
         else
         {
@@ -1717,6 +1735,7 @@ public class MRTOneWidget : WidgetBase
 
     /// <summary>
     /// Fast blink all active rings in a front/back ring set (VeryClose animation).
+    /// High contrast: full opacity ↔ near-invisible for maximum urgency.
     /// </summary>
     private static void BlinkArcRings(System.Windows.Shapes.Path[] rings, bool blinkState)
     {
@@ -1725,7 +1744,7 @@ public class MRTOneWidget : WidgetBase
             if (rings[i].Fill != s_radarTransparent)
             {
                 double maxOp = LayoutConstants.ARC_RING_MAX_OPACITY[i];
-                rings[i].Opacity = blinkState ? maxOp : maxOp * 0.25;
+                rings[i].Opacity = blinkState ? maxOp : maxOp * 0.10;
             }
         }
     }

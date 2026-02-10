@@ -168,6 +168,18 @@ public class FuelData
     /// <summary>Average lap time in seconds (used for time-based calculations)</summary>
     public float AverageLapTime { get; set; }
     
+    /// <summary>
+    /// Estimated total race laps (lap-based: SessionLapsTotal; timed: currentLap + remaining).
+    /// Used by saving/strategy calculations to project fuel over entire race distance.
+    /// </summary>
+    public int EstimatedTotalRaceLaps { get; set; }
+    
+    /// <summary>
+    /// SDK-based fuel consumption estimate (L/lap) derived from FuelUsePerHour.
+    /// Used as fallback for the first 2-3 laps before measured data is reliable.
+    /// </summary>
+    public float SdkFuelEstimate { get; set; }
+    
     /// <summary>Fuel needed to finish race (with current average)</summary>
     public float FuelNeededToFinish { get; set; }
     

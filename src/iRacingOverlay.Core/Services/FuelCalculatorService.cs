@@ -20,6 +20,8 @@ public sealed class FuelCalculatorService
     private float _minFuel = float.MaxValue;
     private float _maxFuel;
     private bool _wasUnderYellow;
+    private bool _isPitLap; // true when a pit stop was detected this lap — skip from averages
+    private float _sdkFuelEstimate; // SDK FuelUsePerHour converted to L/lap for early-lap fallback
 
     // Session change detection
     private int _lastSessionNum = -1;
@@ -45,6 +47,8 @@ public sealed class FuelCalculatorService
         _minFuel = float.MaxValue;
         _maxFuel = 0f;
         _wasUnderYellow = false;
+        _isPitLap = false;
+        _sdkFuelEstimate = 0f;
 
         // Reset snapshot (keep defaults)
         var data = CurrentData;
@@ -108,6 +112,7 @@ public sealed class FuelCalculatorService
             CurrentData.RefuelCount++;
             CurrentData.LastRefuelAmount = fuel - _previousFuel;
             CurrentData.StintLapCount = 0;
+            _isPitLap = true; // flag: this lap's consumption is contaminated
         }
 
         // ── lap change ──────────────────────────────────────────────
@@ -117,37 +122,44 @@ public sealed class FuelCalculatorService
 
             if (used > 0.01f && used < 50f) // sanity bounds
             {
-                _lapFuelUsage.Add(used);
-
-                if (used < _minFuel) _minFuel = used;
-                if (used > _maxFuel) _maxFuel = used;
-
                 CurrentData.FuelUsedLastLap = used;
-                CurrentData.LapsCompleted = _lapFuelUsage.Count;
 
-                // Track green vs yellow separately
-                if (_wasUnderYellow)
+                // Skip pit laps from averages — consumption is contaminated
+                // (partial lap before/after pit distorts the numbers)
+                if (!_isPitLap)
                 {
-                    _yellowLapFuelUsage.Add(used);
-                    CurrentData.YellowFlagLapCount = _yellowLapFuelUsage.Count;
-                }
-                else
-                {
-                    _greenLapFuelUsage.Add(used);
-                    CurrentData.GreenFlagLapCount = _greenLapFuelUsage.Count;
+                    _lapFuelUsage.Add(used);
+
+                    if (used < _minFuel) _minFuel = used;
+                    if (used > _maxFuel) _maxFuel = used;
+
+                    CurrentData.LapsCompleted = _lapFuelUsage.Count;
+
+                    // Track green vs yellow separately
+                    if (_wasUnderYellow)
+                    {
+                        _yellowLapFuelUsage.Add(used);
+                        CurrentData.YellowFlagLapCount = _yellowLapFuelUsage.Count;
+                    }
+                    else
+                    {
+                        _greenLapFuelUsage.Add(used);
+                        CurrentData.GreenFlagLapCount = _greenLapFuelUsage.Count;
+                    }
+
+                    // Lap-to-lap delta
+                    if (_lapFuelUsage.Count >= 2)
+                        CurrentData.LapToLapDelta = used - _lapFuelUsage[^2];
                 }
 
-                // Lap-to-lap delta
-                if (_lapFuelUsage.Count >= 2)
-                    CurrentData.LapToLapDelta = used - _lapFuelUsage[^2];
-                
-                // Track lap times for timed session estimation
+                // Always track lap times (even pit laps are valid for time estimation)
                 if (data.LapLastLapTime > 0 && data.LapLastLapTime < 600)
                     _lapTimes.Add(data.LapLastLapTime);
             }
 
             _fuelAtLapStart = fuel;
             _lastLap = lap;
+            _isPitLap = false; // reset pit flag for next lap
             CurrentData.StintLapCount++;
         }
 
@@ -171,6 +183,19 @@ public sealed class FuelCalculatorService
         CurrentData.SessionState = data.SessionState;
         CurrentData.IsUnderYellow = isUnderYellow;
         CurrentData.LastUpdate = DateTime.UtcNow;
+
+        // ── SDK-based fuel estimate (for early-lap fallback) ────────
+        // iRacing provides FuelUsePerHour (kg/hr). Convert to L/lap estimate.
+        // Use best lap time, last lap time, or average as the time basis.
+        float sdkLapTime = data.LapBestLapTime > 1.0f ? data.LapBestLapTime
+            : data.LapLastLapTime > 1.0f ? data.LapLastLapTime
+            : CurrentData.AverageLapTime > 10f ? CurrentData.AverageLapTime
+            : 0f;
+        if (data.FuelUsePerHour > 0 && sdkLapTime > 1.0f)
+        {
+            _sdkFuelEstimate = (data.FuelUsePerHour / 3600f) * sdkLapTime;
+            CurrentData.SdkFuelEstimate = _sdkFuelEstimate;
+        }
 
         // ── averages ────────────────────────────────────────────────
         CurrentData.AvgFuelPerLap_Last = _lapFuelUsage.Count > 0 ? _lapFuelUsage[^1] : 0;
@@ -198,8 +223,8 @@ public sealed class FuelCalculatorService
         CurrentData.MinFuelPerLap = _minFuel < float.MaxValue ? _minFuel : 0;
         CurrentData.MaxFuelPerLap = _maxFuel;
 
-        // HasSufficientData — need at least 2 valid laps
-        CurrentData.HasSufficientData = _lapFuelUsage.Count >= 2;
+        // HasSufficientData — need at least 2 valid laps (or SDK estimate)
+        CurrentData.HasSufficientData = _lapFuelUsage.Count >= 2 || _sdkFuelEstimate > 0;
 
         // Average lap time for timed session calculations
         CurrentData.AverageLapTime = _lapTimes.Count > 0
@@ -207,9 +232,33 @@ public sealed class FuelCalculatorService
             : 0;
 
         // ── laps remaining (accounts for splutter/buffer zone) ──────────
+        // Early-lap blending: for the first 3 laps, blend SDK estimate with
+        // measured data to provide useful numbers from the start. Weight shifts
+        // from mostly-SDK to mostly-measured as laps accumulate.
         float avgForCalc = CurrentData.AvgFuelPerLap_L5 > 0
             ? CurrentData.AvgFuelPerLap_L5
             : CurrentData.AvgFuelPerLap_Session;
+
+        if (_sdkFuelEstimate > 0)
+        {
+            if (_lapFuelUsage.Count == 0)
+            {
+                // No measured data yet — use SDK estimate entirely
+                avgForCalc = _sdkFuelEstimate;
+            }
+            else if (_lapFuelUsage.Count == 1)
+            {
+                // 1 lap: 40% measured, 60% SDK (single lap can be noisy from race start)
+                avgForCalc = _lapFuelUsage[0] * 0.40f + _sdkFuelEstimate * 0.60f;
+            }
+            else if (_lapFuelUsage.Count == 2)
+            {
+                // 2 laps: 70% measured, 30% SDK
+                float measured = _lapFuelUsage.Average();
+                avgForCalc = measured * 0.70f + _sdkFuelEstimate * 0.30f;
+            }
+            // 3+ laps: pure measured data (avgForCalc already set above)
+        }
 
         // Usable fuel = current fuel minus splutter threshold (unusable fuel at bottom of tank)
         float usableFuel = Math.Max(0, fuel - CurrentData.FuelSputteringThreshold);
@@ -240,6 +289,30 @@ public sealed class FuelCalculatorService
             float estimatedLaps = (float)(CurrentData.SessionTimeRemaining / CurrentData.AverageLapTime);
             CurrentData.EstimatedLapsFromTime = estimatedLaps;
             effectiveRaceLaps = (int)Math.Ceiling(estimatedLaps);
+        }
+
+        // ── estimated total race laps ───────────────────────────────
+        // For lap-based: SessionLapsTotal from SDK.
+        // For timed: current lap + estimated remaining from time/avg lap time.
+        int sessionLapsTotal = data.SessionLapsTotal;
+        bool hasValidTotal = sessionLapsTotal > 0 && sessionLapsTotal <= MAX_SANE_LAPS;
+        if (hasValidTotal)
+        {
+            CurrentData.EstimatedTotalRaceLaps = sessionLapsTotal;
+        }
+        else if (CurrentData.IsTimedSession && CurrentData.AverageLapTime > 10f)
+        {
+            // Timed session: laps completed + remaining estimated from time
+            CurrentData.EstimatedTotalRaceLaps = lap + effectiveRaceLaps;
+        }
+        else if (CurrentData.IsTimedSession && sdkLapTime > 1.0f && data.SessionTimeTotal > 0)
+        {
+            // Very early in timed session: use session total time / best SDK lap estimate
+            CurrentData.EstimatedTotalRaceLaps = (int)Math.Ceiling(data.SessionTimeTotal / sdkLapTime);
+        }
+        else
+        {
+            CurrentData.EstimatedTotalRaceLaps = 0; // unknown
         }
 
         if (avgForCalc > 0 && effectiveRaceLaps > 0)

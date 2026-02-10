@@ -44,16 +44,21 @@ public sealed class FuelSavingService
     public void Update(FuelData fuel)
     {
         // ── guard: not enough data yet ──────────────────────────────
+        // Allow through if SDK estimate is available (early-lap support)
         if (!fuel.HasSufficientData || fuel.AvgFuelPerLap <= 0)
         {
-            ClearSavingFields(fuel);
-            return;
+            // Fallback: use SDK estimate if available for early laps
+            if (fuel.SdkFuelEstimate <= 0)
+            {
+                ClearSavingFields(fuel);
+                return;
+            }
         }
 
         // Track per-lap actual consumption for recent window
         TrackRecentConsumption(fuel);
 
-        float avg = fuel.AvgFuelPerLap;          // selected-method average
+        float avg = fuel.AvgFuelPerLap > 0 ? fuel.AvgFuelPerLap : fuel.SdkFuelEstimate; // fallback to SDK for early laps
         float min = fuel.MinFuelPerLap;           // best efficiency ever achieved
         float current = fuel.CurrentFuel;
         float avgLapTime = fuel.AverageLapTime;
@@ -179,12 +184,20 @@ public sealed class FuelSavingService
 
     private static int GetEffectiveRaceLaps(FuelData fuel)
     {
+        // Prefer direct SDK laps remaining for lap-based races
         if (fuel.RaceLapsRemaining > 0)
             return fuel.RaceLapsRemaining;
 
         // Timed session: estimate from time + avg lap time
         if (fuel.IsTimedSession && fuel.AverageLapTime > 10f)
             return (int)Math.Ceiling(fuel.SessionTimeRemaining / fuel.AverageLapTime);
+
+        // Early in session with estimated total available
+        if (fuel.EstimatedTotalRaceLaps > 0 && fuel.CurrentLap > 0)
+        {
+            int remaining = fuel.EstimatedTotalRaceLaps - fuel.CurrentLap;
+            return remaining > 0 ? remaining : 0;
+        }
 
         return 0;
     }

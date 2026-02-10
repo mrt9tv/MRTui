@@ -168,6 +168,17 @@ public class RelativeCalculator
             if (surface == TRACK_SURFACE_NOT_IN_WORLD)
                 continue;
 
+            // Detect pace/safety car
+            bool isSafetyCar = (i == data.PaceCarIdx && data.PaceCarIdx >= 0);
+
+            // Safety car: only show when caution is active and car is on track (not in pits)
+            if (isSafetyCar)
+            {
+                bool isOnTrack = surface == TRACK_SURFACE_ON_TRACK || surface == TRACK_SURFACE_APPROACHING_PITS;
+                if (!data.IsCautionActive || !isOnTrack)
+                    continue;
+            }
+
             bool isOnPitRoad = ArrayBool(data.CarIdxOnPitRoad, i, false);
 
             // Track last valid surface for tow detection
@@ -303,6 +314,7 @@ public class RelativeCalculator
                 // New feature fields
                 PitStopCount = _pitStopCount[i],
                 CountryCode = DictString(data.CarIdxToCountryCode, i, string.Empty),
+                IsSafetyCar = isSafetyCar,
             };
 
             // ── Off-track duration accumulation ────────────────────

@@ -8,10 +8,11 @@ namespace iRacingOverlay.Core.Services;
 public class ProximityCalculator
 {
     // Distance thresholds in METERS for color zones - RACING-TIGHT
-    private const float VERY_CLOSE_THRESHOLD = 4f;    // <4m - CRITICAL (blinking red)
-    private const float CLOSE_THRESHOLD = 7f;         // 4-7m - WARNING (red)
-    private const float NEAR_THRESHOLD = 12f;         // 7-12m - CAUTION (orange)
-    private const float CAREFUL_THRESHOLD = 16f;      // 12-16m - CAREFUL (yellow)
+    // Tuned for earlier detection to prevent rear-end collisions
+    private const float VERY_CLOSE_THRESHOLD = 5f;    // <5m - CRITICAL (blinking red, whole radar blinks)
+    private const float CLOSE_THRESHOLD = 9f;         // 5-9m - WARNING (red arcs, slow blink)
+    private const float NEAR_THRESHOLD = 14f;         // 9-14m - CAUTION (orange)
+    private const float CAREFUL_THRESHOLD = 20f;      // 14-20m - CAREFUL (yellow, first ring as early warning)
     
     // Detection range: Use PERCENTAGE of track, not fixed meters!
     // This works on all track sizes (small ovals to Nordschleife)
@@ -59,16 +60,16 @@ public class ProximityCalculator
     public ProximityZone ClassifyDistance(float absoluteDistance)
     {
         if (absoluteDistance < VERY_CLOSE_THRESHOLD)
-            return ProximityZone.VeryClose;  // <4m - Blinking Red
+            return ProximityZone.VeryClose;  // <5m - Blinking Red (whole radar)
         
         if (absoluteDistance < CLOSE_THRESHOLD)
-            return ProximityZone.Close;      // 4-7m - Red
+            return ProximityZone.Close;      // 5-9m - Red (slow blink innermost ring)
         
         if (absoluteDistance < NEAR_THRESHOLD)
-            return ProximityZone.Near;       // 7-12m - Orange
+            return ProximityZone.Near;       // 9-14m - Orange
         
         if (absoluteDistance < CAREFUL_THRESHOLD)
-            return ProximityZone.Careful;    // 12-16m - Yellow
+            return ProximityZone.Careful;    // 14-20m - Yellow
         
         // Far zone is anything beyond CAREFUL but still within detection range
         // (detection range is dynamically calculated based on track length)

@@ -232,6 +232,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private DateTime[] _carIdxIncidentTime = new DateTime[64];    // when the incident flag was set
     private Dictionary<int, string> _carIdxToCarModel = new();    // CarIdx -> 3-letter car model abbreviation
     private Dictionary<int, string> _carIdxToCountryCode = new(); // CarIdx -> 2-letter country code
+    private int _paceCarIdx = -1; // CarIdx of the pace/safety car (-1 if none)
     private readonly object _driverDataLock = new(); // Thread safety for async session callbacks
     
     // Tier 2: SessionInfo version tracking - Only parse when SDK increments SessionInfoUpdate
@@ -708,6 +709,11 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 Yaw = sdkData.Yaw.GetValueOrDefault(),
                 YawRate = sdkData.YawRate.GetValueOrDefault(),
 
+                // Safety Car / Pace Car tracking
+                PaceCarIdx = _paceCarIdx,
+                IsCautionActive = ((uint)sdkData.SessionFlags.GetValueOrDefault() & 0x00004000) != 0
+                               || ((uint)sdkData.SessionFlags.GetValueOrDefault() & 0x00008000) != 0,
+
                 // ===== PHASE 2: PIT LIMITER DETECTION =====
                 PitSpeedLimiterActive = sdkData.dcPitSpeedLimiterToggle.GetValueOrDefault(),
                 
@@ -973,7 +979,14 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 {
                     int idx = driver.CarIdx;
                     if (idx < 0 || idx >= 64) continue;
-                    if (driver.CarIsPaceCar == 1) continue; // skip pace car
+                    if (driver.CarIsPaceCar == 1)
+                    {
+                        // Track pace car index but give it a recognizable identity
+                        _paceCarIdx = idx;
+                        _carIdxToCarNumber[idx] = "SC";
+                        _carIdxToDriverName[idx] = "Safety Car";
+                        continue; // skip remaining driver data (no iRating, SR, etc.)
+                    }
 
                     _carIdxToCarNumber[idx] = driver.CarNumber ?? string.Empty;
                     _carIdxToDriverName[idx] = driver.UserName ?? string.Empty;
