@@ -31,6 +31,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<FuelCalculatorService>();
                 services.AddSingleton<WidgetManager>();
                 services.AddSingleton<SessionConfigService>();
+                services.AddSingleton<ProfileStorageService>();
                 services.AddLogging(builder =>
                 {
                     builder.AddConsole();

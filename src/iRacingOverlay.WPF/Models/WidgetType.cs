@@ -29,7 +29,12 @@ public enum WidgetType
     /// Proximity Feed — animated event notifications for nearby cars (±15s).
     /// Shows collisions, off-tracks, pitting, stopped cars, flags, etc.
     /// </summary>
-    ProximityFeed
+    ProximityFeed,
+
+    /// <summary>
+    /// Standings — full-field leaderboard sorted by position with toggleable columns.
+    /// </summary>
+    Standings
 }
 
 /// <summary>
@@ -44,6 +49,7 @@ public static class WidgetTypeExtensions
         WidgetType.FuelCalculator => "Fuel Calculator",
         WidgetType.Relative => "Relative",
         WidgetType.ProximityFeed => "Proximity Feed",
+        WidgetType.Standings => "Standings",
         _ => type.ToString()
     };
 }

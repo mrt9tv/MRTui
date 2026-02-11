@@ -199,7 +199,7 @@ public sealed class NearbyEventDetector
             if (surface == SURFACE_ON_TRACK && !onPitRoad)
             {
                 float prevPct = _prevLapDistPct[i];
-                float curPct = data.CarIdxLapDistPct[i];
+                float curPct = data.CarIdxLapDistPct![i];
                 float pctDelta = curPct - prevPct;
                 // Handle wrap-around
                 if (pctDelta < -0.5f) pctDelta += 1.0f;

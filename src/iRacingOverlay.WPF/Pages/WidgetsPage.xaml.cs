@@ -11,6 +11,7 @@ using iRacingOverlay.WPF.Services;
 using MRTOne = iRacingOverlay.WPF.Widgets.MRTOneWidget.MRTOneWidget;
 using TurnDisplay = iRacingOverlay.WPF.Widgets.TurnDisplayWidget.TurnDisplayWidget;
 using RelativeW = iRacingOverlay.WPF.Widgets.RelativeWidget.RelativeWidget;
+using StandingsW = iRacingOverlay.WPF.Widgets.StandingsWidget.StandingsWidget;
 
 namespace iRacingOverlay.WPF.Pages;
 
@@ -34,6 +35,7 @@ public partial class WidgetsPage : UserControl
         { "BtnWidgetFuel", WidgetType.FuelCalculator },
         { "BtnWidgetRelative", WidgetType.Relative },
         { "BtnWidgetProximityFeed", WidgetType.ProximityFeed },
+        { "BtnWidgetStandings", WidgetType.Standings },
     };
 
     public WidgetsPage(WidgetManager widgetManager, ITelemetryService telemetryService)
@@ -125,11 +127,13 @@ public partial class WidgetsPage : UserControl
         RelativePanel.Visibility = _selectedWidgetType == WidgetType.Relative ? Visibility.Visible : Visibility.Collapsed;
         RelativeRightPanel.Visibility = _selectedWidgetType == WidgetType.Relative ? Visibility.Visible : Visibility.Collapsed;
         ProximityFeedPanel.Visibility = _selectedWidgetType == WidgetType.ProximityFeed ? Visibility.Visible : Visibility.Collapsed;
+        StandingsPanel.Visibility = _selectedWidgetType == WidgetType.Standings ? Visibility.Visible : Visibility.Collapsed;
 
         if (_selectedWidgetType == WidgetType.MRTOne) SyncPanelToMRTOne();
         else if (_selectedWidgetType == WidgetType.TurnDisplay) SyncPanelToTurnDisplay();
         else if (_selectedWidgetType == WidgetType.FuelCalculator) SyncPanelToFuelCalculator();
         else if (_selectedWidgetType == WidgetType.Relative) SyncPanelToRelative();
+        else if (_selectedWidgetType == WidgetType.Standings) SyncPanelToStandings();
     }
 
     // ── MRT One sync ────────────────────────────────────────────────
@@ -484,6 +488,86 @@ public partial class WidgetsPage : UserControl
     // ── Field combos ────────────────────────────────────────────────
 
     private record FieldItem(string DisplayName, TelemetryField? Field);
+
+    // ── Standings sync ────────────────────────────────────────────────
+
+    private StandingsW? GetActiveStandingsWidget()
+    {
+        if (!_widgetManager.HasWidgetType(WidgetType.Standings)) return null;
+        return _widgetManager.GetWidgetsByType(WidgetType.Standings).FirstOrDefault() as StandingsW;
+    }
+
+    private void SyncPanelToStandings()
+    {
+        var widget = GetActiveStandingsWidget();
+        if (widget == null) return;
+
+        _suppressControlEvents = true;
+        try
+        {
+            SliderStandingsRows.Value = widget.MaxVisibleRows;
+            TxtStandingsRows.Text = widget.MaxVisibleRows.ToString();
+            ChkStdCarNumber.IsChecked = widget.ShowCarNumber;
+            ChkStdInterval.IsChecked = widget.ShowInterval;
+            ChkStdGapLeader.IsChecked = widget.ShowGapToLeader;
+            ChkStdLastLap.IsChecked = widget.ShowLastLap;
+            ChkStdBestLap.IsChecked = widget.ShowBestLap;
+            ChkStdCurrentLap.IsChecked = widget.ShowCurrentLap;
+            ChkStdPitCount.IsChecked = widget.ShowPitStopCount;
+            ChkStdIRating.IsChecked = widget.ShowIRating;
+            ChkStdLicense.IsChecked = widget.ShowLicense;
+            ChkStdCarModel.IsChecked = widget.ShowCarModel;
+            ChkStdPosDelta.IsChecked = widget.ShowPositionChange;
+            ChkStdNationality.IsChecked = widget.ShowNationality;
+            ChkStdClassPos.IsChecked = widget.ShowClassPosition;
+            ChkStdAltRows.IsChecked = widget.ShowAlternateRowShading;
+            ChkStdHighlight.IsChecked = widget.HighlightPlayer;
+            ChkStdDimLapped.IsChecked = widget.DimLappedCars;
+        }
+        finally { _suppressControlEvents = false; }
+    }
+
+    private void StandingsToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveStandingsWidget();
+        if (widget == null) return;
+
+        widget.ShowCarNumber = ChkStdCarNumber.IsChecked == true;
+        widget.ShowInterval = ChkStdInterval.IsChecked == true;
+        widget.ShowGapToLeader = ChkStdGapLeader.IsChecked == true;
+        widget.ShowLastLap = ChkStdLastLap.IsChecked == true;
+        widget.ShowBestLap = ChkStdBestLap.IsChecked == true;
+        widget.ShowCurrentLap = ChkStdCurrentLap.IsChecked == true;
+        widget.ShowPitStopCount = ChkStdPitCount.IsChecked == true;
+        widget.ShowIRating = ChkStdIRating.IsChecked == true;
+        widget.ShowLicense = ChkStdLicense.IsChecked == true;
+        widget.ShowCarModel = ChkStdCarModel.IsChecked == true;
+        widget.ShowPositionChange = ChkStdPosDelta.IsChecked == true;
+        widget.ShowNationality = ChkStdNationality.IsChecked == true;
+        widget.ShowClassPosition = ChkStdClassPos.IsChecked == true;
+        widget.ShowAlternateRowShading = ChkStdAltRows.IsChecked == true;
+        widget.HighlightPlayer = ChkStdHighlight.IsChecked == true;
+        widget.DimLappedCars = ChkStdDimLapped.IsChecked == true;
+
+        widget.RecalcLayout();
+        widget.RecalcHeight();
+        widget.SaveSettings();
+    }
+
+    private void StandingsControl_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveStandingsWidget();
+        if (widget == null) return;
+
+        widget.MaxVisibleRows = (int)SliderStandingsRows.Value;
+        TxtStandingsRows.Text = widget.MaxVisibleRows.ToString();
+        widget.RecalcHeight();
+        widget.SaveSettings();
+    }
+
+    // ── Field combos ────────────────────────────────────────────────
 
     private void PopulateFieldCombos()
     {

@@ -50,6 +50,9 @@
                             <CheckBox x:Name="ChkSession_Practice_ProximityFeed" Content="Prox Feed" FontSize="10" IsChecked="False"
                                       Tag="Practice:ProximityFeed" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
                                       Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Practice_Standings" Content="Standings" FontSize="10" IsChecked="False"
+                                      Tag="Practice:Standings" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
                         </WrapPanel>
                     </StackPanel>
                     
@@ -71,6 +74,9 @@
                                       Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
                             <CheckBox x:Name="ChkSession_Qualifying_ProximityFeed" Content="Prox Feed" FontSize="10" IsChecked="False"
                                       Tag="Qualifying:ProximityFeed" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Qualifying_Standings" Content="Standings" FontSize="10" IsChecked="False"
+                                      Tag="Qualifying:Standings" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
                                       Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
                         </WrapPanel>
                     </StackPanel>
@@ -94,6 +100,9 @@
                             <CheckBox x:Name="ChkSession_Race_ProximityFeed" Content="Prox Feed" FontSize="10" IsChecked="True"
                                       Tag="Race:ProximityFeed" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
                                       Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Race_Standings" Content="Standings" FontSize="10" IsChecked="True"
+                                      Tag="Race:Standings" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
                         </WrapPanel>
                     </StackPanel>
                     
@@ -116,7 +125,54 @@
                             <CheckBox x:Name="ChkSession_Warmup_ProximityFeed" Content="Prox Feed" FontSize="10" IsChecked="False"
                                       Tag="Warmup:ProximityFeed" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
                                       Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
+                            <CheckBox x:Name="ChkSession_Warmup_Standings" Content="Standings" FontSize="10" IsChecked="False"
+                                      Tag="Warmup:Standings" Foreground="{StaticResource LightText}" Margin="0,0,12,4"
+                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
                         </WrapPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- ═══════════════════════════════════ -->
+            <!-- PROFILES SECTION                    -->
+            <!-- ═══════════════════════════════════ -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="CONFIGURATION PROFILES" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Named profiles capture visibility AND per-widget data settings. Bind to session type and/or car class for automatic switching."
+                               FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                    
+                    <!-- Auto-switch -->
+                    <CheckBox x:Name="ChkProfileAutoSwitch" Content="Auto-switch profiles"
+                              Style="{StaticResource MRT.ToggleButton}"
+                              IsChecked="False" Margin="0,0,0,6"
+                              Checked="ChkProfileAutoSwitch_Changed" Unchecked="ChkProfileAutoSwitch_Changed"/>
+                    
+                    <!-- Active profile indicator -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="Active: " FontSize="11" Foreground="{StaticResource MutedText}"/>
+                        <TextBlock x:Name="TxtActiveProfile" Text="(none)" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TealPrimary}"/>
+                    </StackPanel>
+                    
+                    <!-- Profile list -->
+                    <StackPanel x:Name="ProfileListPanel" Margin="0,0,0,8"/>
+                    
+                    <!-- Actions -->
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button x:Name="BtnCreateProfile" Content="+ New"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Width="60" Height="24" FontSize="10" Margin="0,0,4,0"
+                                Click="BtnCreateProfile_Click"/>
+                        <Button x:Name="BtnCaptureProfile" Content="⬇ Capture"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Width="70" Height="24" FontSize="10" Margin="0,0,4,0"
+                                ToolTip="Save current widget state into active profile"
+                                Click="BtnCaptureProfile_Click"/>
+                        <Button x:Name="BtnDeleteProfile" Content="✕ Delete"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Width="60" Height="24" FontSize="10"
+                                Click="BtnDeleteProfile_Click"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

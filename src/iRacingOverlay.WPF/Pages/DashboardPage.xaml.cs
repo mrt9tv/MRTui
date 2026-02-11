@@ -90,6 +90,7 @@ public partial class DashboardPage : UserControl
         WidgetType.FuelCalculator => "⛽",
         WidgetType.Relative => "↕",
         WidgetType.ProximityFeed => "⚡",
+        WidgetType.Standings => "🏆",
         _ => "▪",
     };
 

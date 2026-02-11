@@ -34,6 +34,12 @@ public class SessionConfigService
     /// <summary>Current detected session category.</summary>
     public SessionCategory CurrentCategory => _currentCategory;
 
+    /// <summary>Optional profile service for auto-switching profiles on session change.</summary>
+    public ProfileStorageService? ProfileService { get; set; }
+
+    /// <summary>Detected car class name from telemetry (for profile matching).</summary>
+    public string? DetectedCarClass { get; private set; }
+
     public SessionConfigService(ILogger<SessionConfigService> logger)
     {
         _logger = logger;
@@ -62,7 +68,22 @@ public class SessionConfigService
 
         _currentCategory = newCategory;
         SessionCategoryChanged?.Invoke(this, newCategory);
+
+        // Update detected car class from telemetry
+        if (!string.IsNullOrEmpty(data.CarScreenName))
+            DetectedCarClass = data.CarScreenName;
+
         return true;
+    }
+
+    /// <summary>
+    /// Check for best-matching profile given current session + car class.
+    /// Returns the profile ID if auto-switch found a match, null otherwise.
+    /// </summary>
+    public WidgetProfile? CheckProfileMatch()
+    {
+        if (ProfileService == null || !ProfileService.AutoSwitch) return null;
+        return ProfileService.FindBestMatch(_currentCategory, DetectedCarClass);
     }
 
     /// <summary>
@@ -116,6 +137,7 @@ public class SessionConfigService
                 { WidgetType.FuelCalculator, true },
                 { WidgetType.Relative, true },
                 { WidgetType.ProximityFeed, false },
+                { WidgetType.Standings, false },
             }
         };
 
@@ -129,6 +151,7 @@ public class SessionConfigService
                 { WidgetType.FuelCalculator, false },
                 { WidgetType.Relative, false },
                 { WidgetType.ProximityFeed, false },
+                { WidgetType.Standings, false },
             }
         };
 
@@ -142,6 +165,7 @@ public class SessionConfigService
                 { WidgetType.FuelCalculator, true },
                 { WidgetType.Relative, true },
                 { WidgetType.ProximityFeed, true },
+                { WidgetType.Standings, true },
             }
         };
 
@@ -155,6 +179,7 @@ public class SessionConfigService
                 { WidgetType.FuelCalculator, false },
                 { WidgetType.Relative, true },
                 { WidgetType.ProximityFeed, false },
+                { WidgetType.Standings, false },
             }
         };
     }

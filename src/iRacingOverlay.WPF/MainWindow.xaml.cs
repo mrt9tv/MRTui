@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly WidgetManager _widgetManager;
     private readonly ITelemetryService _telemetryService;
     private readonly SessionConfigService _sessionConfig;
+    private readonly ProfileStorageService _profileService;
     private readonly ILogger<MainWindow> _logger;
     private readonly DispatcherTimer _updateRateTimer;
     private GlobalHotkey? _toggleLockHotkey;
@@ -43,7 +44,11 @@ public partial class MainWindow : Window
         _widgetManager = services.GetRequiredService<WidgetManager>();
         _telemetryService = services.GetRequiredService<ITelemetryService>();
         _sessionConfig = services.GetRequiredService<SessionConfigService>();
+        _profileService = services.GetRequiredService<ProfileStorageService>();
         _logger = services.GetRequiredService<ILogger<MainWindow>>();
+
+        // Wire profile service into session config for auto-switching
+        _sessionConfig.ProfileService = _profileService;
 
         _telemetryService.StatusChanged += OnTelemetryStatusChanged;
         _telemetryService.TelemetryUpdated += OnTelemetryUpdatedForSession;
@@ -68,6 +73,7 @@ public partial class MainWindow : Window
         _dashboardPage = new DashboardPage(_widgetManager, _telemetryService, _sessionConfig);
         _widgetsPage = new WidgetsPage(_widgetManager, _telemetryService);
         _sessionsPage = new SessionsPage(_sessionConfig);
+        _sessionsPage.SetProfileService(_profileService, _widgetManager);
         _settingsPage = new SettingsPage();
         _aboutPage = new AboutPage();
 
@@ -133,13 +139,24 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            var preset = _sessionConfig.GetPreset(category);
-            if (preset != null)
+            // Check if a matching profile exists (profile takes priority)
+            var matchedProfile = _sessionConfig.CheckProfileMatch();
+            if (matchedProfile != null)
             {
-                _widgetManager.ApplySessionPreset(preset);
-                _widgetsPage?.SyncPanelToActiveWidget();
+                _profileService.ApplyProfile(matchedProfile.Id, _widgetManager);
+                _logger.LogInformation("Applied profile: {Name} for {Category}", matchedProfile.Name, category);
             }
-            _logger.LogInformation("Applied session preset: {Category}", category);
+            else
+            {
+                // Fall back to basic session preset (visibility only)
+                var preset = _sessionConfig.GetPreset(category);
+                if (preset != null)
+                {
+                    _widgetManager.ApplySessionPreset(preset);
+                    _logger.LogInformation("Applied session preset: {Category}", category);
+                }
+            }
+            _widgetsPage?.SyncPanelToActiveWidget();
         });
     }
 

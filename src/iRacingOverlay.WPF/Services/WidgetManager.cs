@@ -50,6 +50,9 @@ public class WidgetManager
         
         _widgetFactories[WidgetType.ProximityFeed] = (service, config) =>
             new Widgets.ProximityFeedWidget.ProximityFeedWidget(service, config);
+
+        _widgetFactories[WidgetType.Standings] = (service, config) =>
+            new Widgets.StandingsWidget.StandingsWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)

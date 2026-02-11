@@ -51,6 +51,11 @@
                                 Height="28" FontSize="11" Margin="0,0,0,2"
                                 HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
+                        <Button x:Name="BtnWidgetStandings" Content="Standings"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Height="28" FontSize="11" Margin="0,0,0,2"
+                                HorizontalContentAlignment="Left" Padding="8,2"
+                                Click="WidgetMenuButton_Click"/>
                     </StackPanel>
                     
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,6">
@@ -280,6 +285,85 @@
                                        FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
                             <TextBlock Text="Events: off-track, collision, slow/stopped, pitting, flags"
                                        FontSize="10" Foreground="{StaticResource OrangePrimary}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                
+                <!-- ═══════ STANDINGS ═══════ -->
+                <StackPanel x:Name="StandingsPanel" Visibility="Collapsed">
+                    <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
+                        <StackPanel>
+                            <TextBlock Text="STANDINGS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Full-field leaderboard sorted by race position."
+                                       FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                            
+                            <!-- Visible Rows -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Text="Max Rows: " FontSize="10" Foreground="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SliderStandingsRows" Minimum="5" Maximum="40" Value="20"
+                                        Width="100" VerticalAlignment="Center" Margin="4,0,4,0"
+                                        ValueChanged="StandingsControl_Changed"/>
+                                <TextBlock x:Name="TxtStandingsRows" Text="20" FontSize="10"
+                                           Foreground="{StaticResource LightText}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Column Toggles -->
+                            <TextBlock Text="COLUMNS" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,4,0,4"/>
+                            <WrapPanel>
+                                <CheckBox x:Name="ChkStdCarNumber" Content="Car #" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdInterval" Content="Interval" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdGapLeader" Content="Gap" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdLastLap" Content="Last Lap" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdBestLap" Content="Best Lap" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdCurrentLap" Content="Lap #" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdPitCount" Content="Pits" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdIRating" Content="iRating" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdLicense" Content="License" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdCarModel" Content="Car" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdPosDelta" Content="Pos Δ" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdNationality" Content="Nation" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdClassPos" Content="Class Pos" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                            </WrapPanel>
+                            
+                            <!-- Appearance -->
+                            <TextBlock Text="APPEARANCE" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,6,0,4"/>
+                            <WrapPanel>
+                                <CheckBox x:Name="ChkStdAltRows" Content="Alt Rows" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdHighlight" Content="Highlight Me" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                                <CheckBox x:Name="ChkStdDimLapped" Content="Dim Lapped" FontSize="10" IsChecked="False"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="StandingsToggle_Changed" Unchecked="StandingsToggle_Changed"/>
+                            </WrapPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>
