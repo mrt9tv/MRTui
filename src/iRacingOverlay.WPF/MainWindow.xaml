@@ -9,885 +9,97 @@
     
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="52"/>
+            <RowDefinition Height="48"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="32"/>
+            <RowDefinition Height="28"/>
         </Grid.RowDefinitions>
         
-        <!-- Title Bar -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- TITLE BAR                                               -->
+        <!-- ═══════════════════════════════════════════════════════ -->
         <Border Grid.Row="0" Background="{StaticResource DarkSurface}" 
                 BorderBrush="{StaticResource TealPrimary}" BorderThickness="0,0,0,2">
-            <Grid Margin="16,0">
+            <Grid Margin="12,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="MRT UI" 
-                               FontSize="22" FontWeight="Bold"
+                               FontSize="20" FontWeight="Bold"
                                Foreground="{StaticResource TealPrimary}"
                                Margin="0,0,6,0"/>
                     <TextBlock x:Name="TitleVersionText"
-                               Text="v1.0.0" FontSize="12" 
+                               Text="v1.0.0" FontSize="11" 
                                Foreground="{StaticResource MutedText}"
-                               VerticalAlignment="Bottom" Margin="0,0,8,3"/>
+                               VerticalAlignment="Bottom" Margin="0,0,8,2"/>
                     <TextBlock Text="| iRacing Overlay" 
-                               FontSize="15" 
+                               FontSize="13" 
                                Foreground="{StaticResource LightText}"
                                VerticalAlignment="Center"/>
                 </StackPanel>
-                <!-- Menu collapse toggle — always visible small button -->
-                <Button x:Name="BtnToggleMenu" Content="☰" 
-                        HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Width="28" Height="24" FontSize="14"
-                        Foreground="{StaticResource TealPrimary}"
-                        Background="Transparent" BorderThickness="1"
-                        BorderBrush="{StaticResource DarkBorder}"
-                        Cursor="Hand"
-                        Click="BtnToggleMenu_Click"
-                        ToolTip="Toggle sidebar menu"/>
             </Grid>
         </Border>
         
-        <!-- Content Area: 3-Column Layout (Menu | Left Config | Right Config) -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CONTENT: Nav sidebar + Page host                        -->
+        <!-- ═══════════════════════════════════════════════════════ -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <!-- Menu column (collapsible) -->
-                <ColumnDefinition x:Name="MenuColumn" Width="160" MinWidth="0"/>
-                <!-- Left config column -->
-                <ColumnDefinition Width="*"/>
-                <!-- Spacer -->
-                <ColumnDefinition Width="12"/>
-                <!-- Right config column -->
+                <ColumnDefinition Width="44"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             
-            <!-- ═══════════════════════════════════════════════════════ -->
-            <!-- MENU COLUMN (collapsible sidebar)                      -->
-            <!-- ═══════════════════════════════════════════════════════ -->
-            <Border x:Name="MenuBorder" Grid.Column="0" 
-                    Background="{StaticResource DarkSurface}"
-                    BorderBrush="{StaticResource DarkBorder}" BorderThickness="0,0,1,0"
-                    Padding="8,8">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock Text="WIDGETS" Style="{StaticResource MRT.Text.Label}" Margin="4,0,0,6"/>
-                        
-                        <!-- Widget Menu Buttons (replaces ComboBox) -->
-                        <StackPanel x:Name="WidgetMenuButtons" Margin="0,0,0,8">
-                            <Button x:Name="BtnWidgetMRTOne" Content="MRT One"
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Height="26" FontSize="11" Margin="0,0,0,2"
-                                    HorizontalContentAlignment="Left" Padding="8,2"
-                                    Click="WidgetMenuButton_Click"/>
-                            <Button x:Name="BtnWidgetTurnDisplay" Content="Turn Display"
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Height="26" FontSize="11" Margin="0,0,0,2"
-                                    HorizontalContentAlignment="Left" Padding="8,2"
-                                    Click="WidgetMenuButton_Click"/>
-                            <Button x:Name="BtnWidgetFuel" Content="Fuel Calculator"
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Height="26" FontSize="11" Margin="0,0,0,2"
-                                    HorizontalContentAlignment="Left" Padding="8,2"
-                                    Click="WidgetMenuButton_Click"/>
-                            <Button x:Name="BtnWidgetRelative" Content="Relative"
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Height="26" FontSize="11" Margin="0,0,0,2"
-                                    HorizontalContentAlignment="Left" Padding="8,2"
-                                    Click="WidgetMenuButton_Click"/>
-                        </StackPanel>
-                        
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,8">
-                            <Button x:Name="BtnToggleWidget"
-                                    Content="Show"
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Click="BtnToggleWidget_Click"
-                                    Width="64" Height="26" Margin="0,0,4,0"
-                                    FontSize="11" Padding="3,2"/>
-                            <Button x:Name="BtnLockWidgets"
-                                    Content="Lock"
-                                    Style="{StaticResource MRT.Button.Secondary}"
-                                    Click="BtnLockWidgets_Click"
-                                    Width="56" Height="26"
-                                    FontSize="11" Padding="3,2"/>
-                        </StackPanel>
-                        
-                        <TextBlock x:Name="WidgetStatusText"
-                                   Text="Ready."
-                                   FontSize="10"
-                                   Foreground="{StaticResource MutedText}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,10"/>
-                        
-                        <Border Height="1" Background="{StaticResource DarkBorder}" Margin="0,0,0,10"/>
-                        
-                        <TextBlock Text="CONNECTION" Style="{StaticResource MRT.Text.Label}" Margin="4,0,0,4"/>
-                        <TextBlock x:Name="MenuConnectionText" Text="Disconnected" 
-                                   FontSize="11" Foreground="#888888" Margin="4,0,0,4"/>
-                        <TextBlock x:Name="MenuRateText" Text="0 Hz" 
-                                   FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="4,0,0,10"/>
-                        
-                        <Border Height="1" Background="{StaticResource DarkBorder}" Margin="0,0,0,10"/>
-                        
-                        <!-- SESSION AUTO-DETECT -->
-                        <TextBlock Text="SESSION" Style="{StaticResource MRT.Text.Label}" Margin="4,0,0,4"/>
-                        <CheckBox x:Name="ChkAutoDetectSession" Content="Auto-detect"
-                                  Style="{StaticResource MRT.ToggleButton}"
-                                  IsChecked="False" Margin="0,0,0,4"
-                                  ToolTip="Auto-configure widgets when session type changes"
-                                  Checked="ChkAutoDetect_Changed" Unchecked="ChkAutoDetect_Changed"/>
-                        <StackPanel Orientation="Horizontal" Margin="4,0,0,6">
-                            <TextBlock Text="Current: " FontSize="10" Foreground="{StaticResource MutedText}"/>
-                            <TextBlock x:Name="TxtSessionIndicator" Text="—" FontSize="10" Foreground="#888888"/>
-                        </StackPanel>
-                        
-                        <!-- Practice preset -->
-                        <TextBlock Text="Practice" FontSize="9" Foreground="#00BCD4" Margin="4,0,0,2"/>
-                        <WrapPanel Margin="4,0,0,2">
-                            <CheckBox x:Name="ChkSession_Practice_MRTOne" Content="M" FontSize="9" IsChecked="True"
-                                      Tag="Practice:MRTOne" ToolTip="MRT One"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Practice_TurnDisplay" Content="T" FontSize="9" IsChecked="True"
-                                      Tag="Practice:TurnDisplay" ToolTip="Turn Display"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Practice_FuelCalculator" Content="F" FontSize="9" IsChecked="True"
-                                      Tag="Practice:FuelCalculator" ToolTip="Fuel Calculator"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Practice_Relative" Content="R" FontSize="9" IsChecked="True"
-                                      Tag="Practice:Relative" ToolTip="Relative"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                        </WrapPanel>
-                        
-                        <!-- Qualifying preset -->
-                        <TextBlock Text="Qualifying" FontSize="9" Foreground="#AB47BC" Margin="4,2,0,2"/>
-                        <WrapPanel Margin="4,0,0,2">
-                            <CheckBox x:Name="ChkSession_Qualifying_MRTOne" Content="M" FontSize="9" IsChecked="True"
-                                      Tag="Qualifying:MRTOne" ToolTip="MRT One"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Qualifying_TurnDisplay" Content="T" FontSize="9" IsChecked="True"
-                                      Tag="Qualifying:TurnDisplay" ToolTip="Turn Display"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Qualifying_FuelCalculator" Content="F" FontSize="9" IsChecked="False"
-                                      Tag="Qualifying:FuelCalculator" ToolTip="Fuel Calculator"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Qualifying_Relative" Content="R" FontSize="9" IsChecked="False"
-                                      Tag="Qualifying:Relative" ToolTip="Relative"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                        </WrapPanel>
-                        
-                        <!-- Race preset -->
-                        <TextBlock Text="Race" FontSize="9" Foreground="#4CAF50" Margin="4,2,0,2"/>
-                        <WrapPanel Margin="4,0,0,2">
-                            <CheckBox x:Name="ChkSession_Race_MRTOne" Content="M" FontSize="9" IsChecked="True"
-                                      Tag="Race:MRTOne" ToolTip="MRT One"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Race_TurnDisplay" Content="T" FontSize="9" IsChecked="True"
-                                      Tag="Race:TurnDisplay" ToolTip="Turn Display"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Race_FuelCalculator" Content="F" FontSize="9" IsChecked="True"
-                                      Tag="Race:FuelCalculator" ToolTip="Fuel Calculator"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Race_Relative" Content="R" FontSize="9" IsChecked="True"
-                                      Tag="Race:Relative" ToolTip="Relative"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                        </WrapPanel>
-                        
-                        <!-- Warmup preset -->
-                        <TextBlock Text="Warmup" FontSize="9" Foreground="#FF9800" Margin="4,2,0,2"/>
-                        <WrapPanel Margin="4,0,0,6">
-                            <CheckBox x:Name="ChkSession_Warmup_MRTOne" Content="M" FontSize="9" IsChecked="True"
-                                      Tag="Warmup:MRTOne" ToolTip="MRT One"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Warmup_TurnDisplay" Content="T" FontSize="9" IsChecked="False"
-                                      Tag="Warmup:TurnDisplay" ToolTip="Turn Display"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Warmup_FuelCalculator" Content="F" FontSize="9" IsChecked="False"
-                                      Tag="Warmup:FuelCalculator" ToolTip="Fuel Calculator"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                            <CheckBox x:Name="ChkSession_Warmup_Relative" Content="R" FontSize="9" IsChecked="True"
-                                      Tag="Warmup:Relative" ToolTip="Relative"
-                                      Foreground="{StaticResource LightText}" Margin="0,0,4,2"
-                                      Checked="SessionPresetToggle_Changed" Unchecked="SessionPresetToggle_Changed"/>
-                        </WrapPanel>
-                        
-                        <Border Height="1" Background="{StaticResource DarkBorder}" Margin="0,6,0,6"/>
-                        
-                        <!-- GLOBAL FONT SCALE -->
-                        <TextBlock Text="FONT SCALE" Style="{StaticResource MRT.Text.Label}" Margin="4,0,0,4"/>
-                        <Grid Margin="4,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="36"/>
-                            </Grid.ColumnDefinitions>
-                            <Slider x:Name="SliderGlobalFontScale"
-                                    Style="{StaticResource MRT.Slider}"
-                                    Minimum="70" Maximum="150" Value="100"
-                                    TickFrequency="5" IsSnapToTickEnabled="True"
-                                    ValueChanged="GlobalFontScale_ValueChanged"/>
-                            <TextBlock x:Name="TxtGlobalFontScale" Grid.Column="1"
-                                       Text="100%" FontSize="10"
-                                       Foreground="{StaticResource TealPrimary}"
-                                       VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                        </Grid>
-                    </StackPanel>
-                </ScrollViewer>
+            <!-- NAVIGATION SIDEBAR -->
+            <Border Grid.Column="0" Background="{StaticResource DarkSurface}"
+                    BorderBrush="{StaticResource DarkBorder}" BorderThickness="0,0,1,0">
+                <StackPanel VerticalAlignment="Top" Margin="0,6,0,0">
+                    <Button x:Name="NavDashboard" Content="&#x2302;" ToolTip="Dashboard"
+                            Click="NavButton_Click" Tag="Dashboard"
+                            Width="36" Height="36" Margin="4,2" FontSize="18"
+                            Foreground="{StaticResource TealPrimary}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
+                    <Button x:Name="NavWidgets" Content="&#x25A6;" ToolTip="Widgets"
+                            Click="NavButton_Click" Tag="Widgets"
+                            Width="36" Height="36" Margin="4,2" FontSize="16"
+                            Foreground="{StaticResource LightText}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
+                    <Button x:Name="NavSessions" Content="&#x23F1;" ToolTip="Sessions"
+                            Click="NavButton_Click" Tag="Sessions"
+                            Width="36" Height="36" Margin="4,2" FontSize="16"
+                            Foreground="{StaticResource LightText}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
+                    <Button x:Name="NavSettings" Content="&#x2699;" ToolTip="Settings"
+                            Click="NavButton_Click" Tag="Settings"
+                            Width="36" Height="36" Margin="4,2" FontSize="16"
+                            Foreground="{StaticResource LightText}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
+                    <Button x:Name="NavAbout" Content="&#x2139;" ToolTip="About"
+                            Click="NavButton_Click" Tag="About"
+                            Width="36" Height="36" Margin="4,2" FontSize="16"
+                            Foreground="{StaticResource LightText}"
+                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
+                </StackPanel>
             </Border>
-
-            <!-- ═══════════════════════════════════════════════════════ -->
-            <!-- LEFT COLUMN: Widget Selection + Core Controls          -->
-            <!-- ═══════════════════════════════════════════════════════ -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="8,8">
-                <StackPanel>
-                    
-                    <!-- ═══════ MRT ONE: SIZE + POSITION ═══════ -->
-                    <StackPanel x:Name="MRTOnePanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="8"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                
-                                <!-- Size -->
-                                <Grid Grid.Row="0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="42"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="48"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="SIZE" Style="{StaticResource MRT.Text.Label}" VerticalAlignment="Center"/>
-                                    <Slider x:Name="SliderWidgetSize" Grid.Column="1"
-                                            Style="{StaticResource MRT.Slider}"
-                                            Minimum="120" Maximum="600" Value="240"
-                                            TickFrequency="10" IsSnapToTickEnabled="True"
-                                            ValueChanged="SliderWidgetSize_ValueChanged"/>
-                                    <TextBlock x:Name="TxtSizeValue" Grid.Column="2"
-                                               Text="240px" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <!-- Position buttons -->
-                                <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <Button Content="Center H" 
-                                            Style="{StaticResource MRT.Button.Secondary}"
-                                            Click="BtnCenterH_Click"
-                                            Width="72" Height="26" Margin="0,0,4,0"
-                                            FontSize="10" Padding="3,2"/>
-                                    <Button Content="Center V" 
-                                            Style="{StaticResource MRT.Button.Secondary}"
-                                            Click="BtnCenterV_Click"
-                                            Width="72" Height="26" Margin="0,0,4,0"
-                                            FontSize="10" Padding="3,2"/>
-                                    <Button Content="Both" 
-                                            Style="{StaticResource MRT.Button.Secondary}"
-                                            Click="BtnCenterBoth_Click"
-                                            Width="52" Height="26"
-                                            FontSize="10" Padding="3,2"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    
-                        <!-- ═══════ MRT ONE: DATA FIELDS ═══════ -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="DATA FIELDS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
-                                <StackPanel>
-                                    <StackPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Top" Foreground="{StaticResource MutedText}" FontSize="10" Margin="0,0,0,2"/>
-                                        <ComboBox x:Name="CboTopField" Height="26" FontSize="12"
-                                                  SelectionChanged="FieldCombo_SelectionChanged"/>
-                                    </StackPanel>
-                                    <StackPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Center" Foreground="{StaticResource MutedText}" FontSize="10" Margin="0,0,0,2"/>
-                                        <ComboBox x:Name="CboCenterField" Height="26" FontSize="12"
-                                                  SelectionChanged="FieldCombo_SelectionChanged"/>
-                                    </StackPanel>
-                                    <StackPanel Margin="0,0,0,4">
-                                        <TextBlock Text="Bottom" Foreground="{StaticResource MutedText}" FontSize="10" Margin="0,0,0,2"/>
-                                        <ComboBox x:Name="CboBottomField" Height="26" FontSize="12"
-                                                  SelectionChanged="FieldCombo_SelectionChanged"/>
-                                    </StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Margin="0,0,0,2">
-                                            <TextBlock Text="Left" Foreground="{StaticResource MutedText}" FontSize="10" Margin="0,0,0,2"/>
-                                            <ComboBox x:Name="CboLeftField" Height="26" FontSize="12"
-                                                      SelectionChanged="FieldCombo_SelectionChanged"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2" Margin="0,0,0,2">
-                                            <TextBlock Text="Right" Foreground="{StaticResource MutedText}" FontSize="10" Margin="0,0,0,2"/>
-                                            <ComboBox x:Name="CboRightField" Height="26" FontSize="12"
-                                                      SelectionChanged="FieldCombo_SelectionChanged"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END MRT ONE LEFT COLUMN -->
-
-                    <!-- ═══════ TURN DISPLAY CONTROLS ═══════ -->
-                    <StackPanel x:Name="TurnDisplayPanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="TURN DISPLAY" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Shows next and last turn on track"
-                                           FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,10"
-                                           TextWrapping="Wrap"/>
-                                <WrapPanel>
-                                    <CheckBox x:Name="ChkShowTurnNames" Content="Show Turn Names"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,10,4"
-                                              Checked="TurnDisplayToggle_Changed" Unchecked="TurnDisplayToggle_Changed"/>
-                                    <CheckBox x:Name="ChkAnimateBorder" Content="Animate Border"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,10,4"
-                                              Checked="TurnDisplayToggle_Changed" Unchecked="TurnDisplayToggle_Changed"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                        
-                        <!-- Widget Opacity -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="OPACITY" Style="{StaticResource MRT.Text.Label}"/>
-                                    <TextBlock x:Name="TxtTurnOpacity" Grid.Column="1" Text="100%" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"/>
-                                </Grid>
-                                <Slider x:Name="SliderTurnOpacity"
-                                        Style="{StaticResource MRT.Slider}"
-                                        Minimum="30" Maximum="100" Value="100"
-                                        TickFrequency="5" IsSnapToTickEnabled="True"
-                                        ValueChanged="TurnOpacity_ValueChanged"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END TURN DISPLAY CONTROLS -->
-
-                    <!-- ═══════ FUEL CALCULATOR CONTROLS ═══════ -->
-                    <StackPanel x:Name="FuelCalculatorPanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="FUEL CALCULATOR" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Shows fuel saving, lift &amp; coast, and pit vs save strategy."
-                                           FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,6"
-                                           TextWrapping="Wrap"/>
-                                <TextBlock Text="Laps remaining accounts for 0.3L splutter buffer."
-                                           FontSize="10" Foreground="{StaticResource OrangePrimary}" Margin="0,0,0,8"
-                                           TextWrapping="Wrap"/>
-                                <WrapPanel>
-                                    <CheckBox x:Name="ChkFuelL3" Content="L3 Avg"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              Checked="FuelCalculatorToggle_Changed" Unchecked="FuelCalculatorToggle_Changed"/>
-                                    <CheckBox x:Name="ChkFuelL5" Content="L5 Avg"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              Checked="FuelCalculatorToggle_Changed" Unchecked="FuelCalculatorToggle_Changed"/>
-                                    <CheckBox x:Name="ChkFuelSaving" Content="Saving Section"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              ToolTip="Show projected delta, save target, and pit strategy rows"
-                                              Checked="FuelCalculatorToggle_Changed" Unchecked="FuelCalculatorToggle_Changed"/>
-                                    <CheckBox x:Name="ChkFuelPitLap" Content="Pit Lap"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show predicted pit lap number"
-                                              Checked="FuelCalculatorToggle_Changed" Unchecked="FuelCalculatorToggle_Changed"/>
-                                    <CheckBox x:Name="ChkFuelFillAmount" Content="Fill Amount"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show fuel needed to add at pit stop"
-                                              Checked="FuelCalculatorToggle_Changed" Unchecked="FuelCalculatorToggle_Changed"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END FUEL CALCULATOR CONTROLS -->
-
-                    <!-- ═══════ RELATIVE CONTROLS ═══════ -->
-                    <StackPanel x:Name="RelativePanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="RELATIVE" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Proximity-based relative table showing cars ahead and behind."
-                                           FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8"
-                                           TextWrapping="Wrap"/>
-                                
-                                <!-- Ahead / Behind counts -->
-                                <Grid Margin="0,0,0,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="52"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="28"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="AHEAD" Style="{StaticResource MRT.Text.Label}" VerticalAlignment="Center"/>
-                                    <Slider x:Name="SliderMaxAhead" Grid.Column="1"
-                                            Style="{StaticResource MRT.Slider}"
-                                            Minimum="1" Maximum="10" Value="3"
-                                            TickFrequency="1" IsSnapToTickEnabled="True"
-                                            ValueChanged="RelativeSlider_ValueChanged"/>
-                                    <TextBlock x:Name="TxtMaxAhead" Grid.Column="2"
-                                               Text="3" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                </Grid>
-                                <Grid Margin="0,0,0,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="52"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="28"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="BEHIND" Style="{StaticResource MRT.Text.Label}" VerticalAlignment="Center"/>
-                                    <Slider x:Name="SliderMaxBehind" Grid.Column="1"
-                                            Style="{StaticResource MRT.Slider}"
-                                            Minimum="1" Maximum="10" Value="3"
-                                            TickFrequency="1" IsSnapToTickEnabled="True"
-                                            ValueChanged="RelativeSlider_ValueChanged"/>
-                                    <TextBlock x:Name="TxtMaxBehind" Grid.Column="2"
-                                               Text="3" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                </Grid>
-                                
-                                <WrapPanel>
-                                    <CheckBox x:Name="ChkSmartRowCount" Content="Smart Rows"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              ToolTip="Auto-adjust visible rows for P1 (all behind)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowClassPosition" Content="Class Pos"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END RELATIVE CONTROLS -->
-                    
-                </StackPanel>
-            </ScrollViewer>
-            <!-- END LEFT COLUMN -->
-                
-            <!-- ═══════════════════════════════════════════════════════ -->
-            <!-- RIGHT COLUMN: Extended Settings + Alerts               -->
-            <!-- ═══════════════════════════════════════════════════════ -->
-            <ScrollViewer Grid.Column="3" VerticalScrollBarVisibility="Auto" Padding="8,8">
-                <StackPanel>
-                    
-                    <!-- ═══════ MRT ONE: FUEL ALERTS ═══════ -->
-                    <StackPanel x:Name="MRTOneRightPanel" Visibility="Collapsed">
-
-                        <!-- ═══════ MRT ONE: VISUALS ═══════ -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="VISUALS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <WrapPanel>
-                                    <CheckBox x:Name="ChkGradientBg" Content="Gradient BG"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShiftRing" Content="Shift Ring"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              Margin="0,0,8,4"
-                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
-                                    <CheckBox x:Name="ChkGlow" Content="Glow"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              Margin="0,0,8,4"
-                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
-                                    <CheckBox x:Name="ChkPitLimiter" Content="Pit Limiter"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
-                                    <CheckBox x:Name="ChkEnhancedRadar" Content="Radar+"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              Margin="0,0,8,4"
-                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
-                                    <CheckBox x:Name="ChkAutoSwap" Content="Auto-Swap"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Priority-based center field override (PIT NOW, yellow, car alongside)"
-                                              Checked="VisualToggle_Changed" Unchecked="VisualToggle_Changed"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                        
-                        <!-- Widget Opacity -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="OPACITY" Style="{StaticResource MRT.Text.Label}"/>
-                                    <TextBlock x:Name="TxtMRTOneOpacity" Grid.Column="1" Text="100%" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"/>
-                                </Grid>
-                                <Slider x:Name="SliderMRTOneOpacity"
-                                        Style="{StaticResource MRT.Slider}"
-                                        Minimum="30" Maximum="100" Value="100"
-                                        TickFrequency="5" IsSnapToTickEnabled="True"
-                                        ValueChanged="MRTOneOpacity_ValueChanged"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END MRT ONE RIGHT COLUMN -->
-
-                    <!-- ═══════ FUEL CALCULATOR: ALERTS & SETTINGS ═══════ -->
-                    <StackPanel x:Name="FuelCalcRightPanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,6,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="FUEL ALERTS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Thresholds (doable laps)"
-                                           FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,6"
-                                           TextWrapping="Wrap"/>
-                                
-                                <!-- Yellow threshold (default: 4 laps) -->
-                                <StackPanel Margin="0,0,0,6">
-                                    <Grid Margin="0,0,0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox x:Name="ChkFuelYellow" IsChecked="True"
-                                                  Foreground="#FFFF00" FontSize="10" VerticalAlignment="Center"
-                                                  Margin="0,0,4,0"
-                                                  Checked="FuelAlertToggle_Changed" Unchecked="FuelAlertToggle_Changed"/>
-                                        <TextBlock Grid.Column="1" FontSize="10" VerticalAlignment="Center">
-                                            <Run Text="Yellow" Foreground="#FFFF00"/>
-                                            <Run Text=" (caution)" Foreground="{StaticResource MutedText}"/>
-                                        </TextBlock>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Slider x:Name="SliderFuelYellow"
-                                                Style="{StaticResource MRT.Slider}"
-                                                Minimum="1" Maximum="15" Value="4"
-                                                TickFrequency="0.5" IsSnapToTickEnabled="True"
-                                                ValueChanged="FuelAlert_ValueChanged"/>
-                                        <TextBlock x:Name="TxtFuelYellow" Grid.Column="1"
-                                                   Text="4.0" FontSize="11"
-                                                   Foreground="#FFFF00"
-                                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </StackPanel>
-                                
-                                <!-- Red threshold (default: 2.5 laps) -->
-                                <StackPanel Margin="0,0,0,6">
-                                    <Grid Margin="0,0,0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox x:Name="ChkFuelRed" IsChecked="True"
-                                                  Foreground="#FF3333" FontSize="10" VerticalAlignment="Center"
-                                                  Margin="0,0,4,0"
-                                                  Checked="FuelAlertToggle_Changed" Unchecked="FuelAlertToggle_Changed"/>
-                                        <TextBlock Grid.Column="1" FontSize="10" VerticalAlignment="Center">
-                                            <Run Text="Red" Foreground="#FF3333"/>
-                                            <Run Text=" (urgent)" Foreground="{StaticResource MutedText}"/>
-                                        </TextBlock>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Slider x:Name="SliderFuelRed"
-                                                Style="{StaticResource MRT.Slider}"
-                                                Minimum="0.5" Maximum="10" Value="2.5"
-                                                TickFrequency="0.5" IsSnapToTickEnabled="True"
-                                                ValueChanged="FuelAlert_ValueChanged"/>
-                                        <TextBlock x:Name="TxtFuelRed" Grid.Column="1"
-                                                   Text="2.5" FontSize="11"
-                                                   Foreground="#FF3333"
-                                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </StackPanel>
-                                
-                                <!-- Critical threshold (default: 1.5 laps) -->
-                                <StackPanel Margin="0,0,0,6">
-                                    <Grid Margin="0,0,0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox x:Name="ChkFuelCritical" IsChecked="True"
-                                                  Foreground="#FF0000" FontSize="10" VerticalAlignment="Center"
-                                                  Margin="0,0,4,0"
-                                                  Checked="FuelAlertToggle_Changed" Unchecked="FuelAlertToggle_Changed"/>
-                                        <TextBlock Grid.Column="1" FontSize="10" VerticalAlignment="Center">
-                                            <Run Text="Critical" Foreground="#FF0000"/>
-                                            <Run Text=" (blink)" Foreground="{StaticResource MutedText}"/>
-                                        </TextBlock>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Slider x:Name="SliderFuelCritical"
-                                                Style="{StaticResource MRT.Slider}"
-                                                Minimum="0" Maximum="5" Value="1.5"
-                                                TickFrequency="0.5" IsSnapToTickEnabled="True"
-                                                ValueChanged="FuelAlert_ValueChanged"/>
-                                        <TextBlock x:Name="TxtFuelCritical" Grid.Column="1"
-                                                   Text="1.5" FontSize="11"
-                                                   Foreground="#FF0000"
-                                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </StackPanel>
-                                
-                                <!-- Sputtering threshold (default: 0.4L) -->
-                                <StackPanel Margin="0,0,0,2">
-                                    <Grid Margin="0,0,0,2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox x:Name="ChkFuelSputter" IsChecked="True"
-                                                  Foreground="{StaticResource OrangePrimary}" FontSize="10" VerticalAlignment="Center"
-                                                  Margin="0,0,4,0"
-                                                  ToolTip="When enabled, fuel below this level is considered unusable.&#x0a;The engine sputters and dies before the tank is truly empty.&#x0a;&#x0a;Varies by car:&#x0a;  GT3 ≈ 0.3 L&#x0a;  Formula ≈ 0.2 L&#x0a;  Heavy / prototypes ≈ 0.5 L&#x0a;&#x0a;This is subtracted from your current fuel before calculating&#x0a;doable laps, giving you a realistic picture instead of a&#x0a;theoretical 'fuel ÷ consumption' number."
-                                                  Checked="FuelAlertToggle_Changed" Unchecked="FuelAlertToggle_Changed"/>
-                                        <TextBlock Grid.Column="1" FontSize="10" VerticalAlignment="Center"
-                                                   ToolTip="Fuel level (litres) below which the engine sputters and dies.&#x0a;Subtracted from current fuel for realistic 'doable laps' calculation.&#x0a;&#x0a;GT3 ≈ 0.3 L  |  Formula ≈ 0.2 L  |  Heavy ≈ 0.5 L">
-                                            <Run Text="Sputter" Foreground="{StaticResource OrangePrimary}"/>
-                                            <Run Text=" (L) &#x2139;" Foreground="{StaticResource MutedText}"/>
-                                        </TextBlock>
-                                    </Grid>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="36"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Slider x:Name="SliderFuelSputter"
-                                                Style="{StaticResource MRT.Slider}"
-                                                Minimum="0" Maximum="2" Value="0.4"
-                                                TickFrequency="0.1" IsSnapToTickEnabled="True"
-                                                ValueChanged="FuelAlert_ValueChanged"/>
-                                        <TextBlock x:Name="TxtFuelSputter" Grid.Column="1"
-                                                   Text="0.4L" FontSize="11"
-                                                   Foreground="{StaticResource OrangePrimary}"
-                                                   VerticalAlignment="Center" HorizontalAlignment="Right"/>
-                                    </Grid>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                        
-                        <!-- Widget Opacity -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="OPACITY" Style="{StaticResource MRT.Text.Label}"/>
-                                    <TextBlock x:Name="TxtFuelOpacity" Grid.Column="1" Text="100%" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"/>
-                                </Grid>
-                                <Slider x:Name="SliderFuelOpacity"
-                                        Style="{StaticResource MRT.Slider}"
-                                        Minimum="30" Maximum="100" Value="100"
-                                        TickFrequency="5" IsSnapToTickEnabled="True"
-                                        ValueChanged="FuelOpacity_ValueChanged"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END FUEL CALCULATOR RIGHT COLUMN -->
-
-                    <!-- ═══════ RELATIVE: EXTRA OPTIONS ═══════ -->
-                    <StackPanel x:Name="RelativeRightPanel" Visibility="Collapsed">
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="RELATIVE – EXTRA COLUMNS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <TextBlock Text="Toggle additional data columns on the overlay"
-                                           FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8"
-                                           TextWrapping="Wrap"/>
-                                <WrapPanel>
-                                    <CheckBox x:Name="ChkShowDriverInfo" Content="Driver Info"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show license badge + iRating"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkUseFullIRating" Content="Full iR"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show full iRating (2035) instead of compact (2.0k)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowCarNumber" Content="Car #"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="True" Margin="0,0,8,4"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowCarModel" Content="Car Model"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show 3-letter car abbreviation (e.g. 488, AMG)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowInterval" Content="Gap"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show gap to car directly ahead in race position"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowLastLap" Content="Last Lap"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowAltRowShading" Content="Alt Rows"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Alternate row shading for readability"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowInfoBar" Content="Info Bar"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show est laps, time remaining, incidents at bottom"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowClosingRate" Content="Closing ▲▼"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show closing rate arrow (▲ closing / ▼ pulling away)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowPitStopCount" Content="Pit Stops"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show pit stop count per driver (1p, 2p, etc.)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowPositionChange" Content="Pos Δ"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show position change arrows (▲3 gained / ▼2 lost vs 5 laps ago)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowSectorDelta" Content="Gap Color"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Color REL column green (closing) / red (opening)"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowNationality" Content="Nationality"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show 2-letter country code from iRacing club data"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowClassLegend" Content="Class Legend"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Show class color legend with car counts in header"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowLappedDim" Content="Dim Lapped"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Dim cars that are 1+ laps behind or ahead"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkShowDangerGlow" Content="Danger Glow"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Red tint on rows with high closing rate"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                    <CheckBox x:Name="ChkEnableRowAnimation" Content="Animate"
-                                              Style="{StaticResource MRT.ToggleButton}"
-                                              IsChecked="False" Margin="0,0,8,4"
-                                              ToolTip="Smooth row slide animation when positions change"
-                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                        
-                        <!-- Name Format -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <TextBlock Text="NAME FORMAT" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
-                                <ComboBox x:Name="CboNameFormat" Width="160" HorizontalAlignment="Left"
-                                          SelectionChanged="CboNameFormat_SelectionChanged">
-                                    <ComboBoxItem Content="J.Smith" Tag="0" IsSelected="True"/>
-                                    <ComboBoxItem Content="Full Name" Tag="1"/>
-                                    <ComboBoxItem Content="Initials (J.S.)" Tag="2"/>
-                                    <ComboBoxItem Content="First Three (JOE)" Tag="3"/>
-                                    <ComboBoxItem Content="Last Name" Tag="4"/>
-                                    <ComboBoxItem Content="First Name" Tag="5"/>
-                                    <ComboBoxItem Content="3-Letter Code (SMI)" Tag="6"/>
-                                    <ComboBoxItem Content="Smith, J." Tag="7"/>
-                                    <ComboBoxItem Content="J.Smit (4-char)" Tag="8"/>
-                                    <ComboBoxItem Content="Joe S." Tag="9"/>
-                                    <ComboBoxItem Content="SMITH (caps)" Tag="10"/>
-                                    <ComboBoxItem Content="J.Smi (3-char)" Tag="11"/>
-                                    <ComboBoxItem Content="Smith J" Tag="12"/>
-                                    <ComboBoxItem Content="JSmith (compact)" Tag="13"/>
-                                </ComboBox>
-                            </StackPanel>
-                        </Border>
-                        
-                        <!-- Widget Opacity -->
-                        <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="OPACITY" Style="{StaticResource MRT.Text.Label}"/>
-                                    <TextBlock x:Name="TxtRelativeOpacity" Grid.Column="1" Text="100%" FontSize="11"
-                                               Foreground="{StaticResource TealPrimary}"/>
-                                </Grid>
-                                <Slider x:Name="SliderRelativeOpacity"
-                                        Style="{StaticResource MRT.Slider}"
-                                        Minimum="30" Maximum="100" Value="100"
-                                        TickFrequency="5" IsSnapToTickEnabled="True"
-                                        ValueChanged="RelativeOpacity_ValueChanged"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                    <!-- END RELATIVE EXTRA OPTIONS -->
-                    
-                </StackPanel>
-            </ScrollViewer>
-            <!-- END RIGHT COLUMN -->
-                
+            
+            <!-- PAGE HOST -->
+            <ContentControl x:Name="PageHost" Grid.Column="1"/>
         </Grid>
         
-        <!-- Status Bar -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- STATUS BAR                                              -->
+        <!-- ═══════════════════════════════════════════════════════ -->
         <Border Grid.Row="2" Background="{StaticResource DarkSurface}"
                 BorderBrush="{StaticResource DarkBorder}" BorderThickness="0,1,0,0">
-            <Grid Margin="16,0">
+            <Grid Margin="12,0">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="ConnectionStatusText" 
-                               Text="Disconnected" FontSize="11"
-                               Foreground="#888888" Margin="0,0,16,0"/>
-                    <TextBlock Text="Rate: " FontSize="10"
+                               Text="Disconnected" FontSize="10"
+                               Foreground="#888888" Margin="0,0,12,0"/>
+                    <TextBlock Text="Rate: " FontSize="9"
                                Foreground="{StaticResource MutedText}" Margin="0,0,2,0"/>
-                    <TextBlock x:Name="UpdateRateText" Text="0 Hz" FontSize="10"
+                    <TextBlock x:Name="UpdateRateText" Text="0 Hz" FontSize="9"
                                Foreground="{StaticResource TealPrimary}"/>
                 </StackPanel>
                 <TextBlock x:Name="HotkeysText" 
                            Text="Ctrl+L Lock | Ctrl+H Show/Hide"
-                           FontSize="10"
+                           FontSize="9"
                            Foreground="{StaticResource MutedText}"
                            HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>

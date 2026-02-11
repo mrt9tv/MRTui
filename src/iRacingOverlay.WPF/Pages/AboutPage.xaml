@@ -1,0 +1,39 @@
+<UserControl x:Class="iRacingOverlay.WPF.Pages.AboutPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
+        <StackPanel MaxWidth="500">
+            
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,14">
+                <StackPanel>
+                    <TextBlock Text="MRT UI" FontSize="28" FontWeight="Bold"
+                               Foreground="{StaticResource TealPrimary}" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TxtVersion" Text="v0.7.1"
+                               FontSize="14" Foreground="{StaticResource MutedText}" Margin="0,0,0,12"/>
+                    <TextBlock Text="iRacing Telemetry Overlay"
+                               FontSize="14" Foreground="{StaticResource LightText}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Real-time transparent overlay widgets for iRacing. Shows car telemetry, fuel strategy, relative positions, proximity events, and more — all on top of the sim."
+                               FontSize="11" Foreground="{StaticResource MutedText}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+            
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="CREDITS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock FontSize="11" Foreground="{StaticResource LightText}" Margin="0,0,0,4">
+                        <Run Text="SDK: "/><Run Text="SVappsLAB iRacing Telemetry SDK" Foreground="{StaticResource TealPrimary}"/>
+                    </TextBlock>
+                    <TextBlock FontSize="11" Foreground="{StaticResource LightText}" Margin="0,0,0,4">
+                        <Run Text="Framework: "/><Run Text=".NET 8.0 / WPF" Foreground="{StaticResource TealPrimary}"/>
+                    </TextBlock>
+                    <TextBlock FontSize="11" Foreground="{StaticResource LightText}">
+                        <Run Text="Author: "/><Run Text="mrt9tv" Foreground="{StaticResource TealPrimary}"/>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+            
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

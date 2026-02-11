@@ -23,7 +23,13 @@ public enum WidgetType
     /// <summary>
     /// Relative — proximity-sorted competitor table with time intervals and class colors.
     /// </summary>
-    Relative
+    Relative,
+
+    /// <summary>
+    /// Proximity Feed — animated event notifications for nearby cars (±15s).
+    /// Shows collisions, off-tracks, pitting, stopped cars, flags, etc.
+    /// </summary>
+    ProximityFeed
 }
 
 /// <summary>
@@ -37,6 +43,7 @@ public static class WidgetTypeExtensions
         WidgetType.TurnDisplay => "Turn Display",
         WidgetType.FuelCalculator => "Fuel Calculator",
         WidgetType.Relative => "Relative",
+        WidgetType.ProximityFeed => "Proximity Feed",
         _ => type.ToString()
     };
 }

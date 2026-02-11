@@ -47,6 +47,9 @@ public class WidgetManager
         
         _widgetFactories[WidgetType.Relative] = (service, config) =>
             new Widgets.RelativeWidget.RelativeWidget(service, config);
+        
+        _widgetFactories[WidgetType.ProximityFeed] = (service, config) =>
+            new Widgets.ProximityFeedWidget.ProximityFeedWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)

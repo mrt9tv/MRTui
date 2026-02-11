@@ -1,0 +1,110 @@
+namespace iRacingOverlay.Core.Models;
+
+/// <summary>
+/// A transient event detected near the player (within ±15s on track).
+/// Displayed by the Proximity Feed widget as an animated notification.
+/// </summary>
+public class NearbyEvent
+{
+    /// <summary>Unique ID for deduplication and animation tracking.</summary>
+    public long Id { get; set; }
+
+    /// <summary>Car index that triggered this event (0-63).</summary>
+    public int CarIdx { get; set; }
+
+    /// <summary>Driver name (formatted for display).</summary>
+    public string DriverName { get; set; } = string.Empty;
+
+    /// <summary>Car number string.</summary>
+    public string CarNumber { get; set; } = string.Empty;
+
+    /// <summary>Class ID for color stripe.</summary>
+    public int CarClassId { get; set; }
+
+    /// <summary>Type of event detected.</summary>
+    public NearbyEventType EventType { get; set; }
+
+    /// <summary>Time interval to player in seconds (positive = ahead, negative = behind).</summary>
+    public float IntervalToPlayer { get; set; }
+
+    /// <summary>Brief display text (e.g., "OFF TRACK", "PITTING", "SLOW").</summary>
+    public string DisplayText { get; set; } = string.Empty;
+
+    /// <summary>UTC timestamp when this event was first detected.</summary>
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>How long this event should remain visible (seconds).</summary>
+    public float DisplayDuration { get; set; } = 4.0f;
+
+    /// <summary>Severity for visual priority (higher = more prominent).</summary>
+    public NearbyEventSeverity Severity { get; set; } = NearbyEventSeverity.Info;
+
+    /// <summary>Whether this event is ahead (+) or behind (-) the player.</summary>
+    public bool IsAhead => IntervalToPlayer > 0;
+
+    /// <summary>Elapsed seconds since creation.</summary>
+    public double Age => (DateTime.UtcNow - CreatedAt).TotalSeconds;
+
+    /// <summary>Whether the event has exceeded its display duration.</summary>
+    public bool IsExpired => Age > DisplayDuration;
+}
+
+/// <summary>
+/// Categories of nearby events detected from telemetry.
+/// </summary>
+public enum NearbyEventType
+{
+    /// <summary>Car went off track (TrackSurface = OffTrack).</summary>
+    OffTrack,
+
+    /// <summary>Car-on-car contact detected (incident count jumped by 2+).</summary>
+    Collision,
+
+    /// <summary>Car is significantly slower than expected (possible spin/stall).</summary>
+    SlowCar,
+
+    /// <summary>Car entered pit road.</summary>
+    Pitting,
+
+    /// <summary>Car is in pit stall (being serviced).</summary>
+    InBox,
+
+    /// <summary>Car exiting pit lane (on out-lap).</summary>
+    PitExit,
+
+    /// <summary>Car received meatball/repair flag.</summary>
+    MeatballFlag,
+
+    /// <summary>Car received black flag.</summary>
+    BlackFlag,
+
+    /// <summary>Car was towed back to pits.</summary>
+    Towed,
+
+    /// <summary>Yellow/caution flag in the area.</summary>
+    LocalYellow,
+
+    /// <summary>Car has stopped on track (speed near zero while on track surface).</summary>
+    Stopped,
+
+    /// <summary>Car spun (large yaw rate change — detected via rapid LapDistPct stall).</summary>
+    Spin,
+}
+
+/// <summary>
+/// Visual severity for event display priority and styling.
+/// </summary>
+public enum NearbyEventSeverity
+{
+    /// <summary>Informational — subtle appearance.</summary>
+    Info,
+
+    /// <summary>Warning — moderate emphasis (off-track, pitting).</summary>
+    Warning,
+
+    /// <summary>Danger — high emphasis (collision, stopped car, yellow).</summary>
+    Danger,
+
+    /// <summary>Critical — maximum emphasis (car stopped ahead, imminent hazard).</summary>
+    Critical,
+}

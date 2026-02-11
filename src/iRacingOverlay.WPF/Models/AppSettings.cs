@@ -256,6 +256,11 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public bool StartMinimized { get; set; } = false;
 
+    /// <summary>
+    /// Minimize to system tray instead of taskbar
+    /// </summary>
+    public bool MinimizeToTray { get; set; } = false;
+
     // ===== GLOBAL FONT SCALE =====
     
     /// <summary>
