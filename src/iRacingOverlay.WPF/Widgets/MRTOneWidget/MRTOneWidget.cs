@@ -132,7 +132,7 @@ public class MRTOneWidget : WidgetBase
         /// <summary>Left/right base sweep angle (degrees)</summary>
         public const double ARC_LR_BASE_SWEEP = 87; // smaller side coverage
         /// <summary>Number of concentric arc rings per side (left/right)</summary>
-        public const int ARC_SIDE_RING_COUNT = 3;
+        public const int ARC_SIDE_RING_COUNT = 2;
         /// <summary>Per-ring angular taper (degrees removed from each side per ring)</summary>
         public const double ARC_TAPER_PER_RING = 2;
 
@@ -141,8 +141,6 @@ public class MRTOneWidget : WidgetBase
         // Ring max opacity per layer: 0.95 (innermost) stepping down to 0.35 (outermost) — more prominent flash
         public static readonly double[] ARC_RING_MAX_OPACITY = { 0.95, 0.83, 0.71, 0.59, 0.47, 0.35 };
 
-        /// <summary>Slow blink interval for Close zone (ms) — visible on/off pulsing</summary>
-        public const int ARC_SLOW_BLINK_INTERVAL_MS = 280;
         /// <summary>Fast blink interval for VeryClose (ms) — urgent rapid flash</summary>
         public const int ARC_FAST_BLINK_INTERVAL_MS = 75;
         /// <summary>Multiplier for last-lap blink speed (2× faster)</summary>
@@ -217,11 +215,10 @@ public class MRTOneWidget : WidgetBase
     
     // Blinking timers for critical warnings
     private readonly DispatcherTimer _blinkTimer;           // 250ms for fuel (slow blink)
-    private readonly DispatcherTimer _radarBlinkTimer;      // 125ms for radar VeryClose (fast blink)
-    private readonly DispatcherTimer _arcSlowBlinkTimer;    // 400ms for Close zone (slow pulse)
+    private readonly DispatcherTimer _radarBlinkTimer;      // fast blink timer — drives both VeryClose and Close (half-rate)
     private bool _blinkState = false;
     private bool _radarBlinkState = false;
-    private bool _arcSlowBlinkState = false;
+    private int _radarBlinkTickCount;                       // counts fast ticks — Close zone blinks every other tick
     private bool _isLastLap = false;                        // Doubles blink speed on final lap
     private float _closestFrontDistance = float.MaxValue;    // Meters to closest car ahead (for blink speed)
     private float _closestRearDistance = float.MaxValue;     // Meters to closest car behind (for blink speed)
@@ -682,14 +679,6 @@ public class MRTOneWidget : WidgetBase
         _radarBlinkTimer.Tick += OnRadarBlinkTimerTick;
         _radarBlinkTimer.Start();
 
-        // Setup slow blink timer for Close zone (second-to-last severity)
-        _arcSlowBlinkTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(LayoutConstants.ARC_SLOW_BLINK_INTERVAL_MS)
-        };
-        _arcSlowBlinkTimer.Tick += OnArcSlowBlinkTimerTick;
-        _arcSlowBlinkTimer.Start();
-
         // Setup pit limiter blinking timer (fast blink) - PHASE 2: Enhancement #4
         _pitLimiterBlinkTimer = new DispatcherTimer
         {
@@ -891,17 +880,20 @@ public class MRTOneWidget : WidgetBase
             return;
 
         _radarBlinkState = !_radarBlinkState;
+        _radarBlinkTickCount++;
 
-        // FAST blink: VeryClose — entire radar system blinks for maximum urgency
+        // Two blink states:
+        //   VeryClose = fast blink (every tick)
+        //   Close     = half-rate blink (every other tick)
+        bool slowBlinkState = (_radarBlinkTickCount % 2) == 0;
+
         var (frontZone, rearZone) = _stateManager.GetCurrentZones();
         bool anyVeryClose = frontZone == ProximityZone.VeryClose || rearZone == ProximityZone.VeryClose;
 
         if (anyVeryClose)
         {
-            // Blink radar arcs and squares — gauge circle is RPM-only, do NOT touch it
             double blinkOp = _radarBlinkState ? 1.0 : 0.15;
 
-            // Front/back squares blink with high contrast
             if (frontZone == ProximityZone.VeryClose)
             {
                 _radarFront.Opacity = blinkOp;
@@ -919,24 +911,15 @@ public class MRTOneWidget : WidgetBase
             _radarBack.Opacity = 1.0;
         }
 
+        // Close zone: half-rate blink (every other fast tick)
+        if (frontZone == ProximityZone.Close)
+            BlinkArcRings(_arcFrontRings, slowBlinkState, slowBlink: true);
+        if (rearZone == ProximityZone.Close)
+            BlinkArcRings(_arcBackRings, slowBlinkState, slowBlink: true);
+
         // Side arc flashing: blink all active side rings for maximum visibility
         BlinkSideArcRings(_arcLeftRings, _radarBlinkState);
         BlinkSideArcRings(_arcRightRings, _radarBlinkState);
-    }
-
-    private void OnArcSlowBlinkTimerTick(object? sender, EventArgs e)
-    {
-        if (_arcFrontRings == null || _arcBackRings == null)
-            return;
-
-        _arcSlowBlinkState = !_arcSlowBlinkState;
-
-        // SLOW blink: Close zone — pulse ALL active rings for high visibility
-        var (frontZone, rearZone) = _stateManager.GetCurrentZones();
-        if (frontZone == ProximityZone.Close)
-            BlinkArcRings(_arcFrontRings, _arcSlowBlinkState, slowBlink: true);
-        if (rearZone == ProximityZone.Close)
-            BlinkArcRings(_arcBackRings, _arcSlowBlinkState, slowBlink: true);
     }
     
     private void OnPitLimiterBlinkTimerTick(object? sender, EventArgs e)
@@ -1515,13 +1498,16 @@ public class MRTOneWidget : WidgetBase
         // Alongside filter: When lateral spotter detects a car beside us and the closest
         // front/rear car is extremely close (<6m), it's likely the same car overlapping in
         // 1D LapDistPct space — suppress front/rear to avoid false Critical alerts.
+        // Alongside filter: suppress front/rear only when the car overlaps us in
+        // 1D LapDistPct space at very short range (<3m) — the same physical car beside
+        // us. Threshold lowered from 6m to 3m to avoid hiding legitimate warnings.
         bool carAlongside = hasLeft || hasRight;
-        if (carAlongside && frontDist < 6.0f)
+        if (carAlongside && frontDist < 3.0f)
         {
             frontZone = ProximityZone.Clear;
             frontDist = float.MaxValue;
         }
-        if (carAlongside && rearDist < 6.0f)
+        if (carAlongside && rearDist < 3.0f)
         {
             rearZone = ProximityZone.Clear;
             rearDist = float.MaxValue;
@@ -1568,26 +1554,24 @@ public class MRTOneWidget : WidgetBase
         if (closestDist < 5f) // VeryClose
         {
             // Linear interpolation: 0m → 45ms, 5m → 100ms
+            // Close zone inherits half rate automatically (90-200ms effective)
             float t = Math.Clamp(closestDist / 5f, 0f, 1f);
             double interval = 45 + (55 * t); // 45-100ms
             _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
         }
-        else if (closestDist < 9f) // Close
+        else if (closestDist < 9f) // Close (no VeryClose present)
         {
+            // Close blinks every 2nd tick, so set timer to half the desired rate
+            // Desired effective: 200-320ms → timer: 100-160ms
             float t = Math.Clamp((closestDist - 5f) / 4f, 0f, 1f);
-            double interval = 200 + (120 * t); // 200-320ms
-            _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
-            // Reset fast blink to default when not in VeryClose
-            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
-                LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS * lastLapMult);
+            double interval = 100 + (60 * t); // 100-160ms (×2 = 200-320ms effective)
+            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
         }
         else
         {
-            // No close cars — reset to defaults
+            // No close cars — reset to default
             _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
                 LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS * lastLapMult);
-            _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(
-                LayoutConstants.ARC_SLOW_BLINK_INTERVAL_MS * lastLapMult);
         }
 
         // ── FADE-OUT: smooth transition when proximity lost ──────────────
@@ -1902,13 +1886,13 @@ public class MRTOneWidget : WidgetBase
     /// Flashing is handled by the blink timer (OnRadarBlinkTimerTick).
     /// </summary>
     /// <summary>
-    /// Update multi-ring side arcs: TwoCars = all 3 rings (bright, fast blink),
-    /// SingleCar = inner 2 rings, Clear = all off.
+    /// Update multi-ring side arcs: TwoCars = both rings (bright, fast blink),
+    /// SingleCar = inner ring only, Clear = all off.
     /// </summary>
     private static void UpdateSideArcRings(System.Windows.Shapes.Path[] rings, bool carPresent, bool twoCars)
     {
         if (rings == null) return;
-        int ringsToLight = twoCars ? rings.Length : carPresent ? Math.Min(2, rings.Length) : 0;
+        int ringsToLight = twoCars ? rings.Length : carPresent ? 1 : 0;
 
         for (int i = 0; i < rings.Length; i++)
         {
@@ -2401,7 +2385,6 @@ public class MRTOneWidget : WidgetBase
         // Clean up timers
         _blinkTimer?.Stop();
         _radarBlinkTimer?.Stop();
-        _arcSlowBlinkTimer?.Stop();
         _pitLimiterBlinkTimer?.Stop();
 
         AppSettings.Instance.SettingsChanged -= OnSettingsChanged;

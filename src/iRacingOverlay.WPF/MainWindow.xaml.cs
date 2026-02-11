@@ -67,7 +67,13 @@ public partial class MainWindow : Window
 
         // Apply saved settings and restore widget layout
         ApplyWindowSettings();
-        _widgetManager.LoadSavedLayout();
+        if (!_widgetManager.LoadSavedLayout())
+        {
+            // First run — create default widgets (MRT One, Relative, ProxFeed)
+            _widgetManager.CreateWidget(Models.WidgetType.MRTOne);
+            _widgetManager.CreateWidget(Models.WidgetType.Relative);
+            _widgetManager.CreateWidget(Models.WidgetType.ProximityFeed);
+        }
 
         // Create pages (lazy-init on first nav, but pre-build dashboard)
         _dashboardPage = new DashboardPage(_widgetManager, _telemetryService, _sessionConfig);
