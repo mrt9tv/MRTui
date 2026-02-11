@@ -75,6 +75,12 @@ public class RelativeCalculator
     /// <summary>iRacing flag bit: Black flag</summary>
     private const int FLAG_BLACK = 0x10000;
 
+    /// <summary>Blue flag bit in CarIdxSessionFlags (yield to lapping car).</summary>
+    private const int FLAG_BLUE = 0x20;
+
+    /// <summary>Disqualified flag bit in CarIdxSessionFlags.</summary>
+    private const int FLAG_DSQ = 0x20000;
+
     /// <summary>Track last non-NotInWorld surface per car (for tow detection).</summary>
     private readonly int[] _lastTrackSurface = new int[MAX_CARS];
 
@@ -265,6 +271,8 @@ public class RelativeCalculator
             int carFlags = ArrayInt(data.CarIdxSessionFlags, i, 0);
             bool hasMeatball = (carFlags & FLAG_REPAIR) != 0;
             bool hasBlackFlag = (carFlags & FLAG_BLACK) != 0;
+            bool hasBlueFlag = (carFlags & FLAG_BLUE) != 0;
+            bool isDisqualified = (carFlags & FLAG_DSQ) != 0;
 
             // ── Build entry ────────────────────────────────────────
             float lastLap = ArrayFloat(data.CarIdxLastLapTime, i, 0f);
@@ -298,6 +306,8 @@ public class RelativeCalculator
                 // Per-car flags
                 HasMeatball = hasMeatball,
                 HasBlackFlag = hasBlackFlag,
+                HasBlueFlag = hasBlueFlag,
+                IsDisqualified = isDisqualified,
                 HasRecentIncident = data.CarIdxRecentIncident != null && i < data.CarIdxRecentIncident.Length && data.CarIdxRecentIncident[i],
                 IncidentCount = DictInt(data.CarIdxToIncidentCount, i, 0),
                 IncidentDelta = ArrayInt(data.CarIdxRecentIncidentDelta, i, 0),

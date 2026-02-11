@@ -53,6 +53,29 @@ public sealed class NearbyEventDetector
     private const int FLAG_REPAIR = 0x100000;
     private const int FLAG_BLACK = 0x10000;
     private const int FLAG_YELLOW = 0x8;  // per-car local yellow flag
+    private const int FLAG_BLUE = 0x20;   // per-car blue flag (yield to lapping car)
+    private const int FLAG_DSQ = 0x20000; // per-car disqualified
+
+    // iRacing SessionFlags bits (global)
+    private const uint SFLAG_CHECKERED = 0x01;
+    private const uint SFLAG_RED = 0x10;
+    private const uint SFLAG_GREEN = 0x04;
+    private const uint SFLAG_CAUTION = 0x4000;
+    private const uint SFLAG_CAUTION_WAVING = 0x8000;
+
+    // iRacing SessionState constants
+    private const int SESSION_STATE_PARADE_LAPS = 3;
+    private const int SESSION_STATE_RACING = 4;
+    private const int SESSION_STATE_CHECKERED = 5;
+
+    // iRacing CarIdxPaceFlags bits
+    private const int PACE_END_OF_LINE = 0x01;
+    private const int PACE_FREE_PASS = 0x02;
+    private const int PACE_WAVE_AROUND = 0x04;
+
+    // Spin detection: yaw rate threshold (rad/s) — ~90°/s indicates a spin
+    private const float SPIN_YAW_RATE_THRESHOLD = 1.5f;
+    private const float SPIN_MIN_DURATION = 0.8f;
 
     // ── Per-car tracking state ──────────────────────────────────────
     private readonly int[] _prevTrackSurface = new int[MAX_CARS];
@@ -63,6 +86,14 @@ public sealed class NearbyEventDetector
     private readonly bool[] _wasInPitStall = new bool[MAX_CARS];
     private readonly int[] _prevFlags = new int[MAX_CARS];
     private readonly float[] _prevLapDistPct = new float[MAX_CARS];
+    private readonly float[] _spinDuration = new float[MAX_CARS];
+    private readonly int[] _prevPaceFlags = new int[MAX_CARS];
+
+    // ── Session-level tracking ──────────────────────────────────────
+    private int _prevSessionState;
+    private uint _prevSessionFlags;
+    private bool _cautionWasActive;
+    private bool _redFlagActive;
 
     // ── Cooldown tracking (per car × event type) ────────────────────
     private readonly Dictionary<(int carIdx, NearbyEventType type), DateTime> _cooldowns = new();
@@ -88,10 +119,16 @@ public sealed class NearbyEventDetector
         Array.Clear(_wasInPitStall);
         Array.Clear(_prevFlags);
         Array.Clear(_prevLapDistPct);
+        Array.Clear(_spinDuration);
+        Array.Clear(_prevPaceFlags);
         _cooldowns.Clear();
         _activeEvents.Clear();
         _nextEventId = 1;
         _lastUpdateTime = DateTime.UtcNow;
+        _prevSessionState = 0;
+        _prevSessionFlags = 0;
+        _cautionWasActive = false;
+        _redFlagActive = false;
     }
 
     /// <summary>
@@ -114,6 +151,9 @@ public sealed class NearbyEventDetector
         if (data.CarIdxTrackSurface == null || data.CarIdxLapDistPct == null) return;
 
         int playerIdx = data.PlayerCarIdx;
+
+        // ── SESSION-LEVEL events (not per-car) ─────────────────────
+        DetectSessionLevelEvents(data);
 
         // Live-update IntervalToPlayer for all active events from current relative data
         var intervalLookup = new Dictionary<int, float>();
@@ -344,6 +384,95 @@ public sealed class NearbyEventDetector
                 ClearOngoingEvent(i, NearbyEventType.OvertakingImminent);
             }
 
+            // ── SPIN DETECTION (ongoing) ────────────────────────
+            // Detect via LapDistPct stalling + not being a stop (car is still "moving" on track
+            // but LapDistPct isn't advancing = spinning/rotating). Also catch high yaw rate.
+            if (surface == SURFACE_ON_TRACK && !onPitRoad)
+            {
+                float prevPctSpin = _prevLapDistPct[i];
+                float curPctSpin = data.CarIdxLapDistPct![i];
+                float pctDeltaSpin = curPctSpin - prevPctSpin;
+                if (pctDeltaSpin < -0.5f) pctDeltaSpin += 1.0f;
+                if (pctDeltaSpin > 0.5f) pctDeltaSpin -= 1.0f;
+
+                // Negative progress (going backwards) indicates a spin
+                bool goingBackwards = pctDeltaSpin < -0.0001f && dt > 0;
+                // Also detect via near-zero progress but NOT stopped (speed estimated > 1 m/s)
+                float trackLen = data.TrackLength > 0 ? data.TrackLength : 4000f;
+                float spinSpeed = dt > 0 ? (Math.Abs(pctDeltaSpin) * trackLen / dt) : 999f;
+                bool isSpinning = goingBackwards || (spinSpeed < SLOW_SPEED_THRESHOLD && spinSpeed > 0.2f && _slowDuration[i] < SLOW_CAR_MIN_DURATION);
+
+                if (isSpinning)
+                {
+                    _spinDuration[i] += dt;
+                    if (_spinDuration[i] >= SPIN_MIN_DURATION)
+                    {
+                        var existingSpin = FindOngoingEvent(i, NearbyEventType.Spin);
+                        if (existingSpin != null)
+                        {
+                            ongoingStillActive.Add(existingSpin.Id);
+                        }
+                        else
+                        {
+                            bool spinAhead = interval > 0;
+                            TryEmitOngoing(entry, NearbyEventType.Spin,
+                                spinAhead ? "SPIN AHEAD" : "SPIN",
+                                spinAhead ? NearbyEventSeverity.Critical : NearbyEventSeverity.Danger,
+                                4.0f, ongoingStillActive);
+                        }
+                    }
+                }
+                else
+                {
+                    _spinDuration[i] = 0;
+                    ClearOngoingEvent(i, NearbyEventType.Spin);
+                }
+            }
+            else
+            {
+                _spinDuration[i] = 0;
+                ClearOngoingEvent(i, NearbyEventType.Spin);
+            }
+
+            // ── BLUE FLAG (about to be overlapped) ──────────────
+            // Uses per-car blue flag bit AND/OR interval-based detection for faster-class cars approaching
+            bool hasBlueFlag = (flags & FLAG_BLUE) != 0;
+            if (hasBlueFlag && (_prevFlags[i] & FLAG_BLUE) == 0)
+            {
+                TryEmit(entry, NearbyEventType.BlueFlagged, "🔵 BLUE FLAG",
+                    NearbyEventSeverity.Warning, 4.0f);
+            }
+
+            // ── DISQUALIFIED ────────────────────────────────────
+            bool isDSQ = (flags & FLAG_DSQ) != 0;
+            if (isDSQ && (_prevFlags[i] & FLAG_DSQ) == 0)
+            {
+                TryEmit(entry, NearbyEventType.Disqualified, "DSQ",
+                    NearbyEventSeverity.Warning, 5.0f);
+            }
+
+            // ── PACE FLAGS (EndOfLine / FreePass / WaveAround) ──
+            int paceFlags = data.CarIdxPaceFlags != null && i < data.CarIdxPaceFlags.Length
+                ? data.CarIdxPaceFlags[i] : 0;
+            int prevPace = _prevPaceFlags[i];
+
+            if ((paceFlags & PACE_END_OF_LINE) != 0 && (prevPace & PACE_END_OF_LINE) == 0)
+            {
+                TryEmit(entry, NearbyEventType.PaceEndOfLine, "END OF LINE",
+                    NearbyEventSeverity.Info, 4.0f);
+            }
+            if ((paceFlags & PACE_FREE_PASS) != 0 && (prevPace & PACE_FREE_PASS) == 0)
+            {
+                TryEmit(entry, NearbyEventType.PaceFreePass, "FREE PASS",
+                    NearbyEventSeverity.Info, 4.0f);
+            }
+            if ((paceFlags & PACE_WAVE_AROUND) != 0 && (prevPace & PACE_WAVE_AROUND) == 0)
+            {
+                TryEmit(entry, NearbyEventType.PaceWaveAround, "WAVE AROUND",
+                    NearbyEventSeverity.Info, 4.0f);
+            }
+            _prevPaceFlags[i] = paceFlags;
+
             // Update previous state
             _prevTrackSurface[i] = surface;
             _prevOnPitRoad[i] = onPitRoad;
@@ -487,5 +616,108 @@ public sealed class NearbyEventDetector
                 e.ClearedAt = DateTime.UtcNow;
             }
         }
+    }
+
+    // ── Session-level event detection ───────────────────────────────
+
+    /// <summary>
+    /// Detect session-wide events: safety car, start sequence, checkered flag, red flag.
+    /// These are not per-car — they use global SessionFlags and SessionState.
+    /// Uses a special CarIdx of -1 for display.
+    /// </summary>
+    private void DetectSessionLevelEvents(TelemetryData data)
+    {
+        uint sf = data.SessionFlags;
+        int ss = data.SessionState;
+
+        // ── SAFETY CAR / FULL-COURSE CAUTION (ongoing) ──────────
+        bool cautionNow = data.IsCautionActive || (sf & SFLAG_CAUTION) != 0 || (sf & SFLAG_CAUTION_WAVING) != 0;
+        if (cautionNow && !_cautionWasActive)
+        {
+            EmitSessionEvent(NearbyEventType.SafetyCar, "⚠ SAFETY CAR",
+                NearbyEventSeverity.Danger, 6.0f, isOngoing: true);
+        }
+        else if (!cautionNow && _cautionWasActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.SafetyCar);
+        }
+        _cautionWasActive = cautionNow;
+
+        // ── RED FLAG (ongoing while active) ─────────────────────
+        bool redNow = (sf & SFLAG_RED) != 0;
+        if (redNow && !_redFlagActive)
+        {
+            EmitSessionEvent(NearbyEventType.RedFlag, "🔴 RED FLAG",
+                NearbyEventSeverity.Critical, 8.0f, isOngoing: true);
+        }
+        else if (!redNow && _redFlagActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.RedFlag);
+        }
+        _redFlagActive = redNow;
+
+        // ── START SEQUENCE (ParadeLaps → Racing transition) ─────
+        if (ss == SESSION_STATE_RACING && _prevSessionState == SESSION_STATE_PARADE_LAPS)
+        {
+            EmitSessionEvent(NearbyEventType.StartSequence, "🟢 GO GO GO!",
+                NearbyEventSeverity.Info, 4.0f);
+        }
+        else if (ss == SESSION_STATE_PARADE_LAPS && _prevSessionState != SESSION_STATE_PARADE_LAPS && _prevSessionState > 0)
+        {
+            EmitSessionEvent(NearbyEventType.StartSequence, "🟡 PACE LAPS",
+                NearbyEventSeverity.Info, 4.0f);
+        }
+
+        // ── CHECKERED FLAG ──────────────────────────────────────
+        if (ss == SESSION_STATE_CHECKERED && _prevSessionState == SESSION_STATE_RACING)
+        {
+            EmitSessionEvent(NearbyEventType.CheckeredFlag, "🏁 CHECKERED",
+                NearbyEventSeverity.Info, 6.0f);
+        }
+
+        _prevSessionState = ss;
+        _prevSessionFlags = sf;
+    }
+
+    /// <summary>
+    /// Emit a session-level event (not tied to a specific car).
+    /// Uses CarIdx = -1, empty driver/car info.
+    /// </summary>
+    private void EmitSessionEvent(NearbyEventType type, string text,
+        NearbyEventSeverity severity, float duration, bool isOngoing = false)
+    {
+        // Dedup: check for existing same-type session event
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            if (_activeEvents[j].CarIdx == -1 && _activeEvents[j].EventType == type && !_activeEvents[j].IsExpired)
+                return; // already showing
+        }
+
+        // Cap active events
+        if (_activeEvents.Count >= MAX_ACTIVE_EVENTS)
+        {
+            var weakest = _activeEvents
+                .Where(e => !e.IsOngoing)
+                .OrderBy(e => e.Severity)
+                .ThenBy(e => e.CreatedAt)
+                .FirstOrDefault()
+                ?? _activeEvents.OrderBy(e => e.Severity).ThenBy(e => e.CreatedAt).First();
+            _activeEvents.Remove(weakest);
+        }
+
+        _activeEvents.Add(new NearbyEvent
+        {
+            Id = _nextEventId++,
+            CarIdx = -1,
+            DriverName = string.Empty,
+            CarNumber = string.Empty,
+            CarClassId = 0,
+            EventType = type,
+            IntervalToPlayer = 0f,
+            DisplayText = text,
+            Severity = severity,
+            DisplayDuration = Math.Max(duration, MIN_DISPLAY_DURATION),
+            IsOngoing = isOngoing,
+        });
     }
 }

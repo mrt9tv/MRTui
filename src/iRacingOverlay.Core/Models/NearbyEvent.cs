@@ -111,11 +111,38 @@ public enum NearbyEventType
     /// <summary>Car has stopped on track (speed near zero while on track surface).</summary>
     Stopped,
 
-    /// <summary>Car spun (large yaw rate change — detected via rapid LapDistPct stall).</summary>
+    /// <summary>Car spun (large yaw rate change — detected via rapid LapDistPct stall + direction reversal).</summary>
     Spin,
 
     /// <summary>Higher-class car overtaking imminently (closing fast from behind).</summary>
     OvertakingImminent,
+
+    /// <summary>Car has been disqualified (DSQ flag 0x20000).</summary>
+    Disqualified,
+
+    /// <summary>Car is about to be overlapped — blue flag shown or faster-class closing from behind.</summary>
+    BlueFlagged,
+
+    /// <summary>Safety car / full-course caution is active.</summary>
+    SafetyCar,
+
+    /// <summary>Race start sequence (Ready / Set / Go).</summary>
+    StartSequence,
+
+    /// <summary>Checkered flag has been shown — race is ending.</summary>
+    CheckeredFlag,
+
+    /// <summary>Red flag — session stopped.</summary>
+    RedFlag,
+
+    /// <summary>Per-car pace flag: driver sent to end of restart line.</summary>
+    PaceEndOfLine,
+
+    /// <summary>Per-car pace flag: driver given a free pass around the pace car.</summary>
+    PaceFreePass,
+
+    /// <summary>Per-car pace flag: driver told to wave around the pace car.</summary>
+    PaceWaveAround,
 }
 
 /// <summary>

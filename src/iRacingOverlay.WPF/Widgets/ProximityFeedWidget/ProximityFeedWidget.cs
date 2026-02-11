@@ -67,6 +67,13 @@ public class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_LOCAL_YELLOW = Color.FromRgb(255, 230, 0);   // bright yellow
     private static readonly Color COLOR_SPIN = Color.FromRgb(220, 120, 0);           // deep orange
     private static readonly Color COLOR_OVERTAKING = Color.FromRgb(255, 140, 0);     // orange for higher-class overtake imminent
+    private static readonly Color COLOR_DISQUALIFIED = Color.FromRgb(140, 0, 0);     // dark red
+    private static readonly Color COLOR_BLUE_FLAG = Color.FromRgb(0, 100, 255);      // blue
+    private static readonly Color COLOR_SAFETY_CAR = Color.FromRgb(255, 230, 0);     // bright yellow
+    private static readonly Color COLOR_START_SEQ = Color.FromRgb(0, 200, 80);       // green (GO!)
+    private static readonly Color COLOR_CHECKERED = Color.FromRgb(255, 255, 255);    // white
+    private static readonly Color COLOR_RED_FLAG = Color.FromRgb(255, 0, 0);         // red
+    private static readonly Color COLOR_PACE_FLAG = Color.FromRgb(200, 200, 80);     // warm yellow-green
 
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
@@ -108,6 +115,19 @@ public class ProximityFeedWidget : WidgetBase
     /// <summary>Show higher-class overtaking imminent alerts.</summary>
     public bool ShowOvertakingAlert { get; set; } = true;
 
+    /// <summary>Show race start sequence events (READY/SET/GO).</summary>
+    public bool ShowStartSequence { get; set; } = true;
+
+    /// <summary>Show checkered flag event.</summary>
+    public bool ShowCheckeredFlag { get; set; } = true;
+
+    /// <summary>Show pace car / caution events (safety car, pace flags).</summary>
+    public bool ShowPaceFlags { get; set; } = true;
+
+    /// <summary>Whether the player has crossed S/F at least once (suppresses feed before then).</summary>
+    private bool _playerHasCrossedSF;
+    private int _prevLapsCompleted = -1;
+
     #endregion
 
     public override WidgetType WidgetType => WidgetType.ProximityFeed;
@@ -148,6 +168,21 @@ public class ProximityFeedWidget : WidgetBase
             if (v5 is JsonElement je5) ShowOvertakingAlert = je5.ValueKind == JsonValueKind.True;
             else if (v5 is bool b5) ShowOvertakingAlert = b5;
         }
+        if (Config.Settings.TryGetValue("showStartSequence", out var v6))
+        {
+            if (v6 is JsonElement je6) ShowStartSequence = je6.ValueKind == JsonValueKind.True;
+            else if (v6 is bool b6) ShowStartSequence = b6;
+        }
+        if (Config.Settings.TryGetValue("showCheckeredFlag", out var v7))
+        {
+            if (v7 is JsonElement je7) ShowCheckeredFlag = je7.ValueKind == JsonValueKind.True;
+            else if (v7 is bool b7) ShowCheckeredFlag = b7;
+        }
+        if (Config.Settings.TryGetValue("showPaceFlags", out var v8))
+        {
+            if (v8 is JsonElement je8) ShowPaceFlags = je8.ValueKind == JsonValueKind.True;
+            else if (v8 is bool b8) ShowPaceFlags = b8;
+        }
     }
 
     public void SaveSettings()
@@ -157,6 +192,9 @@ public class ProximityFeedWidget : WidgetBase
         Config.Settings["showInterval"] = ShowInterval;
         Config.Settings["growUpward"] = GrowUpward;
         Config.Settings["showOvertakingAlert"] = ShowOvertakingAlert;
+        Config.Settings["showStartSequence"] = ShowStartSequence;
+        Config.Settings["showCheckeredFlag"] = ShowCheckeredFlag;
+        Config.Settings["showPaceFlags"] = ShowPaceFlags;
     }
 
     private void InitializeWidget()
@@ -229,11 +267,33 @@ public class ProximityFeedWidget : WidgetBase
     }
 
     /// <summary>
+    /// Show or hide the drag handle based on lock state.
+    /// When locked (normal mode): drag handle hidden, click-through.
+    /// When unlocked (drag mode): drag handle shown, interactive.
+    /// </summary>
+    public void UpdateDragHandleVisibility(bool showHandle)
+    {
+        _dragHandle.Visibility = showHandle ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
     /// Called by telemetry update loop (~60Hz).
     /// Delegates to detector, then syncs visual rows.
     /// </summary>
     protected override void UpdateUI(TelemetryData data)
     {
+        // Suppress events before player crosses S/F line for the first time
+        // (avoids noise during formation lap / pre-race gridding)
+        if (!_playerHasCrossedSF)
+        {
+            if (data.LapsCompleted >= 1 && _prevLapsCompleted >= 0 && data.LapsCompleted > _prevLapsCompleted)
+                _playerHasCrossedSF = true;
+            _prevLapsCompleted = data.LapsCompleted;
+            // Still keep background transparent until first crossing
+            _backgroundBorder.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            return;
+        }
+
         // Get relative entries from the calculator (already computed this frame)
         IReadOnlyList<RelativeEntry>? relatives = null;
         try
@@ -254,10 +314,19 @@ public class ProximityFeedWidget : WidgetBase
         _blinkFrame++;
         var events = _detector.ActiveEvents;
 
-        // Filter: never show InBox in proximity feed; filter overtaking if toggled off
+        // Filter: never show InBox in proximity feed; respect per-type toggles
         var filtered = events.Where(e => e.EventType != NearbyEventType.InBox);
         if (!ShowOvertakingAlert)
             filtered = filtered.Where(e => e.EventType != NearbyEventType.OvertakingImminent);
+        if (!ShowStartSequence)
+            filtered = filtered.Where(e => e.EventType != NearbyEventType.StartSequence);
+        if (!ShowCheckeredFlag)
+            filtered = filtered.Where(e => e.EventType != NearbyEventType.CheckeredFlag);
+        if (!ShowPaceFlags)
+            filtered = filtered.Where(e => e.EventType != NearbyEventType.SafetyCar
+                && e.EventType != NearbyEventType.PaceEndOfLine
+                && e.EventType != NearbyEventType.PaceFreePass
+                && e.EventType != NearbyEventType.PaceWaveAround);
 
         // Sort: severity desc, then newest first
         var sorted = filtered
@@ -558,13 +627,23 @@ public class ProximityFeedWidget : WidgetBase
         NearbyEventType.LocalYellow => COLOR_LOCAL_YELLOW,
         NearbyEventType.Spin => COLOR_SPIN,
         NearbyEventType.OvertakingImminent => COLOR_OVERTAKING,
+        NearbyEventType.Disqualified => COLOR_DISQUALIFIED,
+        NearbyEventType.BlueFlagged => COLOR_BLUE_FLAG,
+        NearbyEventType.SafetyCar => COLOR_SAFETY_CAR,
+        NearbyEventType.StartSequence => COLOR_START_SEQ,
+        NearbyEventType.CheckeredFlag => COLOR_CHECKERED,
+        NearbyEventType.RedFlag => COLOR_RED_FLAG,
+        NearbyEventType.PaceEndOfLine => COLOR_PACE_FLAG,
+        NearbyEventType.PaceFreePass => COLOR_PACE_FLAG,
+        NearbyEventType.PaceWaveAround => COLOR_PACE_FLAG,
         _ => GetSeverityColor(evt.Severity),
     };
 
     /// <summary>
     /// Per-type blink rules:
-    ///   BLINK: OffTrack, Collision, Stopped, PitExit, MeatballFlag, LocalYellow, OvertakingImminent (after 5s)
-    ///   STATIC: Pitting, SlowCar, Towed, BlackFlag, Spin
+    ///   BLINK: OffTrack, Collision, Stopped, PitExit, MeatballFlag, LocalYellow, OvertakingImminent (after 5s),
+    ///          RedFlag, CheckeredFlag, StartSequence, BlueFlagged, SafetyCar
+    ///   STATIC: Pitting, SlowCar, Towed, BlackFlag, Spin, Disqualified, PaceEndOfLine, PaceFreePass, PaceWaveAround
     /// </summary>
     private static bool ShouldBlinkText(NearbyEvent evt) =>
         evt.EventType is NearbyEventType.OffTrack
@@ -573,5 +652,10 @@ public class ProximityFeedWidget : WidgetBase
             or NearbyEventType.PitExit
             or NearbyEventType.MeatballFlag
             or NearbyEventType.LocalYellow
-            or NearbyEventType.OvertakingImminent;
+            or NearbyEventType.OvertakingImminent
+            or NearbyEventType.RedFlag
+            or NearbyEventType.CheckeredFlag
+            or NearbyEventType.StartSequence
+            or NearbyEventType.BlueFlagged
+            or NearbyEventType.SafetyCar;
 }

@@ -589,6 +589,9 @@ public partial class WidgetsPage : UserControl
             ChkProxInterval.IsChecked = widget.ShowInterval;
             ChkProxGrowUp.IsChecked = widget.GrowUpward;
             ChkProxOvertaking.IsChecked = widget.ShowOvertakingAlert;
+            ChkProxStartSequence.IsChecked = widget.ShowStartSequence;
+            ChkProxCheckered.IsChecked = widget.ShowCheckeredFlag;
+            ChkProxPaceFlags.IsChecked = widget.ShowPaceFlags;
             ChkProxDragMode.IsChecked = false; // always start unlocked
         }
         finally { _suppressControlEvents = false; }
@@ -604,6 +607,9 @@ public partial class WidgetsPage : UserControl
         widget.ShowInterval = ChkProxInterval.IsChecked == true;
         widget.GrowUpward = ChkProxGrowUp.IsChecked == true;
         widget.ShowOvertakingAlert = ChkProxOvertaking.IsChecked == true;
+        widget.ShowStartSequence = ChkProxStartSequence.IsChecked == true;
+        widget.ShowCheckeredFlag = ChkProxCheckered.IsChecked == true;
+        widget.ShowPaceFlags = ChkProxPaceFlags.IsChecked == true;
         widget.SaveSettings();
     }
 
@@ -614,9 +620,10 @@ public partial class WidgetsPage : UserControl
         if (widget == null) return;
 
         bool enableDrag = ChkProxDragMode.IsChecked == true;
-        // When drag mode is ON: unlock widget (IsHitTestVisible=true, _isLocked=false)
-        // When drag mode is OFF: lock widget back (click-through)
+        // When drag mode is ON: unlock widget (IsHitTestVisible=true, _isLocked=false), show drag handle
+        // When drag mode is OFF: lock widget back (click-through), hide drag handle
         widget.SetLocked(!enableDrag);
+        widget.UpdateDragHandleVisibility(enableDrag);
     }
 
     // ── Field combos ────────────────────────────────────────────────

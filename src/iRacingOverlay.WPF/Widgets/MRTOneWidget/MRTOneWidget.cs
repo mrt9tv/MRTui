@@ -1853,6 +1853,7 @@ public class MRTOneWidget : WidgetBase
             if (isActive)
             {
                 rings[i].Fill = fillBrush;
+                rings[i].Visibility = Visibility.Visible;
                 // Only set opacity for non-blinking zones; blink timers handle Close/VeryClose
                 if (!isBlinkingZone)
                     rings[i].Opacity = LayoutConstants.ARC_RING_MAX_OPACITY[i];
@@ -1861,6 +1862,7 @@ public class MRTOneWidget : WidgetBase
             {
                 rings[i].Fill = s_radarTransparent;
                 rings[i].Opacity = 0;
+                rings[i].Visibility = Visibility.Collapsed;
             }
         }
     }

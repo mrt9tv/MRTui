@@ -514,9 +514,11 @@ public class StandingsWidget : WidgetBase
             Canvas.SetLeft(row.Best, _layout.BestX);
             Canvas.SetTop(row.Best, y);
 
-            // Current lap
+            // Current lap — right-aligned for clean column look
             row.Lap.Visibility = ShowCurrentLap ? Visibility.Visible : Visibility.Collapsed;
             row.Lap.Text = ShowCurrentLap ? e.CurrentLap.ToString() : "";
+            row.Lap.TextAlignment = TextAlignment.Right;
+            row.Lap.Width = COL_W_LAP - 4; // fit within column, slight padding
             Canvas.SetLeft(row.Lap, _layout.LapX);
             Canvas.SetTop(row.Lap, y);
 

@@ -126,6 +126,16 @@ public class RelativeEntry
     public bool HasBlackFlag { get; set; }
 
     /// <summary>
+    /// Whether this car has a blue flag (CarIdxSessionFlags bit 0x20 — instructed to yield to lapping car).
+    /// </summary>
+    public bool HasBlueFlag { get; set; }
+
+    /// <summary>
+    /// Whether this car has been disqualified (CarIdxSessionFlags bit 0x20000).
+    /// </summary>
+    public bool IsDisqualified { get; set; }
+
+    /// <summary>
     /// Whether this car gained incidents recently (CurDriverIncidentCount increased).
     /// Auto-clears after approximately 8 seconds.
     /// </summary>

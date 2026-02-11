@@ -303,6 +303,20 @@
                                           Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
                             </WrapPanel>
 
+                            <!-- Session event toggles -->
+                            <TextBlock Text="SESSION EVENTS" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,6,0,4"/>
+                            <WrapPanel>
+                                <CheckBox x:Name="ChkProxStartSequence" Content="Start (Go!)" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
+                                <CheckBox x:Name="ChkProxCheckered" Content="Checkered" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
+                                <CheckBox x:Name="ChkProxPaceFlags" Content="Pace / SC Flags" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
+                            </WrapPanel>
+
                             <!-- Position / drag toggle -->
                             <TextBlock Text="POSITION" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,8,0,4"/>
                             <CheckBox x:Name="ChkProxDragMode" Content="Enable drag to reposition" FontSize="10" IsChecked="False"
