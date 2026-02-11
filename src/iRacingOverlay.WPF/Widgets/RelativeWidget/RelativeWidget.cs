@@ -195,6 +195,14 @@ public class RelativeWidget : WidgetBase
     /// <summary>Tracks previous Y position per CarIdx for smooth row slide animation</summary>
     private readonly Dictionary<int, double> _previousRowPositions = new();
 
+    /// <summary>Tracks last known position per CarIdx for position change flash</summary>
+    private readonly Dictionary<int, int> _lastKnownPosition = new();
+    /// <summary>Position flash countdown per CarIdx (frames remaining, 0=no flash)</summary>
+    private readonly Dictionary<int, int> _positionFlashFrames = new();
+    /// <summary>Position flash direction per CarIdx (true=gained, false=lost)</summary>
+    private readonly Dictionary<int, bool> _positionFlashGained = new();
+    private const int POSITION_FLASH_DURATION = 60; // ~1 second at 60Hz
+
     #endregion
 
     #region Settings
@@ -1031,10 +1039,46 @@ public class RelativeWidget : WidgetBase
         // Determine if this car has dangerous closing rate
         bool isDanger = ShowDangerGlow && !entry.IsPlayer && entry.ClosingRate > DANGER_CLOSING_RATE;
 
-        // Player row highlight + alternate row shading + danger glow
+        // Player row highlight + alternate row shading + danger glow + position flash
+        // Check for position change flash (green=gained, red=lost)
+        int carIdx = entry.CarIdx;
+        int currentPos = ShowClassPosition ? entry.ClassPosition : entry.OverallPosition;
+        bool hasPositionFlash = false;
+        bool flashGained = false;
+
+        if (!entry.IsPlayer && currentPos > 0)
+        {
+            // Detect position change
+            if (_lastKnownPosition.TryGetValue(carIdx, out int prevPos) && prevPos > 0 && prevPos != currentPos)
+            {
+                _positionFlashFrames[carIdx] = POSITION_FLASH_DURATION;
+                _positionFlashGained[carIdx] = currentPos < prevPos; // lower position number = gained
+            }
+            _lastKnownPosition[carIdx] = currentPos;
+
+            // Apply flash if active
+            if (_positionFlashFrames.TryGetValue(carIdx, out int framesLeft) && framesLeft > 0)
+            {
+                hasPositionFlash = true;
+                flashGained = _positionFlashGained.GetValueOrDefault(carIdx, false);
+                _positionFlashFrames[carIdx] = framesLeft - 1;
+            }
+        }
+
         if (entry.IsPlayer)
         {
             row.Background.Background = BRUSH_PLAYER_BG;
+        }
+        else if (hasPositionFlash)
+        {
+            // Position change flash: fading green (gained) or red (lost)
+            int remaining = _positionFlashFrames.GetValueOrDefault(carIdx, 0);
+            float fade = Math.Clamp(remaining / (float)POSITION_FLASH_DURATION, 0f, 1f);
+            byte alpha = (byte)(50 * fade); // 50 → 0 over 1 second
+            var flashColor = flashGained
+                ? Color.FromArgb(alpha, 0, 200, 0)   // green flash for gaining positions
+                : Color.FromArgb(alpha, 200, 0, 0);  // red flash for losing positions
+            row.Background.Background = new SolidColorBrush(flashColor);
         }
         else if (isDanger)
         {
@@ -1319,8 +1363,8 @@ public class RelativeWidget : WidgetBase
             string incText;
             if (delta >= 2)
             {
-                incText = $"INC +{delta}x";
-                statusBrush = BRUSH_MEATBALL; // orange-red for significant incidents (2-4x)
+                incText = "COLLISION";
+                statusBrush = BRUSH_MEATBALL; // orange-red for car-on-car contact (2x+)
             }
             else
             {

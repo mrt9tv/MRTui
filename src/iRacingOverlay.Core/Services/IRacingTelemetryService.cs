@@ -185,7 +185,39 @@ namespace iRacingOverlay.Core.Services;
     
     // ===== PHASE 10.8: PIT REPAIR TIMES (Damage Assessment) =====
     TelemetryVar.PitRepairLeft,       // float - Time for mandatory repairs (seconds)
-    TelemetryVar.PitOptRepairLeft     // float - Time for optional repairs (seconds)
+    TelemetryVar.PitOptRepairLeft,    // float - Time for optional repairs (seconds)
+
+    // ===== SESSION / RACE MANAGEMENT =====
+    TelemetryVar.SessionLapsRemainEx,      // int   - Laps remaining (accounts for extra laps after time expires)
+    TelemetryVar.LapDist,                  // float - Meters from start/finish line (absolute track distance)
+
+    // ===== PLAYER CAR STATUS =====
+    TelemetryVar.PlayerCarPosition,        // int   - Player's overall race position
+    TelemetryVar.PlayerCarInPitStall,      // bool  - Player currently in pit stall
+    TelemetryVar.PlayerCarTowTime,         // float - Tow time remaining (seconds, 0 when not towing)
+    TelemetryVar.PitstopActive,            // bool  - Pitstop service in progress
+    TelemetryVar.PitSvFlags,               // int   - Pit service flags bitfield (PitServiceFlags enum)
+    TelemetryVar.PitSvFuel,                // float - Pit fuel fill amount (liters requested)
+    TelemetryVar.PlayerCarPitSvStatus,     // int   - Pit service status (PitServiceStatus enum)
+
+    // ===== PROXIMITY (SDK-provided gap to nearest cars) =====
+    TelemetryVar.CarDistAhead,             // float - Distance to car directly ahead (meters)
+    TelemetryVar.CarDistBehind,            // float - Distance to car directly behind (meters)
+
+    // ===== MISSING CarIdx ARRAYS (complete SDK coverage) =====
+    TelemetryVar.CarIdxBestLapNum,              // int[64]   - Lap number of each car's best lap
+    TelemetryVar.CarIdxLapCompleted,            // int[64]   - Laps completed per car
+    TelemetryVar.CarIdxFastRepairsUsed,         // int[64]   - Fast repairs used per car
+    TelemetryVar.CarIdxP2P_Count,               // int[64]   - Push-to-pass count per car
+    TelemetryVar.CarIdxP2P_Status,              // bool[64]  - Push-to-pass active per car
+    TelemetryVar.CarIdxPaceFlags,               // int[64]   - Pace flags per car (irsdk_PaceFlags)
+    TelemetryVar.CarIdxPaceLine,                // int[64]   - Pace line assignment per car
+    TelemetryVar.CarIdxPaceRow,                 // int[64]   - Pace row assignment per car
+    TelemetryVar.CarIdxQualTireCompound,        // int[64]   - Qualifying tire compound per car
+    TelemetryVar.CarIdxQualTireCompoundLocked,  // bool[64]  - Qual tire compound locked per car
+    TelemetryVar.CarIdxSteer,                   // float[64] - Steering angle per car (radians)
+    TelemetryVar.CarIdxTireCompound,            // int[64]   - Current tire compound per car
+    TelemetryVar.CarIdxTrackSurfaceMaterial      // int[64]   - Track surface material per car (enum)
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -529,7 +561,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 SteeringWheelAngle = sdkData.SteeringWheelAngle.GetValueOrDefault(),
                 Lap = sdkData.Lap.GetValueOrDefault(),
                 LapDistPct = sdkData.LapDistPct.GetValueOrDefault(),
+                LapDist = sdkData.LapDist.GetValueOrDefault(),
                 Position = sdkData.PlayerCarClassPosition.GetValueOrDefault(),
+                PlayerCarPosition = sdkData.PlayerCarPosition.GetValueOrDefault(),
                 PlayerCarIdx = sdkData.PlayerCarIdx.GetValueOrDefault(),
                 PlayerCarClass = sdkData.PlayerCarClass.GetValueOrDefault(),
                 Timestamp = DateTime.UtcNow,
@@ -549,7 +583,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 SessionLaps = 0, // DEPRECATED - kept for backward compat
                 SessionLapsTotal = sdkData.SessionLapsTotal.GetValueOrDefault(),
                 SessionLapsRemain = sdkData.SessionLapsRemain.GetValueOrDefault(),
-                // NOTE: SessionLapsRemainEx already exists and is auto-updated by SDK
+                // NOTE: SessionLapsRemainEx is set from SDK here, then overridden below
+                // with fuel calculator's EstimatedLapsFromTime for widget display
+                SessionLapsRemainEx = sdkData.SessionLapsRemainEx.GetValueOrDefault(),
                 SessionTimeTotal = (float)sdkData.SessionTimeTotal.GetValueOrDefault(),
                 WaterTemp = sdkData.WaterTemp.GetValueOrDefault(),
                 WaterLevel = sdkData.WaterLevel.GetValueOrDefault(),
@@ -689,6 +725,10 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // DEBUG: Log raw SDK value to diagnose false positives
                 CarLeftRight = (int)sdkData.CarLeftRight.GetValueOrDefault(),
                 
+                // SDK-provided gap distances (meters along track)
+                CarDistAhead = sdkData.CarDistAhead.GetValueOrDefault(),
+                CarDistBehind = sdkData.CarDistBehind.GetValueOrDefault(),
+                
                 // Multi-Car Position Arrays (CarIdx[64])
                 CarIdxLapDistPct = sdkData.CarIdxLapDistPct,
                 CarIdxOnPitRoad = sdkData.CarIdxOnPitRoad,
@@ -705,6 +745,21 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxBestLapTime = sdkData.CarIdxBestLapTime,
                 CarIdxSessionFlags = sdkData.CarIdxSessionFlags?.Select(f => (int)f).ToArray(),
 
+                // Additional CarIdx arrays (complete SDK coverage)
+                CarIdxBestLapNum = sdkData.CarIdxBestLapNum,
+                CarIdxLapCompleted = sdkData.CarIdxLapCompleted,
+                CarIdxFastRepairsUsed = sdkData.CarIdxFastRepairsUsed,
+                CarIdxP2P_Count = sdkData.CarIdxP2P_Count,
+                CarIdxP2P_Status = sdkData.CarIdxP2P_Status,
+                CarIdxPaceFlags = sdkData.CarIdxPaceFlags?.Select(f => (int)f).ToArray(),
+                CarIdxPaceLine = sdkData.CarIdxPaceLine,
+                CarIdxPaceRow = sdkData.CarIdxPaceRow,
+                CarIdxQualTireCompound = sdkData.CarIdxQualTireCompound,
+                CarIdxQualTireCompoundLocked = sdkData.CarIdxQualTireCompoundLocked,
+                CarIdxSteer = sdkData.CarIdxSteer,
+                CarIdxTireCompound = sdkData.CarIdxTireCompound,
+                CarIdxTrackSurfaceMaterial = sdkData.CarIdxTrackSurfaceMaterial?.Select(m => (int)m).ToArray(),
+
                 // Player Orientation
                 Yaw = sdkData.Yaw.GetValueOrDefault(),
                 YawRate = sdkData.YawRate.GetValueOrDefault(),
@@ -719,7 +774,15 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 
                 // ===== PIT REPAIR TIMES (Phase 10.8: Damage Assessment) =====
                 PitRepairLeft = sdkData.PitRepairLeft.GetValueOrDefault(),
-                PitOptRepairLeft = sdkData.PitOptRepairLeft.GetValueOrDefault()
+                PitOptRepairLeft = sdkData.PitOptRepairLeft.GetValueOrDefault(),
+
+                // ===== PLAYER PIT STATUS =====
+                PlayerCarInPitStall = sdkData.PlayerCarInPitStall.GetValueOrDefault(),
+                PlayerCarTowTime = sdkData.PlayerCarTowTime.GetValueOrDefault(),
+                PitstopActive = sdkData.PitstopActive.GetValueOrDefault(),
+                PitSvFlags = (int)sdkData.PitSvFlags.GetValueOrDefault(),
+                PitSvFuel = sdkData.PitSvFuel.GetValueOrDefault(),
+                PlayerCarPitSvStatus = (int)sdkData.PlayerCarPitSvStatus.GetValueOrDefault(),
             };
 
             // ===== DIRTY FIELD TRACKING (Task 6) =====

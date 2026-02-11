@@ -29,8 +29,8 @@ public static class ShiftPointCalculator
     /// </summary>
     public static void UpdateTracking(float currentRPM, float throttle, int gear, float carRedline = 0f)
     {
-        // Store car redline from SDK if provided
-        if (carRedline > 0 && _carRedlineRPM == 0)
+        // Store car redline from SDK — always update (value may change between sessions)
+        if (carRedline > 0)
         {
             _carRedlineRPM = carRedline;
         }
@@ -149,10 +149,11 @@ public static class ShiftPointCalculator
             return RPMZone.Safe;
         }
         
-        // Guard: If SDK hasn't provided ANY shift light data yet (session loading, garage exit),
-        // stay Safe (Teal) to avoid false Warning color from stale learning data
+        // Guard: If SDK hasn't provided shift light data yet (session loading, garage exit, race start),
+        // fall back to legacy RPM zone calculation using EngineRedlineRPM / observed max.
+        // This ensures beads light up in first gear on race start even before shift lights populate.
         if (shiftFirstRPM <= 0 && shiftOptimalRPM <= 0 && shiftBlinkRPM <= 0)
-            return RPMZone.Safe;
+            return GetRPMZone(currentRPM, gear);
 
         // PHASE 1: Use iRacing's professional shift light values if available
         // These are car-specific and based on actual engine physics/torque curves

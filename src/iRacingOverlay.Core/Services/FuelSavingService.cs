@@ -37,6 +37,8 @@ public sealed class FuelSavingService
     private const int RECENT_WINDOW = 3; // compare last 3 laps
     private float _lastLapFuelUsed;
     private int _lastLapSeen = -1;
+    private float _smoothedProjectedDelta; // EMA-smoothed projected fuel delta
+    private bool _smoothedDeltaInitialized;
 
     /// <summary>
     /// Reset all fuel saving state. Called when session/car/track changes.
@@ -46,6 +48,8 @@ public sealed class FuelSavingService
         _recentConsumption.Clear();
         _lastLapFuelUsed = 0;
         _lastLapSeen = -1;
+        _smoothedProjectedDelta = 0;
+        _smoothedDeltaInitialized = false;
     }
 
     /// <summary>
@@ -107,7 +111,16 @@ public sealed class FuelSavingService
         {
             // We're fine — clear saving mode but still show projected surplus
             ClearSavingFields(fuel);
-            fuel.ProjectedFuelDelta = fuelDelta;
+            // Smooth the projected delta with EMA (α=0.03 at 60Hz ≈ 0.55s time constant)
+            // Prevents the value from bouncing frame-to-frame as fuel burns
+            if (_smoothedDeltaInitialized)
+                _smoothedProjectedDelta = _smoothedProjectedDelta * 0.97f + fuelDelta * 0.03f;
+            else
+            {
+                _smoothedProjectedDelta = fuelDelta;
+                _smoothedDeltaInitialized = true;
+            }
+            fuel.ProjectedFuelDelta = _smoothedProjectedDelta;
             fuel.CanSaveFuelToFinish = true;
             fuel.NeedsFuelSaving = false;
             fuel.StrategicAlert = fuelDelta < avg
@@ -154,7 +167,15 @@ public sealed class FuelSavingService
         // not at saving rate. Buffer is a safety margin for resuming normal pace.
         float effectiveRate = recentAvg > 0 ? recentAvg : avg;
         float projectedFuelAtFinish = usableFuel - (effectiveRate * effectiveRaceLaps) - (fuel.FuelBufferLaps * avg);
-        fuel.ProjectedFuelDelta = projectedFuelAtFinish;
+        // Smooth projected delta with EMA to dampen frame-to-frame throttle noise
+        if (_smoothedDeltaInitialized)
+            _smoothedProjectedDelta = _smoothedProjectedDelta * 0.97f + projectedFuelAtFinish * 0.03f;
+        else
+        {
+            _smoothedProjectedDelta = projectedFuelAtFinish;
+            _smoothedDeltaInitialized = true;
+        }
+        fuel.ProjectedFuelDelta = _smoothedProjectedDelta;
 
         // ── saving progress (0-100%) ────────────────────────────────
         if (savingNeeded > 0 && fuel.CurrentSavingRate > 0)

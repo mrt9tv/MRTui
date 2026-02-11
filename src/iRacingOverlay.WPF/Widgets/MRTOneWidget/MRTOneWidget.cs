@@ -221,6 +221,16 @@ public class MRTOneWidget : WidgetBase
     private bool _radarBlinkState = false;
     private bool _arcSlowBlinkState = false;
     private bool _isLastLap = false;                        // Doubles blink speed on final lap
+    private float _closestFrontDistance = float.MaxValue;    // Meters to closest car ahead (for blink speed)
+    private float _closestRearDistance = float.MaxValue;     // Meters to closest car behind (for blink speed)
+    private double _fadeOutFrontOpacity = 0;                 // Fade-out opacity for front arcs (1.0 → 0 over ~0.3s)
+    private double _fadeOutBackOpacity = 0;                  // Fade-out opacity for back arcs
+    private double _fadeOutLeftOpacity = 0;                  // Fade-out opacity for left side arc
+    private double _fadeOutRightOpacity = 0;                 // Fade-out opacity for right side arc
+    private ProximityZone _prevFrontZone = ProximityZone.Clear;
+    private ProximityZone _prevRearZone = ProximityZone.Clear;
+    private bool _prevLeftPresent = false;
+    private bool _prevRightPresent = false;
     
     // Brake bias overlay UI state (not in StateManager - widget-specific)
     private DispatcherTimer? _brakeBiasHideTimer;       // Auto-hide timer
@@ -871,14 +881,8 @@ public class MRTOneWidget : WidgetBase
 
         if (anyVeryClose)
         {
-            // Blink the WHOLE radar — gauge circle border, all arcs, all squares
+            // Blink radar arcs and squares — gauge circle is RPM-only, do NOT touch it
             double blinkOp = _radarBlinkState ? 1.0 : 0.15;
-
-            // Gauge circle border blinks red
-            if (_radarBlinkState)
-                _gaugeCircle.Stroke = new SolidColorBrush(Colors.Red);
-            else
-                _gaugeCircle.Stroke = new SolidColorBrush(Color.FromArgb(60, 255, 0, 0));
 
             // Front/back squares blink with high contrast
             if (frontZone == ProximityZone.VeryClose)
@@ -896,7 +900,6 @@ public class MRTOneWidget : WidgetBase
         {
             _radarFront.Opacity = 1.0;
             _radarBack.Opacity = 1.0;
-            // Restore gauge circle to normal color (will be updated next frame by shift point logic)
         }
 
         // Side arc flashing: red flash when car is alongside
@@ -1266,14 +1269,12 @@ public class MRTOneWidget : WidgetBase
             _pitLimiterBlinkState = false;
         }
 
-        // Only update RPM zone color if neither pit limiter NOR VeryClose radar blink is active
-        // When pit limiter is active, the pit limiter blink timer handles the color
-        // When VeryClose radar is active, the radar blink timer handles the color (red flash)
-        var (currentFrontZone, currentRearZone) = _stateManager.GetCurrentZones();
-        bool radarBlinkActive = currentFrontZone == ProximityZone.VeryClose || currentRearZone == ProximityZone.VeryClose;
+        // Only update RPM zone color if pit limiter is NOT active
+        // When pit limiter is active and feature enabled, the blink timer handles the color
+        // RADAR+ does NOT touch the gauge circle — it only controls arcs and squares
         bool pitLimiterBlinkActive = _settings.EnablePitLimiterIndicator && _stateManager.IsPitLimiterActive;
         
-        if (!pitLimiterBlinkActive && !radarBlinkActive)
+        if (!pitLimiterBlinkActive)
         {
             // Update gauge circle color based on RPM zone
             var rpm = data.RPM;
@@ -1498,9 +1499,11 @@ public class MRTOneWidget : WidgetBase
             _radarRight.Fill = hasRight ? Brushes.Red : Brushes.Green;
         }
         
-        // Update FRONT/BACK squares using ProximityCalculator
-        var frontZone = _proximityCalculator.GetFrontZone(data);
-        var rearZone = _proximityCalculator.GetRearZone(data);
+        // Update FRONT/BACK squares using ProximityCalculator (with distance for blink speed)
+        var (frontZone, frontDist) = _proximityCalculator.GetFrontZoneWithDistance(data);
+        var (rearZone, rearDist) = _proximityCalculator.GetRearZoneWithDistance(data);
+        _closestFrontDistance = frontDist;
+        _closestRearDistance = rearDist;
         
         // Track current zones for blinking animation
         _stateManager.UpdateProximityZones(frontZone, rearZone);
@@ -1524,12 +1527,125 @@ public class MRTOneWidget : WidgetBase
         if (lastLap != _isLastLap)
         {
             _isLastLap = lastLap;
-            double mult = lastLap ? LayoutConstants.ARC_LAST_LAP_BLINK_MULTIPLIER : 1.0;
-            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
-                LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS * mult);
-            _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(
-                LayoutConstants.ARC_SLOW_BLINK_INTERVAL_MS * mult);
+            // Last-lap multiplier is applied as a base; distance modulation is layered on top
         }
+
+        // ── PROXIMITY-BASED BLINK SPEED: closer cars = faster blink ──────
+        // VeryClose range: 0-4m → 60ms (very close) to 120ms (edge of zone)
+        // Close range: 4-7m → 250ms to 400ms
+        // Uses the minimum distance (front or rear, whichever is closer)
+        float closestDist = Math.Min(_closestFrontDistance, _closestRearDistance);
+        double lastLapMult = _isLastLap ? LayoutConstants.ARC_LAST_LAP_BLINK_MULTIPLIER : 1.0;
+
+        if (closestDist < 4f) // VeryClose
+        {
+            // Linear interpolation: 0m → 60ms, 4m → 120ms
+            float t = Math.Clamp(closestDist / 4f, 0f, 1f);
+            double interval = 60 + (60 * t); // 60-120ms
+            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
+        }
+        else if (closestDist < 7f) // Close
+        {
+            float t = Math.Clamp((closestDist - 4f) / 3f, 0f, 1f);
+            double interval = 250 + (150 * t); // 250-400ms
+            _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
+            // Reset fast blink to default when not in VeryClose
+            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
+                LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS * lastLapMult);
+        }
+        else
+        {
+            // No close cars — reset to defaults
+            _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
+                LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS * lastLapMult);
+            _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(
+                LayoutConstants.ARC_SLOW_BLINK_INTERVAL_MS * lastLapMult);
+        }
+
+        // ── FADE-OUT: smooth transition when proximity lost ──────────────
+        // Decay rate: ~0.3s to fade from full to invisible at 60Hz (0.05 per frame)
+        const double FADE_DECAY = 0.05;
+
+        // Front arcs: trigger fade when zone goes from active → Clear
+        if (frontZone == ProximityZone.Clear && _prevFrontZone != ProximityZone.Clear)
+            _fadeOutFrontOpacity = 0.85; // start fading from last visible opacity
+        if (_fadeOutFrontOpacity > 0 && frontZone == ProximityZone.Clear)
+        {
+            for (int i = 0; i < _arcFrontRings.Length; i++)
+            {
+                _arcFrontRings[i].Opacity = _fadeOutFrontOpacity * LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                if (_arcFrontRings[i].Visibility == Visibility.Collapsed)
+                    _arcFrontRings[i].Visibility = Visibility.Visible;
+            }
+            _fadeOutFrontOpacity = Math.Max(0, _fadeOutFrontOpacity - FADE_DECAY);
+            if (_fadeOutFrontOpacity <= 0)
+            {
+                for (int i = 0; i < _arcFrontRings.Length; i++)
+                {
+                    _arcFrontRings[i].Opacity = 0;
+                    _arcFrontRings[i].Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
+        // Back arcs: same fade logic
+        if (rearZone == ProximityZone.Clear && _prevRearZone != ProximityZone.Clear)
+            _fadeOutBackOpacity = 0.85;
+        if (_fadeOutBackOpacity > 0 && rearZone == ProximityZone.Clear)
+        {
+            for (int i = 0; i < _arcBackRings.Length; i++)
+            {
+                _arcBackRings[i].Opacity = _fadeOutBackOpacity * LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                if (_arcBackRings[i].Visibility == Visibility.Collapsed)
+                    _arcBackRings[i].Visibility = Visibility.Visible;
+            }
+            _fadeOutBackOpacity = Math.Max(0, _fadeOutBackOpacity - FADE_DECAY);
+            if (_fadeOutBackOpacity <= 0)
+            {
+                for (int i = 0; i < _arcBackRings.Length; i++)
+                {
+                    _arcBackRings[i].Opacity = 0;
+                    _arcBackRings[i].Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
+        // Side arcs: fade when car moves away
+        if (!hasLeft && _prevLeftPresent)
+            _fadeOutLeftOpacity = 0.85;
+        if (_fadeOutLeftOpacity > 0 && !hasLeft)
+        {
+            _arcLeftSide.Opacity = _fadeOutLeftOpacity;
+            if (_arcLeftSide.Visibility == Visibility.Collapsed)
+                _arcLeftSide.Visibility = Visibility.Visible;
+            _fadeOutLeftOpacity = Math.Max(0, _fadeOutLeftOpacity - FADE_DECAY);
+            if (_fadeOutLeftOpacity <= 0)
+            {
+                _arcLeftSide.Opacity = 0;
+                _arcLeftSide.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        if (!hasRight && _prevRightPresent)
+            _fadeOutRightOpacity = 0.85;
+        if (_fadeOutRightOpacity > 0 && !hasRight)
+        {
+            _arcRightSide.Opacity = _fadeOutRightOpacity;
+            if (_arcRightSide.Visibility == Visibility.Collapsed)
+                _arcRightSide.Visibility = Visibility.Visible;
+            _fadeOutRightOpacity = Math.Max(0, _fadeOutRightOpacity - FADE_DECAY);
+            if (_fadeOutRightOpacity <= 0)
+            {
+                _arcRightSide.Opacity = 0;
+                _arcRightSide.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // Remember previous state for next frame
+        _prevFrontZone = frontZone;
+        _prevRearZone = rearZone;
+        _prevLeftPresent = hasLeft;
+        _prevRightPresent = hasRight;
     }
     
     /// <summary>

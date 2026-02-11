@@ -212,6 +212,41 @@ public class RelativeEntry
 
     /// <summary>Whether this entry is the safety/pace car. Display as "SC" with no driver info.</summary>
     public bool IsSafetyCar { get; set; }
+
+    // ── CarIdx telemetry (complete SDK coverage) ─────────────────
+
+    /// <summary>Laps completed by this car (CarIdxLapCompleted).</summary>
+    public int LapCompleted { get; set; }
+
+    /// <summary>Lap number of this car's best lap (CarIdxBestLapNum).</summary>
+    public int BestLapNum { get; set; }
+
+    /// <summary>Fast repairs used by this car (CarIdxFastRepairsUsed).</summary>
+    public int FastRepairsUsed { get; set; }
+
+    /// <summary>Current tire compound index (CarIdxTireCompound). 0 = default/unknown.</summary>
+    public int TireCompound { get; set; }
+
+    /// <summary>Qualifying tire compound index (CarIdxQualTireCompound).</summary>
+    public int QualTireCompound { get; set; }
+
+    /// <summary>Track surface material under this car (CarIdxTrackSurfaceMaterial enum).</summary>
+    public int TrackSurfaceMaterial { get; set; }
+
+    /// <summary>Push-to-pass uses remaining (CarIdxP2P_Count).</summary>
+    public int P2P_Count { get; set; }
+
+    /// <summary>Push-to-pass currently active (CarIdxP2P_Status).</summary>
+    public bool P2P_Active { get; set; }
+
+    /// <summary>Pace flags for this car (CarIdxPaceFlags).</summary>
+    public int PaceFlags { get; set; }
+
+    /// <summary>Pace line assignment (CarIdxPaceLine).</summary>
+    public int PaceLine { get; set; }
+
+    /// <summary>Pace row assignment (CarIdxPaceRow).</summary>
+    public int PaceRow { get; set; }
 }
 
 /// <summary>

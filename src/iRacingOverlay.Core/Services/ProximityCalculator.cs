@@ -239,16 +239,26 @@ public class ProximityCalculator
     /// </summary>
     public ProximityZone GetFrontZone(TelemetryData data)
     {
-        // Get all nearby cars and manually find closest ahead
+        var (zone, _) = GetFrontZoneWithDistance(data);
+        return zone;
+    }
+
+    /// <summary>
+    /// Get proximity zone AND distance for front radar (closest car ahead).
+    /// Distance is in meters; returns float.MaxValue if no car detected.
+    /// </summary>
+    public (ProximityZone Zone, float Distance) GetFrontZoneWithDistance(TelemetryData data)
+    {
         var nearbyCars = GetNearbyCars(data, maxCars: 10, sameClassOnly: false);
         
-        // Find closest car ahead (positive RelativeDistance, smallest AbsoluteDistance)
         var carAhead = nearbyCars
-            .Where(c => c.RelativeDistance > 0)  // Ahead in meters
-            .OrderBy(c => c.AbsoluteDistance)     // Closest first
+            .Where(c => c.RelativeDistance > 0)
+            .OrderBy(c => c.AbsoluteDistance)
             .FirstOrDefault();
         
-        return carAhead?.Zone ?? ProximityZone.Clear;
+        return carAhead != null
+            ? (carAhead.Zone, carAhead.AbsoluteDistance)
+            : (ProximityZone.Clear, float.MaxValue);
     }
     
     /// <summary>
@@ -256,15 +266,25 @@ public class ProximityCalculator
     /// </summary>
     public ProximityZone GetRearZone(TelemetryData data)
     {
-        // Get all nearby cars and manually find closest behind
+        var (zone, _) = GetRearZoneWithDistance(data);
+        return zone;
+    }
+
+    /// <summary>
+    /// Get proximity zone AND distance for rear radar (closest car behind).
+    /// Distance is in meters; returns float.MaxValue if no car detected.
+    /// </summary>
+    public (ProximityZone Zone, float Distance) GetRearZoneWithDistance(TelemetryData data)
+    {
         var nearbyCars = GetNearbyCars(data, maxCars: 10, sameClassOnly: false);
         
-        // Find closest car behind (negative RelativeDistance, smallest AbsoluteDistance)
         var carBehind = nearbyCars
-            .Where(c => c.RelativeDistance < 0)   // Behind in meters
-            .OrderBy(c => c.AbsoluteDistance)      // Closest first
+            .Where(c => c.RelativeDistance < 0)
+            .OrderBy(c => c.AbsoluteDistance)
             .FirstOrDefault();
         
-        return carBehind?.Zone ?? ProximityZone.Clear;
+        return carBehind != null
+            ? (carBehind.Zone, carBehind.AbsoluteDistance)
+            : (ProximityZone.Clear, float.MaxValue);
     }
 }

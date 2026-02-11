@@ -188,6 +188,13 @@ public class FuelData
     /// </summary>
     public float EffectiveAvgFuelPerLap { get; set; }
     
+    /// <summary>
+    /// Real-time fuel saving on current lap vs L3 average (positive = saving fuel).
+    /// Shows how much less fuel the driver is projected to use this lap compared
+    /// to their recent average. Useful for lift &amp; coast feedback.
+    /// </summary>
+    public float CurrentLapSaving { get; set; }
+    
     /// <summary>Fuel needed to finish race (with current average)</summary>
     public float FuelNeededToFinish { get; set; }
     

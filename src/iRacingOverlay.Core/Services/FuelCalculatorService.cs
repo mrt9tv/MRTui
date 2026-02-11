@@ -22,8 +22,10 @@ public sealed class FuelCalculatorService
     private bool _wasUnderYellow;
     private bool _isPitLap; // true when a pit stop was detected this lap — skip from averages
     private float _sdkFuelEstimate; // SDK FuelUsePerHour converted to L/lap for early-lap fallback
+    private float _smoothedSdkFuelPerHour; // EMA-smoothed FuelUsePerHour (dampens throttle noise)
     private bool _isFirstRaceLap = true; // first completed lap is always partial (standing/rolling start)
     private int _stintStartIndex; // index in _lapFuelUsage where current stint started (for clean stint avg)
+    private float _smoothedLapFuelRate; // EMA-smoothed mid-lap fuel rate (dampens throttle-induced noise)
 
     // Session change detection
     private int _lastSessionNum = -1;
@@ -51,8 +53,10 @@ public sealed class FuelCalculatorService
         _wasUnderYellow = false;
         _isPitLap = false;
         _sdkFuelEstimate = 0f;
+        _smoothedSdkFuelPerHour = 0f;
         _isFirstRaceLap = true;
         _stintStartIndex = 0;
+        _smoothedLapFuelRate = 0f;
 
         // Reset snapshot (keep defaults)
         var data = CurrentData;
@@ -67,6 +71,7 @@ public sealed class FuelCalculatorService
         data.LapToLapDelta = 0;
         data.GreenFlagLapCount = 0;
         data.YellowFlagLapCount = 0;
+        data.CurrentLapSaving = 0;
     }
 
     /// <summary>
@@ -179,11 +184,26 @@ public sealed class FuelCalculatorService
         // Remember yellow state for the lap we just completed
         _wasUnderYellow = isUnderYellow;
 
-        // ── live mid-lap consumption estimate ───────────────────────
+        // ── live mid-lap consumption estimate (EMA-smoothed for stability) ─────
         CurrentData.FuelUsedThisLap = Math.Max(0, _fuelAtLapStart - fuel);
-        CurrentData.CurrentLapFuelRate = data.LapDistPct > 0.05f
+        float rawLapFuelRate = data.LapDistPct > 0.05f
             ? CurrentData.FuelUsedThisLap / data.LapDistPct
             : 0f;
+
+        // EMA smoothing: α=0.05 at 60Hz ≈ 0.33s time constant
+        // Dramatically reduces throttle-induced noise while tracking real changes.
+        // Reset on new lap (rawRate resets) to avoid carryover from previous lap's end-of-lap spike.
+        if (rawLapFuelRate > 0)
+        {
+            _smoothedLapFuelRate = _smoothedLapFuelRate > 0
+                ? _smoothedLapFuelRate * 0.95f + rawLapFuelRate * 0.05f
+                : rawLapFuelRate; // first sample: seed directly
+        }
+        else
+        {
+            _smoothedLapFuelRate = 0f; // new lap or very early — reset
+        }
+        CurrentData.CurrentLapFuelRate = _smoothedLapFuelRate;
 
         _previousFuel = fuel;
 
@@ -211,7 +231,15 @@ public sealed class FuelCalculatorService
         }
         if (data.FuelUsePerHour > 0 && sdkLapTime > 1.0f)
         {
-            _sdkFuelEstimate = (data.FuelUsePerHour / 3600f) * sdkLapTime;
+            // EMA-smooth FuelUsePerHour to dampen throttle-induced noise.
+            // Raw value spikes on throttle and drops on lift — unusable for stable display.
+            // α=0.05 at 60Hz ≈ 0.7s time constant: stable within ~2s, still tracks real changes.
+            float rawFuelPerHour = data.FuelUsePerHour;
+            _smoothedSdkFuelPerHour = _smoothedSdkFuelPerHour > 0
+                ? _smoothedSdkFuelPerHour * 0.95f + rawFuelPerHour * 0.05f
+                : rawFuelPerHour; // seed on first frame
+            
+            _sdkFuelEstimate = (_smoothedSdkFuelPerHour / 3600f) * sdkLapTime;
             CurrentData.SdkFuelEstimate = _sdkFuelEstimate;
         }
 
@@ -241,8 +269,8 @@ public sealed class FuelCalculatorService
         CurrentData.MinFuelPerLap = _minFuel < float.MaxValue ? _minFuel : 0;
         CurrentData.MaxFuelPerLap = _maxFuel;
 
-        // HasSufficientData — need at least 2 valid laps (or SDK estimate)
-        CurrentData.HasSufficientData = _lapFuelUsage.Count >= 2 || _sdkFuelEstimate > 0;
+        // HasSufficientData — SDK estimate is sufficient from lap 1 onwards
+        CurrentData.HasSufficientData = _sdkFuelEstimate > 0 || _lapFuelUsage.Count >= 1;
 
         // Average lap time for timed session calculations
         CurrentData.AverageLapTime = _lapTimes.Count > 0
@@ -250,32 +278,35 @@ public sealed class FuelCalculatorService
             : 0;
 
         // ── laps remaining (accounts for splutter/buffer zone) ──────────
-        // Early-lap blending: the first race lap is excluded (partial distance from
-        // standing/rolling start). SDK estimate fills in until real data arrives.
-        // Once we have clean laps, we trust measured data quickly since there's no
-        // garbage first-lap polluting the averages.
-        float avgForCalc = CurrentData.AvgFuelPerLap_L5 > 0
-            ? CurrentData.AvgFuelPerLap_L5
-            : CurrentData.AvgFuelPerLap_Session;
+        // Prefer L3 average for stability: only updates at lap boundaries, immune
+        // to mid-lap throttle/lift noise. Falls back through L5 → session if needed.
+        float avgForCalc = CurrentData.AvgFuelPerLap_L3 > 0
+            ? CurrentData.AvgFuelPerLap_L3
+            : CurrentData.AvgFuelPerLap_L5 > 0
+                ? CurrentData.AvgFuelPerLap_L5
+                : CurrentData.AvgFuelPerLap_Session;
 
         if (_sdkFuelEstimate > 0)
         {
             if (_lapFuelUsage.Count == 0)
             {
-                // No measured data yet (pre-race or first lap still running) — pure SDK
+                // LAP 1 (no completed laps yet) — 100% iRacing SDK estimate
+                // This is the ONLY source of data before any lap is completed.
                 avgForCalc = _sdkFuelEstimate;
             }
             else if (_lapFuelUsage.Count == 1)
             {
-                // 1 clean lap: 60% measured, 40% SDK (first-lap is already excluded,
-                // so this is a full-distance lap — more trustworthy)
-                avgForCalc = _lapFuelUsage[0] * 0.60f + _sdkFuelEstimate * 0.40f;
+                // 1 clean lap completed: STILL 100% SDK estimate
+                // A single measured lap is too noisy (throttle variance, draft, tire temp).
+                // Keep pure SDK until we have 2 clean laps to cross-reference.
+                avgForCalc = _sdkFuelEstimate;
             }
             else if (_lapFuelUsage.Count == 2)
             {
-                // 2 clean laps: 85% measured, 15% SDK
+                // 2 clean laps: 70% measured, 30% SDK
+                // Measured data gaining confidence, SDK smooths it
                 float measured = _lapFuelUsage.Average();
-                avgForCalc = measured * 0.85f + _sdkFuelEstimate * 0.15f;
+                avgForCalc = measured * 0.70f + _sdkFuelEstimate * 0.30f;
             }
             // 3+ laps: pure measured data (avgForCalc already set above)
         }
@@ -283,22 +314,27 @@ public sealed class FuelCalculatorService
         // Usable fuel = current fuel minus splutter threshold (unusable fuel at bottom of tank)
         float usableFuel = Math.Max(0, fuel - CurrentData.FuelSputteringThreshold);
 
-        // Stabilize LapsRemaining near S/F line to prevent "countdown" effect.
-        // The issue: fuel drops continuously but avgForCalc only updates at lap boundaries.
-        // Near line crossing, FuelUsedThisLap is at maximum → LapsRemaining dips, then
-        // snaps back after crossing when fuelAtLapStart resets.
-        // Fix: blend in the mid-lap projected rate so the estimate transitions smoothly.
-        float displayAvg = avgForCalc;
-        if (_lapFuelUsage.Count >= 1 && CurrentData.CurrentLapFuelRate > 0 && data.LapDistPct > 0.30f)
-        {
-            // Weight mid-lap projection more as we approach S/F line
-            float progressWeight = Math.Clamp((data.LapDistPct - 0.30f) / 0.70f, 0f, 0.5f);
-            displayAvg = avgForCalc * (1f - progressWeight) + CurrentData.CurrentLapFuelRate * progressWeight;
-        }
-
-        CurrentData.LapsRemaining = displayAvg > 0
-            ? usableFuel / displayAvg
+        // LapsRemaining: use stable avgForCalc (L3 average) directly.
+        // No mid-lap blending — L3 avg only changes at lap boundaries, so
+        // LapsRemaining naturally counts down as fuel burns (expected behavior)
+        // without bouncing on throttle/lift.
+        CurrentData.LapsRemaining = avgForCalc > 0
+            ? usableFuel / avgForCalc
             : 0;
+
+        // ── real-time saving indicator ──────────────────────────────
+        // CurrentLapSaving = L3 avg - projected current lap rate.
+        // Positive = currently saving fuel (lifting/coasting).
+        // Only meaningful after some track completion and with L3 data.
+        float l3ForSaving = CurrentData.AvgFuelPerLap_L3;
+        if (l3ForSaving > 0 && CurrentData.CurrentLapFuelRate > 0 && data.LapDistPct > 0.15f)
+        {
+            CurrentData.CurrentLapSaving = l3ForSaving - CurrentData.CurrentLapFuelRate;
+        }
+        else
+        {
+            CurrentData.CurrentLapSaving = 0f;
+        }
 
         // ── race strategy ───────────────────────────────────────────
         // iRacing returns huge values (32767) for SessionLapsRemain in practice/qual/timed.
@@ -387,6 +423,34 @@ public sealed class FuelCalculatorService
             float mean = _lapFuelUsage.Average();
             float sumSqDiff = _lapFuelUsage.Sum(v => (v - mean) * (v - mean));
             CurrentData.FuelConsistencyVariance = (float)Math.Sqrt(sumSqDiff / _lapFuelUsage.Count);
+        }
+
+        // ── optimal pit window ──────────────────────────────────────
+        // Calculate the ideal window of laps to pit based on fuel remaining.
+        // "Earliest" = last lap you can safely run before running dry (1 lap buffer).
+        // "Latest"   = the lap where you'll hit the sputtering threshold.
+        // This tells the driver: "pit between lap X and lap Y."
+        if (avgForCalc > 0 && lap > 0 && !CurrentData.CanFinishWithoutStop)
+        {
+            float usableFuelForWindow = Math.Max(0, fuel - CurrentData.FuelSputteringThreshold);
+            float lapsOfFuelLeft = usableFuelForWindow / avgForCalc;
+
+            // Latest = current lap + full fuel laps (the last possible lap)
+            int latestPitLap = lap + (int)Math.Floor(lapsOfFuelLeft);
+            // Earliest = latest minus a safety margin (2 laps early for pit entry + variance)
+            int earliestPitLap = Math.Max(lap + 1, latestPitLap - 2);
+
+            CurrentData.PitWindowStart = earliestPitLap;
+            CurrentData.PitWindowEnd = latestPitLap;
+            CurrentData.PitWindowReason = earliestPitLap == latestPitLap
+                ? $"Lap {earliestPitLap}"
+                : $"Lap {earliestPitLap}-{latestPitLap}";
+        }
+        else if (CurrentData.CanFinishWithoutStop)
+        {
+            CurrentData.PitWindowStart = 0;
+            CurrentData.PitWindowEnd = 0;
+            CurrentData.PitWindowReason = null;
         }
     }
 

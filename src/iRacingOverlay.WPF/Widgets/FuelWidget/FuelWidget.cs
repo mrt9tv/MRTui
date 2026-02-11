@@ -83,6 +83,10 @@ public class FuelWidget : WidgetBase
     private Grid _rowFillAmount = null!;
     private TextBlock _valFillAmount = null!;
 
+    // Pit window row
+    private Grid _rowPitWindow = null!;
+    private TextBlock _valPitWindow = null!;
+
     // Saving section
     private TextBlock _valDelta = null!;
     private TextBlock _valSavingTarget = null!;
@@ -125,6 +129,9 @@ public class FuelWidget : WidgetBase
 
     /// <summary>Show fill amount calculator row (fuel needed to finish)</summary>
     public bool ShowFillAmount { get; set; } = false;
+
+    /// <summary>Show optimal pit window row (lap range to pit)</summary>
+    public bool ShowPitWindow { get; set; } = true;
 
     /// <summary>Buffer laps for fuel calculation (synced with MRT One settings)</summary>
     public float BufferLaps { get; set; } = 1.0f;
@@ -191,6 +198,11 @@ public class FuelWidget : WidgetBase
             if (v8 is JsonElement je) ShowFillAmount = je.ValueKind == JsonValueKind.True;
             else if (v8 is bool b) ShowFillAmount = b;
         }
+        if (Config.Settings.TryGetValue("showPitWindow", out var v9))
+        {
+            if (v9 is JsonElement je) ShowPitWindow = je.ValueKind == JsonValueKind.True;
+            else if (v9 is bool b) ShowPitWindow = b;
+        }
     }
 
     public void SaveSettings()
@@ -204,6 +216,7 @@ public class FuelWidget : WidgetBase
         Config.Settings["showAlert"] = ShowAlert;
         Config.Settings["showPitLap"] = ShowPitLap;
         Config.Settings["showFillAmount"] = ShowFillAmount;
+        Config.Settings["showPitWindow"] = ShowPitWindow;
     }
 
     private void InitializeWidget()
@@ -280,6 +293,10 @@ public class FuelWidget : WidgetBase
         _valFillAmount = CreateToggleRow("FILL AMT", out _rowFillAmount);
         _rowFillAmount.Visibility = ShowFillAmount ? Visibility.Visible : Visibility.Collapsed;
 
+        // Pit window row (optimal lap range to pit)
+        _valPitWindow = CreateToggleRow("PIT WINDOW", out _rowPitWindow);
+        _rowPitWindow.Visibility = ShowPitWindow ? Visibility.Visible : Visibility.Collapsed;
+
         // Toggleable saving section (separator + 4 rows)
         _savingContainer = new StackPanel();
         _savingContainer.Children.Add(CreateSeparator());
@@ -326,6 +343,7 @@ public class FuelWidget : WidgetBase
         if (ShowTankPct) extraRows++;
         if (ShowPitLap) extraRows++;
         if (ShowFillAmount) extraRows++;
+        if (ShowPitWindow) extraRows++;
 
         // Saving section = separator(5) + 4 rows; alert = separator(5) + alert bar(22)
         double savingHeight = ShowSavingSection ? 5 + (4 * (ROW_HEIGHT + 2)) : 0;
@@ -346,6 +364,7 @@ public class FuelWidget : WidgetBase
         _rowBuffer.Visibility = ShowBuffer ? Visibility.Visible : Visibility.Collapsed;
         _rowPitLap.Visibility = ShowPitLap ? Visibility.Visible : Visibility.Collapsed;
         _rowFillAmount.Visibility = ShowFillAmount ? Visibility.Visible : Visibility.Collapsed;
+        _rowPitWindow.Visibility = ShowPitWindow ? Visibility.Visible : Visibility.Collapsed;
         _tankPctContainer.Visibility = ShowTankPct ? Visibility.Visible : Visibility.Collapsed;
         _savingContainer.Visibility = ShowSavingSection ? Visibility.Visible : Visibility.Collapsed;
         _alertContainer.Visibility = ShowAlert ? Visibility.Visible : Visibility.Collapsed;
@@ -550,6 +569,28 @@ public class FuelWidget : WidgetBase
             }
         }
 
+        // Optimal pit window (lap range to pit)
+        if (ShowPitWindow)
+        {
+            if (!string.IsNullOrEmpty(fuel.PitWindowReason) && !fuel.CanFinishWithoutStop)
+            {
+                _valPitWindow.Text = fuel.PitWindowReason;
+                // Color: orange normally, red if pit window is NOW (start <= current lap + 1)
+                _valPitWindow.Foreground = fuel.PitWindowStart <= data.Lap + 1
+                    ? BRUSH_RED : BRUSH_ORANGE;
+            }
+            else if (fuel.CanFinishWithoutStop && fuel.HasSufficientData)
+            {
+                _valPitWindow.Text = "NO STOP";
+                _valPitWindow.Foreground = BRUSH_GREEN;
+            }
+            else
+            {
+                _valPitWindow.Text = "--";
+                _valPitWindow.Foreground = BRUSH_MUTED;
+            }
+        }
+
         // ── Fuel saving section ─────────────────────────────────
         // Projected delta (surplus/deficit at finish, accounting for sputtering)
         // SavingService sets ProjectedFuelDelta; fall back to Calculator's FuelDeltaToFinish
@@ -597,25 +638,29 @@ public class FuelWidget : WidgetBase
             _valSavingTarget.Foreground = fuel.HasSufficientData ? BRUSH_GREEN : BRUSH_MUTED;
         }
 
-        // Current saving rate
-        if (fuel.NeedsFuelSaving)
+        // Current saving rate — shows real-time saving from current lap vs L3 average.
+        // Positive = driver is saving fuel (lifting/coasting). Visible anytime there's data,
+        // not just when NeedsFuelSaving — gives instant feedback on lift & coast effectiveness.
         {
-            float rate = fuel.CurrentSavingRate;
-            if (rate > 0.001f)
+            float saving = fuel.CurrentLapSaving;
+            if (Math.Abs(saving) > 0.001f)
             {
-                _valSavingRate.Text = "-" + rate.ToString("F3", CultureInfo.InvariantCulture) + " L";
-                _valSavingRate.Foreground = fuel.FuelSavingWorking ? BRUSH_GREEN : BRUSH_ORANGE;
+                string sign = saving >= 0 ? "-" : "+"; // negative saving = using MORE than average
+                _valSavingRate.Text = sign + Math.Abs(saving).ToString("F3", CultureInfo.InvariantCulture) + " L";
+                _valSavingRate.Foreground = saving > 0.005f ? BRUSH_GREEN   // saving fuel
+                    : saving < -0.005f ? BRUSH_RED    // using more than average
+                    : BRUSH_MUTED;                     // basically on-pace
+            }
+            else if (fuel.AvgFuelPerLap_L3 > 0)
+            {
+                _valSavingRate.Text = "0.000";
+                _valSavingRate.Foreground = BRUSH_MUTED; // exactly on-pace
             }
             else
             {
-                _valSavingRate.Text = "0.000";
-                _valSavingRate.Foreground = BRUSH_RED;
+                _valSavingRate.Text = "--";
+                _valSavingRate.Foreground = BRUSH_MUTED;
             }
-        }
-        else
-        {
-            _valSavingRate.Text = "--";
-            _valSavingRate.Foreground = BRUSH_MUTED;
         }
 
         // Strategy: pit vs save

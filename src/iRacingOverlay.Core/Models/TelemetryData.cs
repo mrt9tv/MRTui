@@ -137,6 +137,40 @@ public class TelemetryData
     public float PitOptRepairLeft { get; set; }
 
     /// <summary>
+    /// Player currently in pit stall (from SDK PlayerCarInPitStall)
+    /// </summary>
+    public bool PlayerCarInPitStall { get; set; }
+
+    /// <summary>
+    /// Tow time remaining in seconds (0 when not being towed)
+    /// </summary>
+    public float PlayerCarTowTime { get; set; }
+
+    /// <summary>
+    /// Pitstop service currently in progress
+    /// </summary>
+    public bool PitstopActive { get; set; }
+
+    /// <summary>
+    /// Pit service flags bitfield (PitServiceFlags enum)
+    /// Bits: LFTireChange=1, RFTireChange=2, LRTireChange=4, RRTireChange=8,
+    /// FuelFill=16, WindshieldTearoff=32, FastRepair=64
+    /// </summary>
+    public int PitSvFlags { get; set; }
+
+    /// <summary>
+    /// Fuel fill amount requested for pit stop (liters)
+    /// </summary>
+    public float PitSvFuel { get; set; }
+
+    /// <summary>
+    /// Pit service status (PitServiceStatus enum)
+    /// 0=None, 1=InProgress, 2=Complete, 100=TooFarLeft, 101=TooFarRight,
+    /// 102=TooFarForward, 103=TooFarBack, 104=BadAngle, 105=CantFixThat
+    /// </summary>
+    public int PlayerCarPitSvStatus { get; set; }
+
+    /// <summary>
     /// Clutch input (0.0 to 1.0)
     /// </summary>
     public float Clutch { get; set; }
@@ -157,9 +191,20 @@ public class TelemetryData
     public float LapDistPct { get; set; }
 
     /// <summary>
+    /// Distance in meters from start/finish line (absolute track distance)
+    /// </summary>
+    public float LapDist { get; set; }
+
+    /// <summary>
     /// Current position in race (SDK position - updates at start/finish line)
     /// </summary>
     public int Position { get; set; }
+
+    /// <summary>
+    /// Player's overall race position (from SDK PlayerCarPosition - updates at S/F line)
+    /// Different from PlayerCarClassPosition (Position) - this is overall across all classes
+    /// </summary>
+    public int PlayerCarPosition { get; set; }
 
     /// <summary>
     /// Live overall position (updates every tick, mode-aware, frozen on checkered flag)
@@ -730,6 +775,16 @@ public class TelemetryData
     /// This is the same data the in-game spotter uses for left/right warnings.
     /// </summary>
     public int CarLeftRight { get; set; }
+
+    /// <summary>
+    /// Distance to the car directly ahead in meters (SDK-provided, track-distance based)
+    /// </summary>
+    public float CarDistAhead { get; set; }
+
+    /// <summary>
+    /// Distance to the car directly behind in meters (SDK-provided, track-distance based)
+    /// </summary>
+    public float CarDistBehind { get; set; }
     
     /// <summary>
     /// Track position percentage for each car (0.0-1.0). Array of 64 cars.
@@ -803,6 +858,74 @@ public class TelemetryData
     /// Bits: Black=0x10000, DSQ=0x20000, Repair/Meatball=0x100000
     /// </summary>
     public int[]? CarIdxSessionFlags { get; set; }
+
+    // ===== ADDITIONAL CarIdx ARRAYS (complete SDK coverage) =====
+
+    /// <summary>
+    /// Lap number of each car's best lap. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxBestLapNum { get; set; }
+
+    /// <summary>
+    /// Laps completed per car. Array of 64 ints.
+    /// Different from CarIdxLap (current lap) - this is total completed laps.
+    /// </summary>
+    public int[]? CarIdxLapCompleted { get; set; }
+
+    /// <summary>
+    /// Fast repairs used per car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxFastRepairsUsed { get; set; }
+
+    /// <summary>
+    /// Push-to-pass count remaining per car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxP2P_Count { get; set; }
+
+    /// <summary>
+    /// Push-to-pass active status per car. Array of 64 bools.
+    /// </summary>
+    public bool[]? CarIdxP2P_Status { get; set; }
+
+    /// <summary>
+    /// Pace flags per car (irsdk_PaceFlags). Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxPaceFlags { get; set; }
+
+    /// <summary>
+    /// Pace line assignment per car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxPaceLine { get; set; }
+
+    /// <summary>
+    /// Pace row assignment per car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxPaceRow { get; set; }
+
+    /// <summary>
+    /// Qualifying tire compound per car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxQualTireCompound { get; set; }
+
+    /// <summary>
+    /// Qualifying tire compound locked per car. Array of 64 bools.
+    /// </summary>
+    public bool[]? CarIdxQualTireCompoundLocked { get; set; }
+
+    /// <summary>
+    /// Steering angle per car in radians. Array of 64 floats.
+    /// </summary>
+    public float[]? CarIdxSteer { get; set; }
+
+    /// <summary>
+    /// Current tire compound per car. Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxTireCompound { get; set; }
+
+    /// <summary>
+    /// Track surface material type per car (enum). Array of 64 ints.
+    /// </summary>
+    public int[]? CarIdxTrackSurfaceMaterial { get; set; }
     
     /// <summary>
     /// Map of CarIdx to Car Number string (from YAML DriverInfo:Drivers)

@@ -315,6 +315,19 @@ public class RelativeCalculator
                 PitStopCount = _pitStopCount[i],
                 CountryCode = DictString(data.CarIdxToCountryCode, i, string.Empty),
                 IsSafetyCar = isSafetyCar,
+
+                // CarIdx telemetry (complete SDK coverage)
+                LapCompleted = ArrayInt(data.CarIdxLapCompleted, i, 0),
+                BestLapNum = ArrayInt(data.CarIdxBestLapNum, i, 0),
+                FastRepairsUsed = ArrayInt(data.CarIdxFastRepairsUsed, i, 0),
+                TireCompound = ArrayInt(data.CarIdxTireCompound, i, 0),
+                QualTireCompound = ArrayInt(data.CarIdxQualTireCompound, i, 0),
+                TrackSurfaceMaterial = ArrayInt(data.CarIdxTrackSurfaceMaterial, i, 0),
+                P2P_Count = ArrayInt(data.CarIdxP2P_Count, i, 0),
+                P2P_Active = data.CarIdxP2P_Status != null && i < data.CarIdxP2P_Status.Length && data.CarIdxP2P_Status[i],
+                PaceFlags = ArrayInt(data.CarIdxPaceFlags, i, 0),
+                PaceLine = ArrayInt(data.CarIdxPaceLine, i, 0),
+                PaceRow = ArrayInt(data.CarIdxPaceRow, i, 0),
             };
 
             // ── Off-track duration accumulation ────────────────────
@@ -382,8 +395,11 @@ public class RelativeCalculator
                 // Populate player data from direct telemetry fields
                 entry.DriverName = !string.IsNullOrEmpty(data.DriverName) ? data.DriverName : entry.DriverName;
                 entry.CarNumber = !string.IsNullOrEmpty(data.CarNumber) ? data.CarNumber : entry.CarNumber;
-                entry.OverallPosition = data.LivePosition > 0 ? data.LivePosition : entry.OverallPosition;
-                entry.ClassPosition = data.LiveClassPosition > 0 ? data.LiveClassPosition : entry.ClassPosition;
+                // NOTE: Do NOT override with LivePosition here — it causes duplicate positions
+                // because LivePosition (real-time from track position) can disagree with
+                // CarIdxPosition (SDK official position updated at sector boundaries).
+                // All cars in the relative table must use the same source (CarIdxPosition)
+                // for consistent, duplicate-free position display.
                 entry.LastLapTime = data.LapLastLapTime > 0 ? data.LapLastLapTime : entry.LastLapTime;
                 entry.BestLapTime = data.LapBestLapTime > 0 ? data.LapBestLapTime : entry.BestLapTime;
                 playerEntry = entry;
