@@ -61,19 +61,31 @@ public class StandingsWidget : WidgetBase
     private static readonly Typeface TYPEFACE = new("Consolas");
     private static readonly Typeface TYPEFACE_NAME = new("Segoe UI");
 
-    private static readonly SolidColorBrush BRUSH_BG = Freeze(new(Color.FromArgb(230, 26, 26, 26)));
+    // ── Color palette (aligned with RelativeWidget) ─────────────────
+    private static readonly SolidColorBrush BRUSH_BG = Freeze(new(Color.FromArgb(245, 18, 18, 18)));
     private static readonly SolidColorBrush BRUSH_ROW_ALT = Freeze(new(Color.FromArgb(12, 255, 255, 255)));
-    private static readonly SolidColorBrush BRUSH_TEXT = Freeze(new(Colors.White));
-    private static readonly SolidColorBrush BRUSH_MUTED = Freeze(new(Color.FromRgb(136, 136, 136)));
-    private static readonly SolidColorBrush BRUSH_HEADER = Freeze(new(Color.FromRgb(100, 100, 100)));
+    private static readonly SolidColorBrush BRUSH_TEXT = Freeze(new(Color.FromRgb(240, 240, 240)));
+    private static readonly SolidColorBrush BRUSH_MUTED = Freeze(new(Color.FromRgb(140, 140, 140)));
+    private static readonly SolidColorBrush BRUSH_HEADER = Freeze(new(Color.FromRgb(140, 140, 140)));
     private static readonly SolidColorBrush BRUSH_TEAL = Freeze(new(Color.FromRgb(0, 128, 128)));
     private static readonly SolidColorBrush BRUSH_ORANGE = Freeze(new(Color.FromRgb(255, 128, 0)));
     private static readonly SolidColorBrush BRUSH_PLAYER = Freeze(new(Color.FromArgb(40, 0, 128, 128)));
-    private static readonly SolidColorBrush BRUSH_PIT = Freeze(new(Color.FromRgb(255, 180, 0)));
-    private static readonly SolidColorBrush BRUSH_GREEN = Freeze(new(Color.FromRgb(76, 175, 80)));
-    private static readonly SolidColorBrush BRUSH_RED = Freeze(new(Color.FromRgb(230, 70, 70)));
-    private static readonly SolidColorBrush BRUSH_SEPARATOR = Freeze(new(Color.FromArgb(60, 0, 128, 128)));
+    private static readonly SolidColorBrush BRUSH_PIT = Freeze(new(Color.FromRgb(255, 200, 50)));
+    private static readonly SolidColorBrush BRUSH_GREEN = Freeze(new(Color.FromRgb(0, 200, 80)));
+    private static readonly SolidColorBrush BRUSH_RED = Freeze(new(Color.FromRgb(220, 50, 50)));
+    private static readonly SolidColorBrush BRUSH_SEPARATOR = Freeze(new(Color.FromArgb(40, 80, 80, 80)));
     private static readonly SolidColorBrush BRUSH_LAPPED = Freeze(new(Color.FromArgb(100, 255, 255, 255)));
+    private static readonly SolidColorBrush BRUSH_PURPLE = Freeze(new(Color.FromRgb(180, 0, 255)));
+    private static readonly SolidColorBrush BRUSH_MEATBALL = Freeze(new(Color.FromRgb(255, 100, 0)));
+    private static readonly SolidColorBrush BRUSH_BLACK_FLAG = Freeze(new(Color.FromRgb(0, 0, 0)));
+    private static readonly SolidColorBrush BRUSH_WHITE = Freeze(new(Colors.White));
+    private static readonly SolidColorBrush BRUSH_DARK_TEXT = Freeze(new(Color.FromRgb(20, 20, 20)));
+    // iRacing license colors
+    private static readonly SolidColorBrush BRUSH_LIC_A = Freeze(new(Color.FromRgb(0x01, 0x53, 0xDB)));
+    private static readonly SolidColorBrush BRUSH_LIC_B = Freeze(new(Color.FromRgb(0x00, 0xC7, 0x02)));
+    private static readonly SolidColorBrush BRUSH_LIC_C = Freeze(new(Color.FromRgb(0xFE, 0xEC, 0x04)));
+    private static readonly SolidColorBrush BRUSH_LIC_D = Freeze(new(Color.FromRgb(0xFC, 0x8A, 0x27)));
+    private static readonly SolidColorBrush BRUSH_LIC_R = Freeze(new(Color.FromRgb(0xFC, 0x1A, 0x2B)));
 
     private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }
 

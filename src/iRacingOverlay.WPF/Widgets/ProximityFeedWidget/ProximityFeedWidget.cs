@@ -47,14 +47,33 @@ public class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_TEXT = Color.FromRgb(200, 200, 200);
     private static readonly Color COLOR_MUTED = Color.FromRgb(120, 120, 120);
 
-    // Severity colors
+    // Severity colors (fallback)
     private static readonly Color COLOR_INFO = Color.FromRgb(0, 150, 180);     // teal
     private static readonly Color COLOR_WARNING = Color.FromRgb(255, 180, 0);  // amber
     private static readonly Color COLOR_DANGER = Color.FromRgb(255, 60, 60);   // red
     private static readonly Color COLOR_CRITICAL = Color.FromRgb(255, 20, 20); // bright red
 
+    // Per-event-type colors for richer visual differentiation
+    private static readonly Color COLOR_OFF_TRACK = Color.FromRgb(255, 160, 0);     // orange
+    private static readonly Color COLOR_COLLISION = Color.FromRgb(255, 30, 30);      // bright red
+    private static readonly Color COLOR_SLOW_CAR = Color.FromRgb(255, 200, 40);      // gold/yellow
+    private static readonly Color COLOR_STOPPED = Color.FromRgb(255, 50, 50);        // red
+    private static readonly Color COLOR_PITTING = Color.FromRgb(0, 170, 200);        // cyan/teal
+    private static readonly Color COLOR_IN_BOX = Color.FromRgb(0, 140, 160);         // dark teal
+    private static readonly Color COLOR_PIT_EXIT = Color.FromRgb(80, 200, 120);      // green
+    private static readonly Color COLOR_MEATBALL = Color.FromRgb(255, 100, 0);       // orange-red
+    private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(180, 0, 180);     // magenta
+    private static readonly Color COLOR_TOWED = Color.FromRgb(180, 80, 220);         // purple
+    private static readonly Color COLOR_LOCAL_YELLOW = Color.FromRgb(255, 230, 0);   // bright yellow
+    private static readonly Color COLOR_SPIN = Color.FromRgb(220, 120, 0);           // deep orange
+
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
+
+    // Text blink animation constants
+    private const double TEXT_BLINK_INTERVAL_MS = 500; // 0.5s half-period for text blink
+    private int _blinkFrame;
+    private const int BLINK_HALF_PERIOD = 30; // frames per half-cycle at 60Hz
 
     #endregion
 
@@ -222,6 +241,7 @@ public class ProximityFeedWidget : WidgetBase
 
     private void SyncFeedVisuals()
     {
+        _blinkFrame++;
         var events = _detector.ActiveEvents;
 
         // Sort: severity desc, then newest first
@@ -289,16 +309,16 @@ public class ProximityFeedWidget : WidgetBase
 
     private Border CreateEventRow(NearbyEvent evt)
     {
-        var severityColor = GetSeverityColor(evt.Severity);
-        var severityBrush = new SolidColorBrush(severityColor);
+        var eventColor = GetEventTypeColor(evt);
+        var eventBrush = new SolidColorBrush(eventColor);
 
         var row = new Border
         {
             Height = ROW_HEIGHT,
             Margin = new Thickness(0, 0, 0, ROW_GAP),
             CornerRadius = new CornerRadius(3),
-            Background = new SolidColorBrush(Color.FromArgb(40, severityColor.R, severityColor.G, severityColor.B)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(80, severityColor.R, severityColor.G, severityColor.B)),
+            Background = new SolidColorBrush(Color.FromArgb(40, eventColor.R, eventColor.G, eventColor.B)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(80, eventColor.R, eventColor.G, eventColor.B)),
             BorderThickness = new Thickness(STRIPE_WIDTH, 0, 0, 0),
             Opacity = 0, // start invisible for fade-in
         };
@@ -335,7 +355,7 @@ public class ProximityFeedWidget : WidgetBase
             Text = evt.DisplayText,
             FontSize = 10,
             FontWeight = evt.Severity >= NearbyEventSeverity.Danger ? FontWeights.Bold : FontWeights.Normal,
-            Foreground = severityBrush,
+            Foreground = eventBrush,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 5, 0),
         };
@@ -383,17 +403,45 @@ public class ProximityFeedWidget : WidgetBase
     {
         if (row.Child is not Grid grid) return;
 
-        // Update interval text if it exists
-        foreach (var child in grid.Children)
+        // Determine if text should blink this frame
+        bool blinkVisible = (_blinkFrame / BLINK_HALF_PERIOD) % 2 == 0;
+        bool shouldBlink = ShouldBlinkText(evt);
+
+        // Update interval text and apply text blink effect
+        foreach (UIElement child in grid.Children)
         {
             if (child is TextBlock tb && tb.Tag as string == "intervalText")
             {
                 tb.Text = FormatInterval(evt.IntervalToPlayer);
             }
+            if (child is StackPanel sp)
+            {
+                foreach (UIElement spChild in sp.Children)
+                {
+                    if (spChild is TextBlock etb && etb.Tag as string == "eventText")
+                    {
+                        // Blink effect: toggle opacity of the event text only (not bar/border)
+                        if (shouldBlink)
+                            etb.Opacity = blinkVisible ? 1.0 : 0.25;
+                        else
+                            etb.Opacity = 1.0;
+                    }
+                }
+            }
+        }
+
+        // Ongoing indicator: show a pulsing "●" prefix while condition is active
+        if (evt.IsOngoing)
+        {
+            // Keep full opacity for ongoing events
+            row.Opacity = 1.0;
+            return;
         }
 
         // Fade opacity based on age (last 25% of duration fades out)
-        double ageRatio = evt.Age / evt.DisplayDuration;
+        double age = evt.ClearedAt.HasValue ? evt.AgeSinceCleared : evt.Age;
+        double duration = evt.DisplayDuration;
+        double ageRatio = age / duration;
         if (ageRatio > 0.75)
         {
             double fadeRatio = (ageRatio - 0.75) / 0.25; // 0..1
@@ -459,4 +507,36 @@ public class ProximityFeedWidget : WidgetBase
         NearbyEventSeverity.Critical => COLOR_CRITICAL,
         _ => COLOR_INFO,
     };
+
+    /// <summary>
+    /// Get event-specific color for richer visual differentiation.
+    /// Falls back to severity color for unknown types.
+    /// </summary>
+    private static Color GetEventTypeColor(NearbyEvent evt) => evt.EventType switch
+    {
+        NearbyEventType.OffTrack => COLOR_OFF_TRACK,
+        NearbyEventType.Collision => COLOR_COLLISION,
+        NearbyEventType.SlowCar => COLOR_SLOW_CAR,
+        NearbyEventType.Stopped => COLOR_STOPPED,
+        NearbyEventType.Pitting => COLOR_PITTING,
+        NearbyEventType.InBox => COLOR_IN_BOX,
+        NearbyEventType.PitExit => COLOR_PIT_EXIT,
+        NearbyEventType.MeatballFlag => COLOR_MEATBALL,
+        NearbyEventType.BlackFlag => COLOR_BLACK_FLAG,
+        NearbyEventType.Towed => COLOR_TOWED,
+        NearbyEventType.LocalYellow => COLOR_LOCAL_YELLOW,
+        NearbyEventType.Spin => COLOR_SPIN,
+        _ => GetSeverityColor(evt.Severity),
+    };
+
+    /// <summary>
+    /// Whether this event type should have blinking text (not bars) when active/ongoing.
+    /// </summary>
+    private static bool ShouldBlinkText(NearbyEvent evt) =>
+        evt.Severity >= NearbyEventSeverity.Danger ||
+        evt.IsOngoing ||
+        evt.EventType is NearbyEventType.Collision
+            or NearbyEventType.Stopped
+            or NearbyEventType.MeatballFlag
+            or NearbyEventType.LocalYellow;
 }

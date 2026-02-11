@@ -131,6 +131,8 @@ public class MRTOneWidget : WidgetBase
         public const double ARC_FB_BASE_SWEEP = 57; // 60 - 3 gap
         /// <summary>Left/right base sweep angle (degrees)</summary>
         public const double ARC_LR_BASE_SWEEP = 87; // smaller side coverage
+        /// <summary>Number of concentric arc rings per side (left/right)</summary>
+        public const int ARC_SIDE_RING_COUNT = 3;
         /// <summary>Per-ring angular taper (degrees removed from each side per ring)</summary>
         public const double ARC_TAPER_PER_RING = 2;
 
@@ -168,12 +170,12 @@ public class MRTOneWidget : WidgetBase
     private readonly Rectangle _radarLeft;    // Left (cars on left)
     private readonly Rectangle _radarRight;   // Right (cars on right)
 
-    // Enhanced Radar: 5-ring arc system (outside circle — enhanced mode)
-    // Front/back each have 5 concentric rings; left/right have 1 arc each
+    // Enhanced Radar: 6-ring arc system (outside circle — enhanced mode)
+    // Front/back each have 6 concentric rings; left/right have 3 rings each
     private readonly System.Windows.Shapes.Path[] _arcFrontRings;
     private readonly System.Windows.Shapes.Path[] _arcBackRings;
-    private readonly System.Windows.Shapes.Path _arcLeftSide;
-    private readonly System.Windows.Shapes.Path _arcRightSide;
+    private readonly System.Windows.Shapes.Path[] _arcLeftRings;
+    private readonly System.Windows.Shapes.Path[] _arcRightRings;
     
     // PHASE 1: Proximity detection services
     private readonly ProximityCalculator _proximityCalculator;
@@ -423,21 +425,34 @@ public class MRTOneWidget : WidgetBase
             cumulativeOffset += thick + LayoutConstants.ARC_RING_SPACING;
         }
 
-        // Left/right: single arc each, 120° per side
+        // Left/right: multi-ring arcs (3 rings each) for accurate car-beside display
         {
-            double sideInner = circleEdge + gapFromCircle;
-            double sideOuter = sideInner + LayoutConstants.ARC_RING_THICKNESS[0];
             double lrSweep = LayoutConstants.ARC_LR_BASE_SWEEP;
+            _arcLeftRings = new System.Windows.Shapes.Path[LayoutConstants.ARC_SIDE_RING_COUNT];
+            _arcRightRings = new System.Windows.Shapes.Path[LayoutConstants.ARC_SIDE_RING_COUNT];
+            double sideCumOffset = 0;
 
-            _arcLeftSide = CreateArcPathOnCanvas(ringCenter, sideInner, sideOuter, 270 - lrSweep / 2, lrSweep);
-            _arcLeftSide.Opacity = 0;
-            _arcLeftSide.Visibility = Visibility.Collapsed;
-            outerCanvas.Children.Add(_arcLeftSide);
+            for (int i = 0; i < LayoutConstants.ARC_SIDE_RING_COUNT; i++)
+            {
+                double thick = LayoutConstants.ARC_RING_THICKNESS[i];
+                double sideInner = circleEdge + gapFromCircle + sideCumOffset;
+                double sideOuter = sideInner + thick;
+                double sideTaper = LayoutConstants.ARC_TAPER_PER_RING * i * 2;
+                double sideArcSweep = lrSweep - sideTaper;
+                if (sideArcSweep < 30) sideArcSweep = 30;
 
-            _arcRightSide = CreateArcPathOnCanvas(ringCenter, sideInner, sideOuter, 90 - lrSweep / 2, lrSweep);
-            _arcRightSide.Opacity = 0;
-            _arcRightSide.Visibility = Visibility.Collapsed;
-            outerCanvas.Children.Add(_arcRightSide);
+                _arcLeftRings[i] = CreateArcPathOnCanvas(ringCenter, sideInner, sideOuter, 270 - sideArcSweep / 2, sideArcSweep);
+                _arcLeftRings[i].Opacity = 0;
+                _arcLeftRings[i].Visibility = Visibility.Collapsed;
+                outerCanvas.Children.Add(_arcLeftRings[i]);
+
+                _arcRightRings[i] = CreateArcPathOnCanvas(ringCenter, sideInner, sideOuter, 90 - sideArcSweep / 2, sideArcSweep);
+                _arcRightRings[i].Opacity = 0;
+                _arcRightRings[i].Visibility = Visibility.Collapsed;
+                outerCanvas.Children.Add(_arcRightRings[i]);
+
+                sideCumOffset += thick + LayoutConstants.ARC_RING_SPACING;
+            }
         }
         
         // Top section: Value + Label (positioned absolutely in top portion of circle)
@@ -902,17 +917,9 @@ public class MRTOneWidget : WidgetBase
             _radarBack.Opacity = 1.0;
         }
 
-        // Side arc flashing: red flash when car is alongside
-        // Side arcs are set to red (s_radarSideCritical) by UpdateSideArc;
-        // we blink them here for maximum visibility
-        if (_arcLeftSide.Fill != s_radarTransparent)
-        {
-            _arcLeftSide.Opacity = _radarBlinkState ? 0.90 : 0.25;
-        }
-        if (_arcRightSide.Fill != s_radarTransparent)
-        {
-            _arcRightSide.Opacity = _radarBlinkState ? 0.90 : 0.25;
-        }
+        // Side arc flashing: blink all active side rings for maximum visibility
+        BlinkSideArcRings(_arcLeftRings, _radarBlinkState);
+        BlinkSideArcRings(_arcRightRings, _radarBlinkState);
     }
 
     private void OnArcSlowBlinkTimerTick(object? sender, EventArgs e)
@@ -1488,9 +1495,9 @@ public class MRTOneWidget : WidgetBase
             _radarLeft.Fill = GetLateralGradientColor(lateralPosition, isLeft: true);
             _radarRight.Fill = GetLateralGradientColor(lateralPosition, isLeft: false);
             // Side arcs: fade in opacity when car present
-            UpdateSideArc(_arcLeftSide, hasLeft,
+            UpdateSideArcRings(_arcLeftRings, hasLeft,
                 lateralPosition == LateralPosition.TwoCarsLeft);
-            UpdateSideArc(_arcRightSide, hasRight,
+            UpdateSideArcRings(_arcRightRings, hasRight,
                 lateralPosition == LateralPosition.TwoCarsRight);
         }
         else
@@ -1610,19 +1617,25 @@ public class MRTOneWidget : WidgetBase
             }
         }
 
-        // Side arcs: fade when car moves away
+        // Side arcs: fade all rings when car moves away
         if (!hasLeft && _prevLeftPresent)
             _fadeOutLeftOpacity = 0.85;
         if (_fadeOutLeftOpacity > 0 && !hasLeft)
         {
-            _arcLeftSide.Opacity = _fadeOutLeftOpacity;
-            if (_arcLeftSide.Visibility == Visibility.Collapsed)
-                _arcLeftSide.Visibility = Visibility.Visible;
+            foreach (var ring in _arcLeftRings)
+            {
+                ring.Opacity = _fadeOutLeftOpacity;
+                if (ring.Visibility == Visibility.Collapsed)
+                    ring.Visibility = Visibility.Visible;
+            }
             _fadeOutLeftOpacity = Math.Max(0, _fadeOutLeftOpacity - FADE_DECAY);
             if (_fadeOutLeftOpacity <= 0)
             {
-                _arcLeftSide.Opacity = 0;
-                _arcLeftSide.Visibility = Visibility.Collapsed;
+                foreach (var ring in _arcLeftRings)
+                {
+                    ring.Opacity = 0;
+                    ring.Visibility = Visibility.Collapsed;
+                }
             }
         }
 
@@ -1630,14 +1643,20 @@ public class MRTOneWidget : WidgetBase
             _fadeOutRightOpacity = 0.85;
         if (_fadeOutRightOpacity > 0 && !hasRight)
         {
-            _arcRightSide.Opacity = _fadeOutRightOpacity;
-            if (_arcRightSide.Visibility == Visibility.Collapsed)
-                _arcRightSide.Visibility = Visibility.Visible;
+            foreach (var ring in _arcRightRings)
+            {
+                ring.Opacity = _fadeOutRightOpacity;
+                if (ring.Visibility == Visibility.Collapsed)
+                    ring.Visibility = Visibility.Visible;
+            }
             _fadeOutRightOpacity = Math.Max(0, _fadeOutRightOpacity - FADE_DECAY);
             if (_fadeOutRightOpacity <= 0)
             {
-                _arcRightSide.Opacity = 0;
-                _arcRightSide.Visibility = Visibility.Collapsed;
+                foreach (var ring in _arcRightRings)
+                {
+                    ring.Opacity = 0;
+                    ring.Visibility = Visibility.Collapsed;
+                }
             }
         }
 
@@ -1850,22 +1869,44 @@ public class MRTOneWidget : WidgetBase
     /// Update a single side arc (left/right). RED for all car-present states.
     /// Flashing is handled by the blink timer (OnRadarBlinkTimerTick).
     /// </summary>
-    private static void UpdateSideArc(System.Windows.Shapes.Path arc, bool carPresent, bool twoCars)
+    /// <summary>
+    /// Update multi-ring side arcs: TwoCars = all 3 rings (bright, fast blink),
+    /// SingleCar = inner 2 rings, Clear = all off.
+    /// </summary>
+    private static void UpdateSideArcRings(System.Windows.Shapes.Path[] rings, bool carPresent, bool twoCars)
     {
-        if (twoCars)
+        if (rings == null) return;
+        int ringsToLight = twoCars ? rings.Length : carPresent ? Math.Min(2, rings.Length) : 0;
+
+        for (int i = 0; i < rings.Length; i++)
         {
-            arc.Fill = s_radarSideCritical; // Bright red (255,40,40) for two cars
-            arc.Opacity = 0.95;
+            if (i < ringsToLight)
+            {
+                rings[i].Fill = s_radarSideCritical;
+                rings[i].Opacity = LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                rings[i].Visibility = Visibility.Visible;
+            }
+            else
+            {
+                rings[i].Fill = s_radarTransparent;
+                rings[i].Opacity = 0;
+            }
         }
-        else if (carPresent)
+    }
+
+    /// <summary>
+    /// Blink active side arc rings (fast toggle for high visibility).
+    /// </summary>
+    private static void BlinkSideArcRings(System.Windows.Shapes.Path[] rings, bool blinkState)
+    {
+        if (rings == null) return;
+        for (int i = 0; i < rings.Length; i++)
         {
-            arc.Fill = s_radarSideCritical; // RED for single car too (was orange)
-            arc.Opacity = 0.85;
-        }
-        else
-        {
-            arc.Fill = s_radarTransparent;
-            arc.Opacity = 0;
+            if (rings[i].Fill != s_radarTransparent)
+            {
+                double maxOp = LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                rings[i].Opacity = blinkState ? maxOp : maxOp * 0.12;
+            }
         }
     }
 
@@ -2250,8 +2291,8 @@ public class MRTOneWidget : WidgetBase
         var arcVis = radarEnabled && enhanced ? Visibility.Visible : Visibility.Collapsed;
         foreach (var ring in _arcFrontRings) ring.Visibility = arcVis;
         foreach (var ring in _arcBackRings) ring.Visibility = arcVis;
-        _arcLeftSide.Visibility = arcVis;
-        _arcRightSide.Visibility = arcVis;
+        foreach (var ring in _arcLeftRings) ring.Visibility = arcVis;
+        foreach (var ring in _arcRightRings) ring.Visibility = arcVis;
     }
 
     #region Context Menu (Data Swapping & Centering)

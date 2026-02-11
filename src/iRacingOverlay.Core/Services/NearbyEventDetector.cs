@@ -52,6 +52,7 @@ public sealed class NearbyEventDetector
     // iRacing flag bits
     private const int FLAG_REPAIR = 0x100000;
     private const int FLAG_BLACK = 0x10000;
+    private const int FLAG_YELLOW = 0x8;  // per-car local yellow flag
 
     // ── Per-car tracking state ──────────────────────────────────────
     private readonly int[] _prevTrackSurface = new int[MAX_CARS];
@@ -127,6 +128,9 @@ public sealed class NearbyEventDetector
                 evt.IntervalToPlayer = liveInterval;
         }
 
+        // Track which ongoing events are still active this tick
+        var ongoingStillActive = new HashSet<long>();
+
         // Only process cars within detection range (14s ahead, 7s behind)
         foreach (var entry in relativeEntries)
         {
@@ -146,25 +150,32 @@ public sealed class NearbyEventDetector
             int flags = data.CarIdxSessionFlags != null && i < data.CarIdxSessionFlags.Length
                 ? data.CarIdxSessionFlags[i] : 0;
 
-            // ── OFF TRACK ───────────────────────────────────────
+            // ── OFF TRACK (ongoing) ─────────────────────────────
             if (surface == SURFACE_OFF_TRACK)
             {
                 _offTrackDuration[i] += dt;
-                if (_offTrackDuration[i] >= OFF_TRACK_MIN_DURATION &&
-                    _prevTrackSurface[i] != SURFACE_OFF_TRACK)
+                if (_offTrackDuration[i] >= OFF_TRACK_MIN_DURATION)
                 {
-                    TryEmit(entry, NearbyEventType.OffTrack, "OFF TRACK",
-                        NearbyEventSeverity.Warning, 3.5f);
+                    var existing = FindOngoingEvent(i, NearbyEventType.OffTrack);
+                    if (existing != null)
+                    {
+                        ongoingStillActive.Add(existing.Id);
+                    }
+                    else if (_prevTrackSurface[i] != SURFACE_OFF_TRACK || _offTrackDuration[i] < OFF_TRACK_MIN_DURATION + dt * 2)
+                    {
+                        TryEmitOngoing(entry, NearbyEventType.OffTrack, "OFF TRACK",
+                            NearbyEventSeverity.Warning, 3.5f, ongoingStillActive);
+                    }
                 }
             }
             else
             {
                 _offTrackDuration[i] = 0;
+                // Condition cleared — mark any ongoing OffTrack event for this car
+                ClearOngoingEvent(i, NearbyEventType.OffTrack);
             }
 
             // ── COLLISION (incident flag jump) ──────────────────
-            // iRacing: CarIdxSessionFlags bit 0x040000 = furled black (incident)
-            // We detect incident count jumps in RelativeEntry
             if (entry.HasRecentIncident && entry.IncidentDelta >= 2)
             {
                 TryEmit(entry, NearbyEventType.Collision, "COLLISION",
@@ -200,11 +211,23 @@ public sealed class NearbyEventDetector
                     NearbyEventSeverity.Warning, 4.0f);
             }
 
-            // ── MEATBALL FLAG ───────────────────────────────────
-            if ((flags & FLAG_REPAIR) != 0 && (_prevFlags[i] & FLAG_REPAIR) == 0)
+            // ── MEATBALL FLAG (ongoing) ─────────────────────────
+            if ((flags & FLAG_REPAIR) != 0)
             {
-                TryEmit(entry, NearbyEventType.MeatballFlag, "MEATBALL",
-                    NearbyEventSeverity.Warning, 4.0f);
+                var existing = FindOngoingEvent(i, NearbyEventType.MeatballFlag);
+                if (existing != null)
+                {
+                    ongoingStillActive.Add(existing.Id);
+                }
+                else if ((_prevFlags[i] & FLAG_REPAIR) == 0)
+                {
+                    TryEmitOngoing(entry, NearbyEventType.MeatballFlag, "MEATBALL",
+                        NearbyEventSeverity.Warning, 4.0f, ongoingStillActive);
+                }
+            }
+            else
+            {
+                ClearOngoingEvent(i, NearbyEventType.MeatballFlag);
             }
 
             // ── BLACK FLAG ──────────────────────────────────────
@@ -214,8 +237,16 @@ public sealed class NearbyEventDetector
                     NearbyEventSeverity.Danger, 4.0f);
             }
 
-            // ── SLOW CAR / STOPPED ──────────────────────────────
-            // Approximate speed from LapDistPct delta (no per-car speed in live API)
+            // ── LOCAL YELLOW FLAG ───────────────────────────────
+            if ((flags & FLAG_YELLOW) != 0 && (_prevFlags[i] & FLAG_YELLOW) == 0)
+            {
+                bool isAhead = interval > 0;
+                TryEmit(entry, NearbyEventType.LocalYellow,
+                    isAhead ? "⚑ YELLOW AHEAD" : "⚑ YELLOW",
+                    NearbyEventSeverity.Danger, 4.0f);
+            }
+
+            // ── SLOW CAR / STOPPED (ongoing) ────────────────────
             if (surface == SURFACE_ON_TRACK && !onPitRoad)
             {
                 float prevPct = _prevLapDistPct[i];
@@ -235,10 +266,18 @@ public sealed class NearbyEventDetector
                     if (_slowDuration[i] >= SLOW_CAR_MIN_DURATION)
                     {
                         bool isAhead = interval > 0;
-                        TryEmit(entry, NearbyEventType.Stopped,
-                            isAhead ? "STOPPED AHEAD" : "STOPPED",
-                            isAhead ? NearbyEventSeverity.Critical : NearbyEventSeverity.Danger,
-                            5.0f);
+                        var existingStopped = FindOngoingEvent(i, NearbyEventType.Stopped);
+                        if (existingStopped != null)
+                        {
+                            ongoingStillActive.Add(existingStopped.Id);
+                        }
+                        else
+                        {
+                            TryEmitOngoing(entry, NearbyEventType.Stopped,
+                                isAhead ? "STOPPED AHEAD" : "STOPPED",
+                                isAhead ? NearbyEventSeverity.Critical : NearbyEventSeverity.Danger,
+                                5.0f, ongoingStillActive);
+                        }
                     }
                 }
                 else if (approxSpeed < SLOW_SPEED_THRESHOLD)
@@ -246,18 +285,30 @@ public sealed class NearbyEventDetector
                     _slowDuration[i] += dt;
                     if (_slowDuration[i] >= SLOW_CAR_MIN_DURATION)
                     {
-                        TryEmit(entry, NearbyEventType.SlowCar, "SLOW",
-                            NearbyEventSeverity.Warning, 3.5f);
+                        var existingSlow = FindOngoingEvent(i, NearbyEventType.SlowCar);
+                        if (existingSlow != null)
+                        {
+                            ongoingStillActive.Add(existingSlow.Id);
+                        }
+                        else
+                        {
+                            TryEmitOngoing(entry, NearbyEventType.SlowCar, "SLOW",
+                                NearbyEventSeverity.Warning, 3.5f, ongoingStillActive);
+                        }
                     }
                 }
                 else
                 {
                     _slowDuration[i] = 0;
+                    ClearOngoingEvent(i, NearbyEventType.Stopped);
+                    ClearOngoingEvent(i, NearbyEventType.SlowCar);
                 }
             }
             else
             {
                 _slowDuration[i] = 0;
+                ClearOngoingEvent(i, NearbyEventType.Stopped);
+                ClearOngoingEvent(i, NearbyEventType.SlowCar);
             }
 
             // Update previous state
@@ -266,6 +317,16 @@ public sealed class NearbyEventDetector
             _prevFlags[i] = flags;
             if (data.CarIdxLapDistPct != null && i < data.CarIdxLapDistPct.Length)
                 _prevLapDistPct[i] = data.CarIdxLapDistPct[i];
+        }
+
+        // Any ongoing events whose condition was NOT confirmed this tick → clear them
+        foreach (var evt in _activeEvents)
+        {
+            if (evt.IsOngoing && !ongoingStillActive.Contains(evt.Id))
+            {
+                evt.IsOngoing = false;
+                evt.ClearedAt = DateTime.UtcNow;
+            }
         }
     }
 
@@ -316,6 +377,82 @@ public sealed class NearbyEventDetector
                 .Select(kv => kv.Key)
                 .ToList();
             foreach (var k in expired) _cooldowns.Remove(k);
+        }
+    }
+
+    /// <summary>
+    /// Emit an ongoing event (persists while condition is active).
+    /// Bypasses cooldown for ongoing types — dedup by finding existing event instead.
+    /// </summary>
+    private void TryEmitOngoing(RelativeEntry entry, NearbyEventType type,
+        string text, NearbyEventSeverity severity, float duration,
+        HashSet<long> ongoingStillActive)
+    {
+        // Don't duplicate — check for existing ongoing event for this car + type
+        var existing = FindOngoingEvent(entry.CarIdx, type);
+        if (existing != null)
+        {
+            ongoingStillActive.Add(existing.Id);
+            return;
+        }
+
+        // Cap active events
+        if (_activeEvents.Count >= MAX_ACTIVE_EVENTS)
+        {
+            // Remove lowest severity non-ongoing oldest event first
+            var weakest = _activeEvents
+                .Where(e => !e.IsOngoing)
+                .OrderBy(e => e.Severity)
+                .ThenBy(e => e.CreatedAt)
+                .FirstOrDefault()
+                ?? _activeEvents.OrderBy(e => e.Severity).ThenBy(e => e.CreatedAt).First();
+            _activeEvents.Remove(weakest);
+        }
+
+        var evt = new NearbyEvent
+        {
+            Id = _nextEventId++,
+            CarIdx = entry.CarIdx,
+            DriverName = entry.DriverName,
+            CarNumber = entry.CarNumber,
+            CarClassId = entry.CarClassId,
+            EventType = type,
+            IntervalToPlayer = entry.IntervalToPlayer,
+            DisplayText = text,
+            Severity = severity,
+            DisplayDuration = Math.Max(duration, MIN_DISPLAY_DURATION),
+            IsOngoing = true,
+        };
+        _activeEvents.Add(evt);
+        ongoingStillActive.Add(evt.Id);
+    }
+
+    /// <summary>Find an active ongoing event for a specific car + event type.</summary>
+    private NearbyEvent? FindOngoingEvent(int carIdx, NearbyEventType type)
+    {
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == carIdx && e.EventType == type && e.IsOngoing)
+                return e;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Mark any ongoing event for car + type as no longer ongoing.
+    /// The event will then expire via its normal DisplayDuration timer.
+    /// </summary>
+    private void ClearOngoingEvent(int carIdx, NearbyEventType type)
+    {
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == carIdx && e.EventType == type && e.IsOngoing)
+            {
+                e.IsOngoing = false;
+                e.ClearedAt = DateTime.UtcNow;
+            }
         }
     }
 }

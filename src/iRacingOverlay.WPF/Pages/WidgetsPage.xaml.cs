@@ -12,6 +12,7 @@ using MRTOne = iRacingOverlay.WPF.Widgets.MRTOneWidget.MRTOneWidget;
 using TurnDisplay = iRacingOverlay.WPF.Widgets.TurnDisplayWidget.TurnDisplayWidget;
 using RelativeW = iRacingOverlay.WPF.Widgets.RelativeWidget.RelativeWidget;
 using StandingsW = iRacingOverlay.WPF.Widgets.StandingsWidget.StandingsWidget;
+using ProxFeedW = iRacingOverlay.WPF.Widgets.ProximityFeedWidget.ProximityFeedWidget;
 
 namespace iRacingOverlay.WPF.Pages;
 
@@ -134,6 +135,7 @@ public partial class WidgetsPage : UserControl
         else if (_selectedWidgetType == WidgetType.FuelCalculator) SyncPanelToFuelCalculator();
         else if (_selectedWidgetType == WidgetType.Relative) SyncPanelToRelative();
         else if (_selectedWidgetType == WidgetType.Standings) SyncPanelToStandings();
+        else if (_selectedWidgetType == WidgetType.ProximityFeed) SyncPanelToProximityFeed();
     }
 
     // ── MRT One sync ────────────────────────────────────────────────
@@ -564,6 +566,41 @@ public partial class WidgetsPage : UserControl
         widget.MaxVisibleRows = (int)SliderStandingsRows.Value;
         TxtStandingsRows.Text = widget.MaxVisibleRows.ToString();
         widget.RecalcHeight();
+        widget.SaveSettings();
+    }
+
+    // ── Proximity Feed sync ─────────────────────────────────────────
+
+    private ProxFeedW? GetActiveProximityFeedWidget()
+    {
+        return _widgetManager.GetWidgetsByType(WidgetType.ProximityFeed)
+            .FirstOrDefault() as ProxFeedW;
+    }
+
+    private void SyncPanelToProximityFeed()
+    {
+        var widget = GetActiveProximityFeedWidget();
+        if (widget == null) return;
+
+        _suppressControlEvents = true;
+        try
+        {
+            ChkProxDirection.IsChecked = widget.ShowDirection;
+            ChkProxInterval.IsChecked = widget.ShowInterval;
+            ChkProxGrowUp.IsChecked = widget.GrowUpward;
+        }
+        finally { _suppressControlEvents = false; }
+    }
+
+    private void ProximityFeedToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveProximityFeedWidget();
+        if (widget == null) return;
+
+        widget.ShowDirection = ChkProxDirection.IsChecked == true;
+        widget.ShowInterval = ChkProxInterval.IsChecked == true;
+        widget.GrowUpward = ChkProxGrowUp.IsChecked == true;
         widget.SaveSettings();
     }
 

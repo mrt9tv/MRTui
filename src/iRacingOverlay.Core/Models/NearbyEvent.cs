@@ -43,11 +43,34 @@ public class NearbyEvent
     /// <summary>Whether this event is ahead (+) or behind (-) the player.</summary>
     public bool IsAhead => IntervalToPlayer > 0;
 
+    /// <summary>
+    /// Whether the underlying condition is still active (e.g. car still off-track).
+    /// Ongoing events never expire by timer; they persist until the condition clears,
+    /// at which point IsOngoing is set false and normal timer expiry resumes.
+    /// </summary>
+    public bool IsOngoing { get; set; }
+
+    /// <summary>
+    /// When the ongoing condition cleared, giving us a timestamp for fade-out timing.
+    /// Null while the condition is still active.
+    /// </summary>
+    public DateTime? ClearedAt { get; set; }
+
     /// <summary>Elapsed seconds since creation.</summary>
     public double Age => (DateTime.UtcNow - CreatedAt).TotalSeconds;
 
+    /// <summary>
+    /// Elapsed seconds since the condition cleared (0 while still ongoing).
+    /// Used for fade-out timer after an ongoing event's condition ends.
+    /// </summary>
+    public double AgeSinceCleared => ClearedAt.HasValue
+        ? (DateTime.UtcNow - ClearedAt.Value).TotalSeconds
+        : 0;
+
     /// <summary>Whether the event has exceeded its display duration.</summary>
-    public bool IsExpired => Age > DisplayDuration;
+    public bool IsExpired => IsOngoing ? false
+        : ClearedAt.HasValue ? AgeSinceCleared > DisplayDuration
+        : Age > DisplayDuration;
 }
 
 /// <summary>
