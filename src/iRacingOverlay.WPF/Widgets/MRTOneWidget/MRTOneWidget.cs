@@ -229,6 +229,8 @@ public class MRTOneWidget : WidgetBase
     private double _fadeOutBackOpacity = 0;                  // Fade-out opacity for back arcs
     private double _fadeOutLeftOpacity = 0;                  // Fade-out opacity for left side arc
     private double _fadeOutRightOpacity = 0;                 // Fade-out opacity for right side arc
+    private Brush? _fadeOutFrontFill;                        // Preserved fill colour during front arc fade
+    private Brush? _fadeOutBackFill;                         // Preserved fill colour during back arc fade
     private ProximityZone _prevFrontZone = ProximityZone.Clear;
     private ProximityZone _prevRearZone = ProximityZone.Clear;
     private bool _prevLeftPresent = false;
@@ -1509,6 +1511,22 @@ public class MRTOneWidget : WidgetBase
         // Update FRONT/BACK squares using ProximityCalculator (with distance for blink speed)
         var (frontZone, frontDist) = _proximityCalculator.GetFrontZoneWithDistance(data);
         var (rearZone, rearDist) = _proximityCalculator.GetRearZoneWithDistance(data);
+
+        // Alongside filter: When lateral spotter detects a car beside us and the closest
+        // front/rear car is extremely close (<6m), it's likely the same car overlapping in
+        // 1D LapDistPct space — suppress front/rear to avoid false Critical alerts.
+        bool carAlongside = hasLeft || hasRight;
+        if (carAlongside && frontDist < 6.0f)
+        {
+            frontZone = ProximityZone.Clear;
+            frontDist = float.MaxValue;
+        }
+        if (carAlongside && rearDist < 6.0f)
+        {
+            rearZone = ProximityZone.Clear;
+            rearDist = float.MaxValue;
+        }
+
         _closestFrontDistance = frontDist;
         _closestRearDistance = rearDist;
         
@@ -1520,8 +1538,11 @@ public class MRTOneWidget : WidgetBase
             _radarFront.Fill = GetEnhancedZoneBrush(frontZone);
             _radarBack.Fill = GetEnhancedZoneBrush(rearZone);
             // Drive the 6-ring arcs based on proximity zone
-            UpdateArcRings(_arcFrontRings, frontZone);
-            UpdateArcRings(_arcBackRings, rearZone);
+            // Skip UpdateArcRings while fading to preserve last-known Fill colour
+            if (frontZone != ProximityZone.Clear || _fadeOutFrontOpacity <= 0)
+                UpdateArcRings(_arcFrontRings, frontZone);
+            if (rearZone != ProximityZone.Clear || _fadeOutBackOpacity <= 0)
+                UpdateArcRings(_arcBackRings, rearZone);
         }
         else
         {
@@ -1575,11 +1596,16 @@ public class MRTOneWidget : WidgetBase
 
         // Front arcs: trigger fade when zone goes from active → Clear
         if (frontZone == ProximityZone.Clear && _prevFrontZone != ProximityZone.Clear)
+        {
             _fadeOutFrontOpacity = 0.85; // start fading from last visible opacity
+            _fadeOutFrontFill = GetRingColor(_prevFrontZone); // preserve last colour
+        }
         if (_fadeOutFrontOpacity > 0 && frontZone == ProximityZone.Clear)
         {
             for (int i = 0; i < _arcFrontRings.Length; i++)
             {
+                if (_fadeOutFrontFill != null)
+                    _arcFrontRings[i].Fill = _fadeOutFrontFill;
                 _arcFrontRings[i].Opacity = _fadeOutFrontOpacity * LayoutConstants.ARC_RING_MAX_OPACITY[i];
                 if (_arcFrontRings[i].Visibility == Visibility.Collapsed)
                     _arcFrontRings[i].Visibility = Visibility.Visible;
@@ -1597,11 +1623,16 @@ public class MRTOneWidget : WidgetBase
 
         // Back arcs: same fade logic
         if (rearZone == ProximityZone.Clear && _prevRearZone != ProximityZone.Clear)
+        {
             _fadeOutBackOpacity = 0.85;
+            _fadeOutBackFill = GetRingColor(_prevRearZone);
+        }
         if (_fadeOutBackOpacity > 0 && rearZone == ProximityZone.Clear)
         {
             for (int i = 0; i < _arcBackRings.Length; i++)
             {
+                if (_fadeOutBackFill != null)
+                    _arcBackRings[i].Fill = _fadeOutBackFill;
                 _arcBackRings[i].Opacity = _fadeOutBackOpacity * LayoutConstants.ARC_RING_MAX_OPACITY[i];
                 if (_arcBackRings[i].Visibility == Visibility.Collapsed)
                     _arcBackRings[i].Visibility = Visibility.Visible;

@@ -282,16 +282,13 @@ public class ProximityFeedWidget : WidgetBase
     /// </summary>
     protected override void UpdateUI(TelemetryData data)
     {
-        // Suppress events before player crosses S/F line for the first time
-        // (avoids noise during formation lap / pre-race gridding)
+        // Track S/F crossing: used to suppress formation-lap noise (stopped/slow)
+        // while still allowing meaningful events (off-track, collision, session events)
         if (!_playerHasCrossedSF)
         {
             if (data.LapsCompleted >= 1 && _prevLapsCompleted >= 0 && data.LapsCompleted > _prevLapsCompleted)
                 _playerHasCrossedSF = true;
             _prevLapsCompleted = data.LapsCompleted;
-            // Still keep background transparent until first crossing
-            _backgroundBorder.Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
-            return;
         }
 
         // Get relative entries from the calculator (already computed this frame)
@@ -327,6 +324,11 @@ public class ProximityFeedWidget : WidgetBase
                 && e.EventType != NearbyEventType.PaceEndOfLine
                 && e.EventType != NearbyEventType.PaceFreePass
                 && e.EventType != NearbyEventType.PaceWaveAround);
+
+        // Before first S/F crossing: suppress stopped/slow noise (all cars are slow during formation)
+        if (!_playerHasCrossedSF)
+            filtered = filtered.Where(e => e.EventType != NearbyEventType.Stopped
+                && e.EventType != NearbyEventType.SlowCar);
 
         // Sort: severity desc, then newest first
         var sorted = filtered

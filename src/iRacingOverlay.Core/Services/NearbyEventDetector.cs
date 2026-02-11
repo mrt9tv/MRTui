@@ -33,6 +33,9 @@ public sealed class NearbyEventDetector
     /// <summary>Seconds a "slow car" must persist before emitting.</summary>
     private const float SLOW_CAR_MIN_DURATION = 2.0f;
 
+    /// <summary>Seconds a "stopped" car must persist before emitting (faster trigger than slow).</summary>
+    private const float STOPPED_MIN_DURATION = 1.0f;
+
     /// <summary>Minimum display duration for any event (seconds).</summary>
     private const float MIN_DISPLAY_DURATION = 3.0f;
 
@@ -76,6 +79,33 @@ public sealed class NearbyEventDetector
     // Spin detection: yaw rate threshold (rad/s) — ~90°/s indicates a spin
     private const float SPIN_YAW_RATE_THRESHOLD = 1.5f;
     private const float SPIN_MIN_DURATION = 0.8f;
+
+    // ── Event priority (higher = overrides lower for same car) ──
+    // When a higher-priority ongoing event is active for a car,
+    // lower-priority events for that car are suppressed / cleared.
+    private static int GetEventPriority(NearbyEventType type) => type switch
+    {
+        NearbyEventType.Collision => 100,
+        NearbyEventType.Spin => 90,
+        NearbyEventType.OffTrack => 80,
+        NearbyEventType.Stopped => 70,
+        NearbyEventType.SlowCar => 60,
+        NearbyEventType.Towed => 55,
+        NearbyEventType.MeatballFlag => 50,
+        NearbyEventType.BlackFlag => 50,
+        NearbyEventType.Disqualified => 45,
+        NearbyEventType.BlueFlagged => 40,
+        NearbyEventType.LocalYellow => 35,
+        NearbyEventType.OvertakingImminent => 30,
+        NearbyEventType.PaceEndOfLine => 25,
+        NearbyEventType.PaceFreePass => 25,
+        NearbyEventType.PaceWaveAround => 25,
+        NearbyEventType.Pitting => 20,
+        NearbyEventType.PitExit => 15,
+        NearbyEventType.InBox => 10,
+        // Session-level events don't compete with per-car events
+        _ => 0,
+    };
 
     // ── Per-car tracking state ──────────────────────────────────────
     private readonly int[] _prevTrackSurface = new int[MAX_CARS];
@@ -303,7 +333,7 @@ public sealed class NearbyEventDetector
                 if (approxSpeed < STOPPED_SPEED_THRESHOLD)
                 {
                     _slowDuration[i] += dt;
-                    if (_slowDuration[i] >= SLOW_CAR_MIN_DURATION)
+                    if (_slowDuration[i] >= STOPPED_MIN_DURATION)
                     {
                         bool isAhead = interval > 0;
                         var existingStopped = FindOngoingEvent(i, NearbyEventType.Stopped);
@@ -499,10 +529,18 @@ public sealed class NearbyEventDetector
     {
         var key = (entry.CarIdx, type);
 
+        // Priority check: if a higher-priority ongoing event exists for this car, skip
+        int myPriority = GetEventPriority(type);
+        if (HasHigherPriorityOngoing(entry.CarIdx, myPriority))
+            return;
+
         // Cooldown check
         if (_cooldowns.TryGetValue(key, out var lastEmit) &&
             (DateTime.UtcNow - lastEmit).TotalSeconds < EVENT_COOLDOWN)
             return;
+
+        // Clear any lower-priority ongoing events for this car
+        ClearLowerPriorityOngoing(entry.CarIdx, myPriority);
 
         // Cap active events
         if (_activeEvents.Count >= MAX_ACTIVE_EVENTS)
@@ -558,6 +596,14 @@ public sealed class NearbyEventDetector
             return;
         }
 
+        // Priority check: if a higher-priority ongoing event exists for this car, skip
+        int myPriority = GetEventPriority(type);
+        if (HasHigherPriorityOngoing(entry.CarIdx, myPriority))
+            return;
+
+        // Clear any lower-priority ongoing events for this car
+        ClearLowerPriorityOngoing(entry.CarIdx, myPriority);
+
         // Cap active events
         if (_activeEvents.Count >= MAX_ACTIVE_EVENTS)
         {
@@ -599,6 +645,40 @@ public sealed class NearbyEventDetector
                 return e;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Check if a higher-priority ongoing event already exists for this car.
+    /// Session-level events (CarIdx=-1) are excluded from per-car priority checks.
+    /// </summary>
+    private bool HasHigherPriorityOngoing(int carIdx, int myPriority)
+    {
+        if (carIdx < 0) return false; // session-level events don't compete
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == carIdx && e.IsOngoing && GetEventPriority(e.EventType) > myPriority)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Clear (mark done) any ongoing events for this car with LOWER priority.
+    /// This ensures higher-priority events visually replace lower ones.
+    /// </summary>
+    private void ClearLowerPriorityOngoing(int carIdx, int myPriority)
+    {
+        if (carIdx < 0) return;
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == carIdx && e.IsOngoing && GetEventPriority(e.EventType) < myPriority)
+            {
+                e.IsOngoing = false;
+                e.ClearedAt = DateTime.UtcNow;
+            }
+        }
     }
 
     /// <summary>
