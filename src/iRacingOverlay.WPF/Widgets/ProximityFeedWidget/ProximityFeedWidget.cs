@@ -124,6 +124,12 @@ public class ProximityFeedWidget : WidgetBase
     /// <summary>Show pace car / caution events (safety car, pace flags).</summary>
     public bool ShowPaceFlags { get; set; } = true;
 
+    /// <summary>Detection range ahead of the player in seconds (1-30, default 12).</summary>
+    public float DetectionAheadSeconds { get; set; } = 12.0f;
+
+    /// <summary>Detection range behind the player in seconds (1-15, default 6).</summary>
+    public float DetectionBehindSeconds { get; set; } = 6.0f;
+
     /// <summary>Whether the player has crossed S/F at least once (suppresses feed before then).</summary>
     private bool _playerHasCrossedSF;
     private int _prevLapsCompleted = -1;
@@ -183,6 +189,21 @@ public class ProximityFeedWidget : WidgetBase
             if (v8 is JsonElement je8) ShowPaceFlags = je8.ValueKind == JsonValueKind.True;
             else if (v8 is bool b8) ShowPaceFlags = b8;
         }
+        if (Config.Settings.TryGetValue("detectionAhead", out var v9))
+        {
+            if (v9 is JsonElement je9 && je9.TryGetDouble(out var d9)) DetectionAheadSeconds = (float)Math.Clamp(d9, 1.0, 30.0);
+            else if (v9 is float f9) DetectionAheadSeconds = Math.Clamp(f9, 1.0f, 30.0f);
+            else if (v9 is double dd9) DetectionAheadSeconds = (float)Math.Clamp(dd9, 1.0, 30.0);
+        }
+        if (Config.Settings.TryGetValue("detectionBehind", out var v10))
+        {
+            if (v10 is JsonElement je10 && je10.TryGetDouble(out var d10)) DetectionBehindSeconds = (float)Math.Clamp(d10, 1.0, 15.0);
+            else if (v10 is float f10) DetectionBehindSeconds = Math.Clamp(f10, 1.0f, 15.0f);
+            else if (v10 is double dd10) DetectionBehindSeconds = (float)Math.Clamp(dd10, 1.0, 15.0);
+        }
+        // Apply detection range to detector
+        _detector.DetectionAheadSeconds = DetectionAheadSeconds;
+        _detector.DetectionBehindSeconds = DetectionBehindSeconds;
     }
 
     public void SaveSettings()
@@ -195,6 +216,8 @@ public class ProximityFeedWidget : WidgetBase
         Config.Settings["showStartSequence"] = ShowStartSequence;
         Config.Settings["showCheckeredFlag"] = ShowCheckeredFlag;
         Config.Settings["showPaceFlags"] = ShowPaceFlags;
+        Config.Settings["detectionAhead"] = DetectionAheadSeconds;
+        Config.Settings["detectionBehind"] = DetectionBehindSeconds;
     }
 
     private void InitializeWidget()
@@ -247,6 +270,7 @@ public class ProximityFeedWidget : WidgetBase
         Canvas.SetLeft(_dragHandle, (WIDGET_WIDTH - 40) / 2);
         Canvas.SetTop(_dragHandle, 0);
         _dragHandle.MouseLeftButtonDown += DragHandle_MouseLeftButtonDown;
+        _dragHandle.Visibility = Visibility.Collapsed; // Start hidden — user enables via MRT UI checkbox
         _canvas.Children.Add(_dragHandle);
 
         Content = _canvas;
@@ -284,6 +308,10 @@ public class ProximityFeedWidget : WidgetBase
     {
         // Track S/F crossing: used to suppress formation-lap noise (stopped/slow)
         // while still allowing meaningful events (off-track, collision, session events)
+        // Sync adjustable detection range to detector
+        _detector.DetectionAheadSeconds = DetectionAheadSeconds;
+        _detector.DetectionBehindSeconds = DetectionBehindSeconds;
+
         if (!_playerHasCrossedSF)
         {
             if (data.LapsCompleted >= 1 && _prevLapsCompleted >= 0 && data.LapsCompleted > _prevLapsCompleted)

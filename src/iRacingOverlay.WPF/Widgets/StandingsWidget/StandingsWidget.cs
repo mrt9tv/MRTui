@@ -127,6 +127,7 @@ public class StandingsWidget : WidgetBase
     public bool ShowAlternateRowShading { get; set; } = true;
     public bool HighlightPlayer { get; set; } = true;
     public bool DimLappedCars { get; set; } = false;
+    public bool AlwaysShowPlayer { get; set; } = true;
     public NameFormat DriverNameFormat { get; set; } = NameFormat.FirstInitialLastName;
 
     public enum NameFormat
@@ -140,6 +141,8 @@ public class StandingsWidget : WidgetBase
     #region State
 
     private readonly StandingsCalculator _calculator = new();
+    private bool _isTimedSession;
+    private int _estimatedTotalLaps;
     private Canvas _canvas = null!;
     private Border _backgroundBorder = null!;
     private Canvas _rowCanvas = null!;
@@ -389,8 +392,13 @@ public class StandingsWidget : WidgetBase
         _frameCount++;
         bool isBlinkOn = (_frameCount / BLINK_HALF_PERIOD) % 2 == 0;
 
-        var entries = _calculator.Calculate(data, MaxVisibleRows);
+        var entries = _calculator.Calculate(data, MaxVisibleRows, AlwaysShowPlayer);
         int count = Math.Min(entries.Count, MAX_DISPLAY_ROWS);
+
+        // Detect timed session and estimated total laps for the lap column
+        _isTimedSession = (data.SessionLapsTotal <= 0 || data.SessionLapsTotal > 500)
+                          && data.SessionTimeRemain > 0;
+        _estimatedTotalLaps = data.EstimatedTotalRaceLaps;
 
         double yStart = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + 2;
 
@@ -515,8 +523,16 @@ public class StandingsWidget : WidgetBase
             Canvas.SetTop(row.Best, y);
 
             // Current lap — right-aligned for clean column look
+            // Always show actual laps driven (CurrentLap from CarIdxLap), never estimated.
             row.Lap.Visibility = ShowCurrentLap ? Visibility.Visible : Visibility.Collapsed;
-            row.Lap.Text = ShowCurrentLap ? e.CurrentLap.ToString() : "";
+            if (ShowCurrentLap)
+            {
+                row.Lap.Text = e.CurrentLap.ToString();
+            }
+            else
+            {
+                row.Lap.Text = "";
+            }
             row.Lap.TextAlignment = TextAlignment.Right;
             row.Lap.Width = COL_W_LAP - 4; // fit within column, slight padding
             Canvas.SetLeft(row.Lap, _layout.LapX);
@@ -691,6 +707,7 @@ public class StandingsWidget : WidgetBase
         Config.Settings["showAltRows"] = ShowAlternateRowShading;
         Config.Settings["highlightPlayer"] = HighlightPlayer;
         Config.Settings["dimLapped"] = DimLappedCars;
+        Config.Settings["alwaysShowPlayer"] = AlwaysShowPlayer;
         Config.Settings["nameFormat"] = (int)DriverNameFormat;
     }
 
@@ -714,6 +731,7 @@ public class StandingsWidget : WidgetBase
         if (TryGetBool("showAltRows", out var ar)) ShowAlternateRowShading = ar;
         if (TryGetBool("highlightPlayer", out var hp)) HighlightPlayer = hp;
         if (TryGetBool("dimLapped", out var dl)) DimLappedCars = dl;
+        if (TryGetBool("alwaysShowPlayer", out var asp)) AlwaysShowPlayer = asp;
         if (TryGetInt("nameFormat", out var nf) && Enum.IsDefined(typeof(NameFormat), nf))
             DriverNameFormat = (NameFormat)nf;
     }

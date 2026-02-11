@@ -7,12 +7,12 @@ namespace iRacingOverlay.Core.Services;
 /// </summary>
 public class ProximityCalculator
 {
-    // Distance thresholds in METERS for color zones - ORIGINAL (proven in testing)
-    // Rings activate late and blink just before contact — no false alarms
-    private const float VERY_CLOSE_THRESHOLD = 4f;    // <4m - CRITICAL (all 6 rings, intense blink)
-    private const float CLOSE_THRESHOLD = 7f;         // 4-7m - WARNING (5 rings, slow blink)
-    private const float NEAR_THRESHOLD = 12f;         // 7-12m - CAUTION (3 rings, orange)
-    private const float CAREFUL_THRESHOLD = 16f;      // 12-16m - CAREFUL (1 ring, yellow)
+    // Distance thresholds in METERS for color zones
+    // Tuned: red triggers a bit earlier for better reaction time
+    private const float VERY_CLOSE_THRESHOLD = 5f;    // <5m - CRITICAL (all 6 rings, intense blink)
+    private const float CLOSE_THRESHOLD = 9f;         // 5-9m - WARNING (5 rings, slow blink)
+    private const float NEAR_THRESHOLD = 14f;         // 9-14m - CAUTION (3 rings, orange)
+    private const float CAREFUL_THRESHOLD = 18f;      // 14-18m - CAREFUL (1 ring, yellow)
     
     // Detection range: Use PERCENTAGE of track, not fixed meters!
     // This works on all track sizes (small ovals to Nordschleife)
@@ -65,20 +65,20 @@ public class ProximityCalculator
     public ProximityZone ClassifyDistance(float absoluteDistance)
     {
         if (absoluteDistance < VERY_CLOSE_THRESHOLD)
-            return ProximityZone.VeryClose;  // <4m - All rings, intense blink
+            return ProximityZone.VeryClose;  // <5m - All rings, intense blink
         
         if (absoluteDistance < CLOSE_THRESHOLD)
-            return ProximityZone.Close;      // 4-7m - 5 rings, slow blink
+            return ProximityZone.Close;      // 5-9m - 5 rings, slow blink
         
         if (absoluteDistance < NEAR_THRESHOLD)
-            return ProximityZone.Near;       // 7-12m - 3 rings, orange
+            return ProximityZone.Near;       // 9-14m - 3 rings, orange
         
         if (absoluteDistance < CAREFUL_THRESHOLD)
-            return ProximityZone.Careful;    // 12-16m - 1 ring, yellow
+            return ProximityZone.Careful;    // 14-18m - 1 ring, yellow
         
         // Far zone is anything beyond CAREFUL but still within detection range
         // (detection range is dynamically calculated based on track length)
-        return ProximityZone.Far;            // >16m - No rings (just detection)
+        return ProximityZone.Far;            // >18m - No rings (just detection)
     }
     
     /// <summary>

@@ -16,6 +16,12 @@ public class StandingsCalculator
     private const int MAX_CARS = 64;
 
     /// <summary>
+    /// Reference lap time for converting LapDistPct gaps to seconds.
+    /// Updated each tick from the leader's best/last lap.
+    /// </summary>
+    private float _referenceLapTime;
+
+    /// <summary>
     /// Starting positions captured at first valid update (for position-change calc).
     /// Key = CarIdx, Value = starting overall position.
     /// </summary>
@@ -34,8 +40,9 @@ public class StandingsCalculator
     /// </summary>
     /// <param name="data">Latest telemetry snapshot.</param>
     /// <param name="maxRows">Maximum entries to return (0 = all).</param>
+    /// <param name="alwaysIncludePlayer">If true, ensure the player is in the returned list even if beyond maxRows.</param>
     /// <returns>Sorted standings list, or empty if data is insufficient.</returns>
-    public List<StandingsEntry> Calculate(TelemetryData data, int maxRows = 0)
+    public List<StandingsEntry> Calculate(TelemetryData data, int maxRows = 0, bool alwaysIncludePlayer = false)
     {
         if (data.CarIdxPosition == null || data.CarIdxLapDistPct == null)
             return new List<StandingsEntry>();
@@ -89,6 +96,7 @@ public class StandingsCalculator
                 BestLapTime = data.CarIdxBestLapTime != null && i < data.CarIdxBestLapTime.Length
                     ? data.CarIdxBestLapTime[i] : 0f,
                 CurrentLap = lap,
+                LapDistPct = lapDistPct,
                 IsOnPitRoad = onPitRoad,
                 IsPlayer = (i == playerIdx),
                 PitStopCount = _pitStopCounts[i],
@@ -103,11 +111,72 @@ public class StandingsCalculator
 
         _initialised = true;
 
-        // Sort by overall position
-        entries.Sort((a, b) => a.OverallPosition.CompareTo(b.OverallPosition));
+        // ── Live position calculation ─────────────────────────────
+        // During active racing (SessionState 3=ParadeLaps, 4=Racing),
+        // compute live positions from total distance (lap + lapDistPct)
+        // instead of SDK CarIdxPosition which only updates at S/F.
+        bool isRacing = data.SessionState == 3 || data.SessionState == 4;
+
+        if (isRacing && entries.Count > 1)
+        {
+            // Sort by total distance covered (descending = leader first)
+            entries.Sort((a, b) =>
+            {
+                float totalA = a.CurrentLap + a.LapDistPct;
+                float totalB = b.CurrentLap + b.LapDistPct;
+                return totalB.CompareTo(totalA);
+            });
+
+            // Assign live overall positions
+            for (int p = 0; p < entries.Count; p++)
+                entries[p].OverallPosition = p + 1;
+
+            // Assign live class positions (within each class)
+            var classGroups = new Dictionary<int, int>(); // classId → next position
+            for (int p = 0; p < entries.Count; p++)
+            {
+                int cls = entries[p].CarClassId;
+                if (!classGroups.TryGetValue(cls, out int nextCP))
+                    nextCP = 1;
+                entries[p].ClassPosition = nextCP;
+                classGroups[cls] = nextCP + 1;
+            }
+
+            if (entries.Count > 0)
+                leaderLap = entries[0].CurrentLap;
+
+            // Recompute position change from start positions
+            for (int p = 0; p < entries.Count; p++)
+            {
+                var e = entries[p];
+                e.PositionChange = _startPositions.TryGetValue(e.CarIdx, out int startP)
+                    ? startP - e.OverallPosition : 0;
+            }
+        }
+        else
+        {
+            // Non-race: sort by SDK overall position
+            entries.Sort((a, b) => a.OverallPosition.CompareTo(b.OverallPosition));
+        }
 
         // Second pass — compute intervals and gap-to-leader
-        float leaderEstTime = 0f;
+        // Use LapDistPct-based gaps for smooth per-frame updates.
+        // Falls back to F2Time when no reference lap time is available yet.
+
+        // Build reference lap time from leader's timing
+        if (entries.Count > 0)
+        {
+            var leader = entries[0];
+            float best = leader.BestLapTime;
+            float last = leader.LastLapTime;
+            float newRef = best > 10 ? best : last > 10 ? last : 0f;
+            // Also try player's best if leader has nothing yet
+            if (newRef <= 0)
+                newRef = data.LapBestLapTime > 10 ? data.LapBestLapTime : 0f;
+            if (newRef > 0)
+                _referenceLapTime = newRef;
+        }
+
         for (int idx = 0; idx < entries.Count; idx++)
         {
             var e = entries[idx];
@@ -116,24 +185,32 @@ public class StandingsCalculator
             // Lap delta relative to leader
             e.LapDelta = leaderLap > 0 ? e.CurrentLap - leaderLap : 0;
 
-            // Gap to leader via EstTime
-            float estTime = data.CarIdxEstTime != null && ci < data.CarIdxEstTime.Length
-                ? data.CarIdxEstTime[ci] : 0f;
-
             if (idx == 0)
             {
-                leaderEstTime = estTime;
                 e.GapToLeader = 0f;
                 e.Interval = 0f;
             }
+            else if (_referenceLapTime > 0)
+            {
+                // LapDistPct-based: total distance in fractional laps → gap in seconds
+                var leader = entries[0];
+                float leaderTotalDist = leader.CurrentLap + leader.LapDistPct;
+                float carTotalDist = e.CurrentLap + e.LapDistPct;
+                float aheadTotalDist = entries[idx - 1].CurrentLap + entries[idx - 1].LapDistPct;
+
+                float gapLaps = leaderTotalDist - carTotalDist;
+                float intLaps = aheadTotalDist - carTotalDist;
+
+                e.GapToLeader = Math.Max(0f, gapLaps * _referenceLapTime);
+                e.Interval = Math.Max(0f, intLaps * _referenceLapTime);
+            }
             else
             {
-                // F2Time = time behind leader (from iRacing)
+                // Fallback: F2Time (sector-boundary updates) until laps are completed
                 float f2 = data.CarIdxF2Time != null && ci < data.CarIdxF2Time.Length
                     ? data.CarIdxF2Time[ci] : 0f;
                 e.GapToLeader = f2;
 
-                // Interval = gap to car directly ahead
                 var ahead = entries[idx - 1];
                 float aheadF2 = data.CarIdxF2Time != null && ahead.CarIdx < data.CarIdxF2Time.Length
                     ? data.CarIdxF2Time[ahead.CarIdx] : 0f;
@@ -142,7 +219,28 @@ public class StandingsCalculator
         }
 
         if (maxRows > 0 && entries.Count > maxRows)
-            entries.RemoveRange(maxRows, entries.Count - maxRows);
+        {
+            // Check if the player is beyond the visible range
+            if (alwaysIncludePlayer)
+            {
+                int playerIdx2 = entries.FindIndex(e => e.IsPlayer);
+                if (playerIdx2 >= maxRows)
+                {
+                    // Player is outside visible range — replace last visible row with player
+                    var playerEntry = entries[playerIdx2];
+                    entries.RemoveRange(maxRows, entries.Count - maxRows);
+                    entries[maxRows - 1] = playerEntry;
+                }
+                else
+                {
+                    entries.RemoveRange(maxRows, entries.Count - maxRows);
+                }
+            }
+            else
+            {
+                entries.RemoveRange(maxRows, entries.Count - maxRows);
+            }
+        }
 
         return entries;
     }
@@ -154,5 +252,6 @@ public class StandingsCalculator
         Array.Clear(_pitStopCounts, 0, MAX_CARS);
         Array.Clear(_wasPitting, 0, MAX_CARS);
         _initialised = false;
+        _referenceLapTime = 0f;
     }
 }

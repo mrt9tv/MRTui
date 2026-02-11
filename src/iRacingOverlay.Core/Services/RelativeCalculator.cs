@@ -41,6 +41,7 @@ public class RelativeCalculator
     private readonly List<RelativeEntry> _result = new(MAX_CARS);
     private readonly List<RelativeEntry> _ahead = new(MAX_CARS / 2);
     private readonly List<RelativeEntry> _behind = new(MAX_CARS / 2);
+    private readonly List<RelativeEntry> _allCars = new(MAX_CARS); // for live position computation
 
     /// <summary>Cached reference lap time for distance → time conversion</summary>
     private float _referenceLapTime = DEFAULT_LAP_TIME;
@@ -128,6 +129,7 @@ public class RelativeCalculator
         _result.Clear();
         _ahead.Clear();
         _behind.Clear();
+        _allCars.Clear();
 
         // Guard: we need at minimum the track position array
         if (data.CarIdxLapDistPct == null)
@@ -405,14 +407,13 @@ public class RelativeCalculator
                 // Populate player data from direct telemetry fields
                 entry.DriverName = !string.IsNullOrEmpty(data.DriverName) ? data.DriverName : entry.DriverName;
                 entry.CarNumber = !string.IsNullOrEmpty(data.CarNumber) ? data.CarNumber : entry.CarNumber;
-                // NOTE: Do NOT override with LivePosition here — it causes duplicate positions
-                // because LivePosition (real-time from track position) can disagree with
-                // CarIdxPosition (SDK official position updated at sector boundaries).
-                // All cars in the relative table must use the same source (CarIdxPosition)
-                // for consistent, duplicate-free position display.
+                // Live positions are computed per-frame from CarIdxLap+LapDistPct
+                // for ALL cars (including player) after the entry loop, ensuring
+                // consistent, duplicate-free position display.
                 entry.LastLapTime = data.LapLastLapTime > 0 ? data.LapLastLapTime : entry.LastLapTime;
                 entry.BestLapTime = data.LapBestLapTime > 0 ? data.LapBestLapTime : entry.BestLapTime;
                 playerEntry = entry;
+                _allCars.Add(entry); // collect for live position computation
                 continue; // placed later in the middle
             }
 
@@ -432,10 +433,42 @@ public class RelativeCalculator
                 rawLapDelta -= 1; // behind on track but lap count ahead → S/F crossing
             entry.LapDelta = rawLapDelta;
 
+            _allCars.Add(entry); // collect for live position computation
+
             if (dist >= 0f)
                 _ahead.Add(entry);
             else
                 _behind.Add(entry);
+        }
+
+        // ── Live position calculation for all cars ─────────────────
+        // During active racing, compute positions from total distance
+        // (lap + lapDistPct) instead of SDK CarIdxPosition which only
+        // updates at the start/finish line.
+        bool isRacing = data.SessionState == 3 || data.SessionState == 4;
+        if (isRacing && _allCars.Count > 1)
+        {
+            _allCars.Sort((a, b) =>
+            {
+                float totalA = a.LapNumber + a.LapDistPct;
+                float totalB = b.LapNumber + b.LapDistPct;
+                return totalB.CompareTo(totalA); // descending = leader first
+            });
+
+            // Assign live overall positions
+            for (int p = 0; p < _allCars.Count; p++)
+                _allCars[p].OverallPosition = p + 1;
+
+            // Assign live class positions (within each class)
+            var classGroups = new Dictionary<int, int>(8);
+            for (int p = 0; p < _allCars.Count; p++)
+            {
+                int cls = _allCars[p].CarClassId;
+                if (!classGroups.TryGetValue(cls, out int nextCP))
+                    nextCP = 1;
+                _allCars[p].ClassPosition = nextCP;
+                classGroups[cls] = nextCP + 1;
+            }
         }
 
         // ── Select and order ahead cars ────────────────────────────

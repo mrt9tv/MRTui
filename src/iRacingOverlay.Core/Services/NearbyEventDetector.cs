@@ -3,7 +3,7 @@ using iRacingOverlay.Core.Models;
 namespace iRacingOverlay.Core.Services;
 
 /// <summary>
-/// Detects race events near the player (14s ahead, 7s behind on track).
+/// Detects race events near the player (configurable range, default 12s ahead / 6s behind).
 /// Monitors all 64 car slots for state changes and emits NearbyEvent
 /// notifications for the Proximity Feed widget.
 /// Live-updates IntervalToPlayer on active events each tick.
@@ -15,29 +15,29 @@ public sealed class NearbyEventDetector
 {
     private const int MAX_CARS = 64;
 
-    /// <summary>Detection radius in seconds AHEAD of the player.</summary>
-    private const float DETECTION_AHEAD_SECONDS = 14.0f;
+    /// <summary>Detection radius in seconds AHEAD of the player (default 12s, adjustable).</summary>
+    public float DetectionAheadSeconds { get; set; } = 12.0f;
 
-    /// <summary>Detection radius in seconds BEHIND the player.</summary>
-    private const float DETECTION_BEHIND_SECONDS = 7.0f;
+    /// <summary>Detection radius in seconds BEHIND the player (default 6s, adjustable).</summary>
+    public float DetectionBehindSeconds { get; set; } = 6.0f;
 
     /// <summary>Minimum speed (m/s) below which a car on track is considered "slow".</summary>
     private const float SLOW_SPEED_THRESHOLD = 5.0f;
 
-    /// <summary>Speed below which a car on track is "stopped" (m/s).</summary>
-    private const float STOPPED_SPEED_THRESHOLD = 1.0f;
+    /// <summary>Speed below which a car on track is "stopped" (m/s). ~5.4 km/h.</summary>
+    private const float STOPPED_SPEED_THRESHOLD = 1.5f;
 
     /// <summary>Minimum seconds off-track before emitting event (avoids curb touches).</summary>
     private const float OFF_TRACK_MIN_DURATION = 1.5f;
 
     /// <summary>Seconds a "slow car" must persist before emitting.</summary>
-    private const float SLOW_CAR_MIN_DURATION = 2.0f;
+    private const float SLOW_CAR_MIN_DURATION = 3.0f;
 
-    /// <summary>Seconds a "stopped" car must persist before emitting (faster trigger than slow).</summary>
-    private const float STOPPED_MIN_DURATION = 1.0f;
+    /// <summary>Seconds a "stopped" car must persist before emitting.</summary>
+    private const float STOPPED_MIN_DURATION = 2.0f;
 
     /// <summary>Minimum display duration for any event (seconds).</summary>
-    private const float MIN_DISPLAY_DURATION = 3.0f;
+    private const float MIN_DISPLAY_DURATION = 4.0f;
 
     /// <summary>Cooldown per car per event type (seconds) to prevent spam.</summary>
     private const float EVENT_COOLDOWN = 8.0f;
@@ -76,9 +76,16 @@ public sealed class NearbyEventDetector
     private const int PACE_FREE_PASS = 0x02;
     private const int PACE_WAVE_AROUND = 0x04;
 
-    // Spin detection: yaw rate threshold (rad/s) — ~90°/s indicates a spin
-    private const float SPIN_YAW_RATE_THRESHOLD = 1.5f;
-    private const float SPIN_MIN_DURATION = 0.8f;
+    // Spin detection thresholds
+    /// <summary>Minimum backward speed (m/s) to count as a spin (~11 km/h).
+    /// Filters out U-turns and minor LapDistPct noise.</summary>
+    private const float SPIN_BACKWARD_SPEED_MIN = 3.0f;
+
+    /// <summary>Minimum prior forward speed (m/s) to qualify as a spin (~29 km/h).
+    /// A real spin starts from speed; a U-turn starts from near-zero.</summary>
+    private const float SPIN_PRIOR_FORWARD_MIN = 8.0f;
+
+    private const float SPIN_MIN_DURATION = 0.5f;
 
     // ── Event priority (higher = overrides lower for same car) ──
     // When a higher-priority ongoing event is active for a car,
@@ -107,6 +114,10 @@ public sealed class NearbyEventDetector
         _ => 0,
     };
 
+    /// <summary>Grace period after race start (seconds) — suppresses Stopped/SlowCar
+    /// detection while the grid is still getting up to speed.</summary>
+    private const float RACE_START_GRACE_SECONDS = 2.5f;
+
     // ── Per-car tracking state ──────────────────────────────────────
     private readonly int[] _prevTrackSurface = new int[MAX_CARS];
     private readonly bool[] _prevOnPitRoad = new bool[MAX_CARS];
@@ -117,6 +128,8 @@ public sealed class NearbyEventDetector
     private readonly int[] _prevFlags = new int[MAX_CARS];
     private readonly float[] _prevLapDistPct = new float[MAX_CARS];
     private readonly float[] _spinDuration = new float[MAX_CARS];
+    /// <summary>Smoothed forward speed per car — retains memory of prior speed for spin detection.</summary>
+    private readonly float[] _priorForwardSpeed = new float[MAX_CARS];
     private readonly int[] _prevPaceFlags = new int[MAX_CARS];
 
     // ── Session-level tracking ──────────────────────────────────────
@@ -124,6 +137,8 @@ public sealed class NearbyEventDetector
     private uint _prevSessionFlags;
     private bool _cautionWasActive;
     private bool _redFlagActive;
+    /// <summary>Remaining seconds of race-start grace (suppresses slow/stopped during grid launch).</summary>
+    private float _raceStartGraceRemaining;
 
     // ── Cooldown tracking (per car × event type) ────────────────────
     private readonly Dictionary<(int carIdx, NearbyEventType type), DateTime> _cooldowns = new();
@@ -150,6 +165,7 @@ public sealed class NearbyEventDetector
         Array.Clear(_prevFlags);
         Array.Clear(_prevLapDistPct);
         Array.Clear(_spinDuration);
+        Array.Clear(_priorForwardSpeed);
         Array.Clear(_prevPaceFlags);
         _cooldowns.Clear();
         _activeEvents.Clear();
@@ -159,6 +175,7 @@ public sealed class NearbyEventDetector
         _prevSessionFlags = 0;
         _cautionWasActive = false;
         _redFlagActive = false;
+        _raceStartGraceRemaining = 0f;
     }
 
     /// <summary>
@@ -185,6 +202,10 @@ public sealed class NearbyEventDetector
         // ── SESSION-LEVEL events (not per-car) ─────────────────────
         DetectSessionLevelEvents(data);
 
+        // Tick down race-start grace period
+        if (_raceStartGraceRemaining > 0)
+            _raceStartGraceRemaining = Math.Max(0, _raceStartGraceRemaining - dt);
+
         // Live-update IntervalToPlayer for all active events from current relative data
         var intervalLookup = new Dictionary<int, float>();
         foreach (var re in relativeEntries)
@@ -201,7 +222,7 @@ public sealed class NearbyEventDetector
         // Track which ongoing events are still active this tick
         var ongoingStillActive = new HashSet<long>();
 
-        // Only process cars within detection range (14s ahead, 7s behind)
+        // Only process cars within detection range
         foreach (var entry in relativeEntries)
         {
             int i = entry.CarIdx;
@@ -210,8 +231,8 @@ public sealed class NearbyEventDetector
             if (!entry.IsConnected) continue;
 
             float interval = entry.IntervalToPlayer;
-            // Asymmetric detection: 14s ahead (positive), 7s behind (negative)
-            if (interval > DETECTION_AHEAD_SECONDS || interval < -DETECTION_BEHIND_SECONDS) continue;
+            // Asymmetric detection: ahead (positive), behind (negative)
+            if (interval > DetectionAheadSeconds || interval < -DetectionBehindSeconds) continue;
 
             int surface = data.CarIdxTrackSurface != null && i < data.CarIdxTrackSurface.Length
                 ? data.CarIdxTrackSurface[i] : SURFACE_NOT_IN_WORLD;
@@ -317,7 +338,9 @@ public sealed class NearbyEventDetector
             }
 
             // ── SLOW CAR / STOPPED (ongoing) ────────────────────
-            if (surface == SURFACE_ON_TRACK && !onPitRoad)
+            // Suppress during race-start grace period (grid accelerating from standing still).
+            // Real pile-ups at the start are caught by Collision (incident flags) and OffTrack.
+            if (surface == SURFACE_ON_TRACK && !onPitRoad && _raceStartGraceRemaining <= 0)
             {
                 float prevPct = _prevLapDistPct[i];
                 float curPct = data.CarIdxLapDistPct![i];
@@ -415,8 +438,11 @@ public sealed class NearbyEventDetector
             }
 
             // ── SPIN DETECTION (ongoing) ────────────────────────
-            // Detect via LapDistPct stalling + not being a stop (car is still "moving" on track
-            // but LapDistPct isn't advancing = spinning/rotating). Also catch high yaw rate.
+            // Detect via significant backward movement on track.
+            // Requires: (1) backward speed exceeds SPIN_BACKWARD_SPEED_MIN (~3 m/s)
+            //           (2) car was moving forward at SPIN_PRIOR_FORWARD_MIN (~8 m/s) recently.
+            // This filters deliberate U-turns (start from near-zero speed, reverse slowly)
+            // and minor LapDistPct noise from tight corners.
             if (surface == SURFACE_ON_TRACK && !onPitRoad)
             {
                 float prevPctSpin = _prevLapDistPct[i];
@@ -425,12 +451,20 @@ public sealed class NearbyEventDetector
                 if (pctDeltaSpin < -0.5f) pctDeltaSpin += 1.0f;
                 if (pctDeltaSpin > 0.5f) pctDeltaSpin -= 1.0f;
 
-                // Negative progress (going backwards) indicates a spin
-                bool goingBackwards = pctDeltaSpin < -0.0001f && dt > 0;
-                // Also detect via near-zero progress but NOT stopped (speed estimated > 1 m/s)
                 float trackLen = data.TrackLength > 0 ? data.TrackLength : 4000f;
-                float spinSpeed = dt > 0 ? (Math.Abs(pctDeltaSpin) * trackLen / dt) : 999f;
-                bool isSpinning = goingBackwards || (spinSpeed < SLOW_SPEED_THRESHOLD && spinSpeed > 0.2f && _slowDuration[i] < SLOW_CAR_MIN_DURATION);
+                float speedSigned = dt > 0 ? (pctDeltaSpin * trackLen / dt) : 0f;
+                float backwardSpeed = speedSigned < 0 ? -speedSigned : 0f;
+
+                // Track prior forward speed (smoothed) — retains memory of how fast the car was
+                // going before a potential spin. Decays over ~1-2s at 60fps.
+                if (speedSigned > 1.0f) // going forward at > 1 m/s
+                    _priorForwardSpeed[i] = speedSigned;
+                else
+                    _priorForwardSpeed[i] *= 0.97f; // slow decay — retains memory ~1s
+
+                // Spin = going backwards at significant speed + car was moving forward recently
+                bool isSpinning = backwardSpeed > SPIN_BACKWARD_SPEED_MIN
+                                  && _priorForwardSpeed[i] > SPIN_PRIOR_FORWARD_MIN;
 
                 if (isSpinning)
                 {
@@ -533,6 +567,14 @@ public sealed class NearbyEventDetector
         int myPriority = GetEventPriority(type);
         if (HasHigherPriorityOngoing(entry.CarIdx, myPriority))
             return;
+
+        // Dedup: skip if an active (non-expired) event already exists for this car + type
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == entry.CarIdx && e.EventType == type && !e.IsExpired)
+                return;
+        }
 
         // Cooldown check
         if (_cooldowns.TryGetValue(key, out var lastEmit) &&
@@ -741,6 +783,13 @@ public sealed class NearbyEventDetector
         {
             EmitSessionEvent(NearbyEventType.StartSequence, "🟢 GO GO GO!",
                 NearbyEventSeverity.Info, 4.0f);
+            // Begin grace period: suppress Stopped/SlowCar while grid accelerates
+            _raceStartGraceRemaining = RACE_START_GRACE_SECONDS;
+        }
+        // Also activate grace when session jumps straight to RACING (e.g., practice → race without parade)
+        else if (ss == SESSION_STATE_RACING && _prevSessionState > 0 && _prevSessionState != SESSION_STATE_RACING)
+        {
+            _raceStartGraceRemaining = RACE_START_GRACE_SECONDS;
         }
         else if (ss == SESSION_STATE_PARADE_LAPS && _prevSessionState != SESSION_STATE_PARADE_LAPS && _prevSessionState > 0)
         {

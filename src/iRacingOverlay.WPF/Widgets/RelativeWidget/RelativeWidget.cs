@@ -203,6 +203,10 @@ public class RelativeWidget : WidgetBase
     private readonly Dictionary<int, bool> _positionFlashGained = new();
     private const int POSITION_FLASH_DURATION = 60; // ~1 second at 60Hz
 
+    /// <summary>Player's current race position (overall or class, depends on ShowClassPosition).
+    /// Updated each tick in UpdateRows for use in interval color logic.</summary>
+    private int _playerRacePosition;
+
     #endregion
 
     #region Settings
@@ -945,6 +949,11 @@ public class RelativeWidget : WidgetBase
 
     private void UpdateRows(List<RelativeEntry> entries)
     {
+        // Determine player's race position for interval color logic
+        var playerEntry = entries.FirstOrDefault(e => e.IsPlayer);
+        if (playerEntry != null)
+            _playerRacePosition = ShowClassPosition ? playerEntry.ClassPosition : playerEntry.OverallPosition;
+
         double yStart = HEADER_HEIGHT + SEPARATOR_HEIGHT + 4;
 
         for (int i = 0; i < MAX_DISPLAY_ROWS; i++)
@@ -1290,11 +1299,16 @@ public class RelativeWidget : WidgetBase
         else
         {
             row.Gap.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
-            // Sector delta: green=closing, red=opening (overrides default teal/orange)
+            // Sector delta: green=closing, red=opening (overrides default position colors)
             if (ShowSectorDelta)
                 row.Gap.Foreground = entry.IsGapClosing ? BRUSH_GREEN : BRUSH_RED;
             else
-                row.Gap.Foreground = entry.IntervalToPlayer > 0 ? BRUSH_ORANGE : BRUSH_TEAL;
+            {
+                // Color by RACE POSITION: orange = ahead in standings, teal = behind in standings
+                int entryPos = ShowClassPosition ? entry.ClassPosition : entry.OverallPosition;
+                row.Gap.Foreground = (_playerRacePosition > 0 && entryPos > 0 && entryPos < _playerRacePosition)
+                    ? BRUSH_ORANGE : BRUSH_TEAL;
+            }
             row.Gap.FontWeight = FontWeights.SemiBold;
         }
 

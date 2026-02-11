@@ -80,12 +80,12 @@ public partial class MainWindow : Window
         // Wire settings change events
         _settingsPage.SettingsChanged += () => Topmost = AppSettings.Instance.AlwaysOnTop;
 
-        // Show dashboard by default
+        // Show last-used page (persisted between sessions)
         UpdateConnectionStatus(_telemetryService.Status);
         TitleVersionText.Text = VersionInfo.DisplayVersion;
         UpdateHotkeysDisplay();
 
-        NavigateTo("Dashboard");
+        NavigateTo(AppSettings.Instance.LastNavPage);
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -120,6 +120,10 @@ public partial class MainWindow : Window
             "About" => _aboutPage,
             _ => _dashboardPage,
         };
+
+        // Persist selected page between sessions
+        AppSettings.Instance.LastNavPage = page;
+        AppSettings.Instance.Save();
 
         // Update nav button highlights
         var teal = FindResource("TealPrimary") as SolidColorBrush ?? new SolidColorBrush(Color.FromRgb(0, 128, 128));

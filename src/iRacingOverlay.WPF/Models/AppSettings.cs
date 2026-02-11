@@ -250,6 +250,12 @@ public class AppSettings : INotifyPropertyChanged
     /// Keep manager window always on top
     /// </summary>
     public bool AlwaysOnTop { get; set; } = false;
+
+    /// <summary>
+    /// Last selected navigation page in MainWindow (Dashboard, Widgets, Sessions, Settings, About).
+    /// Restored on startup so the user returns to where they left off.
+    /// </summary>
+    public string LastNavPage { get; set; } = "Dashboard";
     
     /// <summary>
     /// Start manager window minimized to taskbar

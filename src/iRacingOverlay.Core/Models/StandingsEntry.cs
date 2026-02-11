@@ -33,6 +33,9 @@ public class StandingsEntry
     public float BestLapTime { get; set; }
     public int CurrentLap { get; set; }
 
+    /// <summary>Fraction of current lap completed (0–1); used for smooth gap interpolation.</summary>
+    public float LapDistPct { get; set; }
+
     // ── Status ───────────────────────────────────────────────────────
     public bool IsOnPitRoad { get; set; }
     public bool IsPlayer { get; set; }

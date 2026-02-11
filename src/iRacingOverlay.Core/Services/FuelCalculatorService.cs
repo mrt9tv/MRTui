@@ -100,6 +100,19 @@ public sealed class FuelCalculatorService
         var fuel = data.FuelLevel;
         var lap = data.Lap;
 
+        // ── race restart detection (same session, lap regresses) ─────
+        // When the driver resets a race the lap counter drops back to 0
+        // while _lastLap is still high.  Clear all accumulated data so
+        // EMA-smoothed values don't carry over stale throttle noise.
+        if (_initialized && lap >= 0 && _lastLap > 0 && lap < _lastLap - 1)
+        {
+            Reset();
+            // Re-set session tracking so we don't double-reset
+            _lastSessionNum = data.SessionNum;
+            _lastTrackName = data.TrackName ?? string.Empty;
+            _lastCarScreenName = data.CarScreenName ?? string.Empty;
+        }
+
         // ── detect yellow flag (caution) from session flags ──────────
         bool isUnderYellow = (data.SessionFlags & 0x00004000) != 0 // Caution
                           || (data.SessionFlags & 0x00000008) != 0; // Yellow
@@ -192,17 +205,15 @@ public sealed class FuelCalculatorService
 
         // EMA smoothing: α=0.05 at 60Hz ≈ 0.33s time constant
         // Dramatically reduces throttle-induced noise while tracking real changes.
-        // Reset on new lap (rawRate resets) to avoid carryover from previous lap's end-of-lap spike.
+        // At the start of a new lap (rawRate=0), carry forward the last smoothed value
+        // to avoid a jarring discontinuity in the displayed rate.
         if (rawLapFuelRate > 0)
         {
             _smoothedLapFuelRate = _smoothedLapFuelRate > 0
                 ? _smoothedLapFuelRate * 0.95f + rawLapFuelRate * 0.05f
                 : rawLapFuelRate; // first sample: seed directly
         }
-        else
-        {
-            _smoothedLapFuelRate = 0f; // new lap or very early — reset
-        }
+        // else: keep previous smoothed value — avoids reset-to-zero glitch at lap start
         CurrentData.CurrentLapFuelRate = _smoothedLapFuelRate;
 
         _previousFuel = fuel;
@@ -296,17 +307,17 @@ public sealed class FuelCalculatorService
             }
             else if (_lapFuelUsage.Count == 1)
             {
-                // 1 clean lap completed: STILL 100% SDK estimate
-                // A single measured lap is too noisy (throttle variance, draft, tire temp).
-                // Keep pure SDK until we have 2 clean laps to cross-reference.
-                avgForCalc = _sdkFuelEstimate;
+                // 1 clean lap completed: 70% SDK, 30% measured
+                // First measured lap is noisy — lean on SDK but start blending
+                float measured = _lapFuelUsage.Average();
+                avgForCalc = measured * 0.30f + _sdkFuelEstimate * 0.70f;
             }
             else if (_lapFuelUsage.Count == 2)
             {
-                // 2 clean laps: 70% measured, 30% SDK
-                // Measured data gaining confidence, SDK smooths it
+                // 2 clean laps: 40% SDK, 60% measured
+                // Measured data gaining confidence
                 float measured = _lapFuelUsage.Average();
-                avgForCalc = measured * 0.70f + _sdkFuelEstimate * 0.30f;
+                avgForCalc = measured * 0.60f + _sdkFuelEstimate * 0.40f;
             }
             // 3+ laps: pure measured data (avgForCalc already set above)
         }

@@ -138,13 +138,13 @@ public class MRTOneWidget : WidgetBase
 
         // Ring thickness per layer (innermost → outermost)
         public static readonly double[] ARC_RING_THICKNESS = { 4.5, 4.0, 3.5, 3.0, 2.5, 2.0 };
-        // Ring max opacity per layer: 0.85 (innermost) stepping down to 0.25 (outermost)
-        public static readonly double[] ARC_RING_MAX_OPACITY = { 0.85, 0.73, 0.61, 0.49, 0.37, 0.25 };
+        // Ring max opacity per layer: 0.95 (innermost) stepping down to 0.35 (outermost) — more prominent flash
+        public static readonly double[] ARC_RING_MAX_OPACITY = { 0.95, 0.83, 0.71, 0.59, 0.47, 0.35 };
 
         /// <summary>Slow blink interval for Close zone (ms) — visible on/off pulsing</summary>
-        public const int ARC_SLOW_BLINK_INTERVAL_MS = 350;
+        public const int ARC_SLOW_BLINK_INTERVAL_MS = 280;
         /// <summary>Fast blink interval for VeryClose (ms) — urgent rapid flash</summary>
-        public const int ARC_FAST_BLINK_INTERVAL_MS = 100;
+        public const int ARC_FAST_BLINK_INTERVAL_MS = 75;
         /// <summary>Multiplier for last-lap blink speed (2× faster)</summary>
         public const double ARC_LAST_LAP_BLINK_MULTIPLIER = 0.5;
 
@@ -1565,17 +1565,17 @@ public class MRTOneWidget : WidgetBase
         float closestDist = Math.Min(_closestFrontDistance, _closestRearDistance);
         double lastLapMult = _isLastLap ? LayoutConstants.ARC_LAST_LAP_BLINK_MULTIPLIER : 1.0;
 
-        if (closestDist < 4f) // VeryClose
+        if (closestDist < 5f) // VeryClose
         {
-            // Linear interpolation: 0m → 60ms, 4m → 120ms
-            float t = Math.Clamp(closestDist / 4f, 0f, 1f);
-            double interval = 60 + (60 * t); // 60-120ms
+            // Linear interpolation: 0m → 45ms, 5m → 100ms
+            float t = Math.Clamp(closestDist / 5f, 0f, 1f);
+            double interval = 45 + (55 * t); // 45-100ms
             _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
         }
-        else if (closestDist < 7f) // Close
+        else if (closestDist < 9f) // Close
         {
-            float t = Math.Clamp((closestDist - 4f) / 3f, 0f, 1f);
-            double interval = 250 + (150 * t); // 250-400ms
+            float t = Math.Clamp((closestDist - 5f) / 4f, 0f, 1f);
+            double interval = 200 + (120 * t); // 200-320ms
             _arcSlowBlinkTimer.Interval = TimeSpan.FromMilliseconds(interval * lastLapMult);
             // Reset fast blink to default when not in VeryClose
             _radarBlinkTimer.Interval = TimeSpan.FromMilliseconds(
@@ -1865,14 +1865,13 @@ public class MRTOneWidget : WidgetBase
     /// Update a set of 6 concentric arc rings for a front/back quadrant.
     /// Rings activate from outside→inside as zone increases.
     /// Each ring gets the zone colour with per-layer max opacity (0.25→0.85).
-    /// For Close/VeryClose zones, opacity is controlled by blink timers — only set Fill here.
+    /// For Close/VeryClose zones: set Fill AND initial opacity so rings appear immediately.
+    /// Subsequent blink timer ticks will then toggle between on/off states.
     /// </summary>
     private static void UpdateArcRings(System.Windows.Shapes.Path[] rings, ProximityZone zone)
     {
         int activeCount = GetActiveRingCount(zone);
         var fillBrush = GetRingColor(zone);
-        // Don't override opacity for zones where blink timers control it
-        bool isBlinkingZone = zone == ProximityZone.Close || zone == ProximityZone.VeryClose;
 
         for (int i = 0; i < rings.Length; i++)
         {
@@ -1885,9 +1884,9 @@ public class MRTOneWidget : WidgetBase
             {
                 rings[i].Fill = fillBrush;
                 rings[i].Visibility = Visibility.Visible;
-                // Only set opacity for non-blinking zones; blink timers handle Close/VeryClose
-                if (!isBlinkingZone)
-                    rings[i].Opacity = LayoutConstants.ARC_RING_MAX_OPACITY[i];
+                // Always set opacity — for blinking zones this ensures immediate visibility
+                // on the first frame. The blink timer will then modulate on subsequent ticks.
+                rings[i].Opacity = LayoutConstants.ARC_RING_MAX_OPACITY[i];
             }
             else
             {
