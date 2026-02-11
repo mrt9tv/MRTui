@@ -155,8 +155,8 @@ public class StandingsWidget : WidgetBase
     {
         Title = "Standings";
         LoadSettings();
-        RecalcLayout();
-        InitializeWidget();
+        InitializeWidget();   // Must come first — creates Canvas, headers, rows
+        RecalcLayout();       // Now _hdrDefs is populated for PositionHeaders()
         RecalcHeight();
     }
 
