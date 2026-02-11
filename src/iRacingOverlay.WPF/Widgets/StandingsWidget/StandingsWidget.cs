@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
@@ -22,7 +23,7 @@ public class StandingsWidget : WidgetBase
 
     private const double PADDING = 8;
     private const double ROW_HEIGHT = 18;
-    private const double ROW_GAP = 1;
+    private const double ROW_GAP = 2;
     private const double HEADER_HEIGHT = 18;
     private const double SEPARATOR_HEIGHT = 1;
     private const double BORDER_RADIUS = 6;
@@ -315,9 +316,10 @@ public class StandingsWidget : WidgetBase
         Width = _layout.TotalWidth;
     }
 
-    public void RecalcHeight()
+    public void RecalcHeight(int? actualRowCount = null)
     {
-        int rows = Math.Min(MaxVisibleRows, MAX_DISPLAY_ROWS);
+        int rows = actualRowCount ?? Math.Min(MaxVisibleRows, MAX_DISPLAY_ROWS);
+        rows = Math.Clamp(rows, 1, Math.Min(MaxVisibleRows, MAX_DISPLAY_ROWS));
         double h = PADDING + HEADER_HEIGHT + SEPARATOR_HEIGHT + (rows * (ROW_HEIGHT + ROW_GAP)) + PADDING;
         Height = h;
 
@@ -438,7 +440,7 @@ public class StandingsWidget : WidgetBase
                 else if (e.LapDelta < 0)
                     row.Int.Text = $"+{Math.Abs(e.LapDelta)}L";
                 else
-                    row.Int.Text = e.Interval > 0 ? $"+{e.Interval:F1}" : "—";
+                    row.Int.Text = e.Interval > 0 ? $"+{e.Interval.ToString("F1", CultureInfo.InvariantCulture)}" : "—";
                 row.Int.Foreground = BRUSH_MUTED;
             }
             Canvas.SetLeft(row.Int, _layout.IntX);
@@ -453,7 +455,7 @@ public class StandingsWidget : WidgetBase
                 else if (e.LapDelta < 0)
                     row.Gap.Text = $"+{Math.Abs(e.LapDelta)}L";
                 else
-                    row.Gap.Text = e.GapToLeader > 0 ? $"+{e.GapToLeader:F1}" : "—";
+                    row.Gap.Text = e.GapToLeader > 0 ? $"+{e.GapToLeader.ToString("F1", CultureInfo.InvariantCulture)}" : "—";
             }
             Canvas.SetLeft(row.Gap, _layout.GapX);
             Canvas.SetTop(row.Gap, y);
@@ -517,6 +519,9 @@ public class StandingsWidget : WidgetBase
             SetRowVisible(i, false);
 
         _visibleRowCount = count;
+
+        // Auto-resize height to match actual driver count (capped at MaxVisibleRows)
+        RecalcHeight(count);
     }
 
     #endregion
@@ -549,11 +554,11 @@ public class StandingsWidget : WidgetBase
         int mins = (int)(seconds / 60);
         float secs = seconds - mins * 60;
         return mins > 0
-            ? $"{mins}:{secs:00.0}"
-            : $"{secs:0.000}";
+            ? $"{mins}:{secs.ToString("00.0", CultureInfo.InvariantCulture)}"
+            : secs.ToString("0.000", CultureInfo.InvariantCulture);
     }
 
-    private static string FormatIRating(int ir) => ir >= 10000 ? $"{ir / 1000}k" : ir >= 1000 ? $"{ir / 1000.0:F1}k" : ir.ToString();
+    private static string FormatIRating(int ir) => ir >= 10000 ? $"{ir / 1000}k" : ir >= 1000 ? $"{(ir / 1000.0).ToString("F1", CultureInfo.InvariantCulture)}k" : ir.ToString();
 
     private static string TruncateModel(string model) =>
         string.IsNullOrEmpty(model) ? "" : model.Length > 3 ? model[..3] : model;
@@ -577,14 +582,18 @@ public class StandingsWidget : WidgetBase
         _rows[idx].RowBg.Visibility = v;
         _rows[idx].ClassStripe.Visibility = v;
         foreach (var tb in AllCells(_rows[idx]))
-            tb.Visibility = visible ? tb.Visibility : Visibility.Collapsed;
-        // When showing, restore per-column visibility
+            tb.Visibility = v;
+        // When showing, restore per-column visibility (hides disabled columns)
         if (visible) RestoreColumnVisibility(idx);
     }
 
     private void RestoreColumnVisibility(int idx)
     {
         var row = _rows[idx];
+        // Always-visible columns
+        row.Pos.Visibility = Visibility.Visible;
+        row.Name.Visibility = Visibility.Visible;
+        // Toggleable columns
         row.Num.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
         row.Int.Visibility = ShowInterval ? Visibility.Visible : Visibility.Collapsed;
         row.Gap.Visibility = ShowGapToLeader ? Visibility.Visible : Visibility.Collapsed;

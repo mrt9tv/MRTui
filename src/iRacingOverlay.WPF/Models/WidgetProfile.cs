@@ -50,6 +50,11 @@ public class WidgetProfile
     public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
     /// <summary>
+    /// Whether this is a built-in default profile that cannot be deleted.
+    /// </summary>
+    public bool IsDefault { get; set; } = false;
+
+    /// <summary>
     /// Compute match score against current session + car.
     /// Higher = better match.
     /// </summary>

@@ -1,8 +1,9 @@
 namespace iRacingOverlay.Core.Models;
 
 /// <summary>
-/// A transient event detected near the player (within ±15s on track).
+/// A transient event detected near the player (14s ahead, 7s behind on track).
 /// Displayed by the Proximity Feed widget as an animated notification.
+/// IntervalToPlayer is live-updated each tick for active events.
 /// </summary>
 public class NearbyEvent
 {

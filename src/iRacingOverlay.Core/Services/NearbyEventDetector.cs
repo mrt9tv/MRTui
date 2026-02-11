@@ -3,9 +3,10 @@ using iRacingOverlay.Core.Models;
 namespace iRacingOverlay.Core.Services;
 
 /// <summary>
-/// Detects race events near the player (within ±15 seconds on track).
+/// Detects race events near the player (14s ahead, 7s behind on track).
 /// Monitors all 64 car slots for state changes and emits NearbyEvent
 /// notifications for the Proximity Feed widget.
+/// Live-updates IntervalToPlayer on active events each tick.
 ///
 /// Performance: O(64) per tick, no allocations on steady-state (object pool).
 /// Thread safety: NOT thread-safe. Call Update() from UI dispatch only.
@@ -14,8 +15,11 @@ public sealed class NearbyEventDetector
 {
     private const int MAX_CARS = 64;
 
-    /// <summary>Detection radius in seconds of track time around the player.</summary>
-    private const float DETECTION_RADIUS_SECONDS = 15.0f;
+    /// <summary>Detection radius in seconds AHEAD of the player.</summary>
+    private const float DETECTION_AHEAD_SECONDS = 14.0f;
+
+    /// <summary>Detection radius in seconds BEHIND the player.</summary>
+    private const float DETECTION_BEHIND_SECONDS = 7.0f;
 
     /// <summary>Minimum speed (m/s) below which a car on track is considered "slow".</summary>
     private const float SLOW_SPEED_THRESHOLD = 5.0f;
@@ -28,6 +32,9 @@ public sealed class NearbyEventDetector
 
     /// <summary>Seconds a "slow car" must persist before emitting.</summary>
     private const float SLOW_CAR_MIN_DURATION = 2.0f;
+
+    /// <summary>Minimum display duration for any event (seconds).</summary>
+    private const float MIN_DISPLAY_DURATION = 3.0f;
 
     /// <summary>Cooldown per car per event type (seconds) to prevent spam.</summary>
     private const float EVENT_COOLDOWN = 8.0f;
@@ -107,8 +114,20 @@ public sealed class NearbyEventDetector
 
         int playerIdx = data.PlayerCarIdx;
 
-        // Build a quick lookup of interval-to-player from relative entries
-        // Only process cars within ±15s
+        // Live-update IntervalToPlayer for all active events from current relative data
+        var intervalLookup = new Dictionary<int, float>();
+        foreach (var re in relativeEntries)
+        {
+            if (re.CarIdx >= 0 && re.CarIdx < MAX_CARS)
+                intervalLookup[re.CarIdx] = re.IntervalToPlayer;
+        }
+        foreach (var evt in _activeEvents)
+        {
+            if (intervalLookup.TryGetValue(evt.CarIdx, out var liveInterval))
+                evt.IntervalToPlayer = liveInterval;
+        }
+
+        // Only process cars within detection range (14s ahead, 7s behind)
         foreach (var entry in relativeEntries)
         {
             int i = entry.CarIdx;
@@ -117,7 +136,8 @@ public sealed class NearbyEventDetector
             if (!entry.IsConnected) continue;
 
             float interval = entry.IntervalToPlayer;
-            if (Math.Abs(interval) > DETECTION_RADIUS_SECONDS) continue;
+            // Asymmetric detection: 14s ahead (positive), 7s behind (negative)
+            if (interval > DETECTION_AHEAD_SECONDS || interval < -DETECTION_BEHIND_SECONDS) continue;
 
             int surface = data.CarIdxTrackSurface != null && i < data.CarIdxTrackSurface.Length
                 ? data.CarIdxTrackSurface[i] : SURFACE_NOT_IN_WORLD;
@@ -170,7 +190,7 @@ public sealed class NearbyEventDetector
             if (!onPitRoad && _prevOnPitRoad[i] && surface == SURFACE_ON_TRACK)
             {
                 TryEmit(entry, NearbyEventType.PitExit, "PIT EXIT",
-                    NearbyEventSeverity.Info, 2.5f);
+                    NearbyEventSeverity.Info, 3.0f);
             }
 
             // ── TOWED (was on track, jumped to pit stall without traversing pit road approach) ──
@@ -283,7 +303,7 @@ public sealed class NearbyEventDetector
             IntervalToPlayer = entry.IntervalToPlayer,
             DisplayText = text,
             Severity = severity,
-            DisplayDuration = duration,
+            DisplayDuration = Math.Max(duration, MIN_DISPLAY_DURATION),
         });
 
         _cooldowns[key] = DateTime.UtcNow;

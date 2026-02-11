@@ -64,9 +64,17 @@ public class ProfileStorageService
         return profile;
     }
 
-    /// <summary>Delete a profile by ID.</summary>
+    /// <summary>Delete a profile by ID. Default profiles cannot be deleted.</summary>
     public bool DeleteProfile(Guid id)
     {
+        var profile = GetProfile(id);
+        if (profile == null) return false;
+        if (profile.IsDefault)
+        {
+            _logger.LogWarning("Cannot delete default profile: {Name} ({Id})", profile.Name, id);
+            return false;
+        }
+
         var removed = Profiles.RemoveAll(p => p.Id == id);
         if (removed > 0)
         {
@@ -208,6 +216,7 @@ public class ProfileStorageService
         var raceProfile = new WidgetProfile
         {
             Name = "Race (Default)",
+            IsDefault = true,
             SessionBinding = SessionCategory.Race,
             WidgetVisibility = new()
             {
@@ -224,6 +233,7 @@ public class ProfileStorageService
         var practiceProfile = new WidgetProfile
         {
             Name = "Practice (Default)",
+            IsDefault = true,
             SessionBinding = SessionCategory.Practice,
             WidgetVisibility = new()
             {
@@ -240,6 +250,7 @@ public class ProfileStorageService
         var qualiProfile = new WidgetProfile
         {
             Name = "Qualifying (Default)",
+            IsDefault = true,
             SessionBinding = SessionCategory.Qualifying,
             WidgetVisibility = new()
             {
@@ -278,6 +289,7 @@ public class ProfileStorageService
                 {
                     Id = p.Id.ToString(),
                     Name = p.Name,
+                    IsDefault = p.IsDefault,
                     SessionBinding = p.SessionBinding?.ToString(),
                     CarClassBinding = p.CarClassBinding,
                     LastModified = p.LastModified,
@@ -327,6 +339,7 @@ public class ProfileStorageService
                 {
                     Id = id,
                     Name = pd.Name,
+                    IsDefault = pd.IsDefault,
                     SessionBinding = session,
                     CarClassBinding = pd.CarClassBinding,
                     LastModified = pd.LastModified,
@@ -371,6 +384,7 @@ public class ProfileStorageService
     {
         public string Id { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
+        public bool IsDefault { get; set; }
         public string? SessionBinding { get; set; }
         public string? CarClassBinding { get; set; }
         public DateTime LastModified { get; set; }

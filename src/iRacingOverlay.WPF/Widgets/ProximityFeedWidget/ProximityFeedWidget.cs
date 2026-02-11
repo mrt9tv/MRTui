@@ -16,9 +16,10 @@ using iRacingOverlay.WPF.Models;
 namespace iRacingOverlay.WPF.Widgets.ProximityFeedWidget;
 
 /// <summary>
-/// Proximity Feed Widget — animated event notifications for nearby cars (±15s).
+/// Proximity Feed Widget — animated event notifications for nearby cars (14s ahead, 7s behind).
 /// Lightweight vertical feed showing collisions, off-tracks, pitting, stopped cars, flags.
 /// Events slide in, display briefly, then fade out. Most severe events at top.
+/// Includes a persistent drag handle for repositioning even when feed is empty.
 ///
 /// MRT theme: dark translucent background, severity-colored left stripe, compact text.
 /// </summary>
@@ -61,6 +62,7 @@ public class ProximityFeedWidget : WidgetBase
 
     private Canvas _canvas = null!;
     private Border _backgroundBorder = null!;
+    private Border _dragHandle = null!;
     private StackPanel _feedStack = null!;
     private readonly NearbyEventDetector _detector = new();
     private readonly RelativeCalculator _relativeCalculator = new();
@@ -155,7 +157,46 @@ public class ProximityFeedWidget : WidgetBase
 
         _backgroundBorder.Child = _feedStack;
         _canvas.Children.Add(_backgroundBorder);
+
+        // Persistent drag handle — always visible so user can reposition when feed is empty
+        _dragHandle = new Border
+        {
+            Width = 40,
+            Height = 14,
+            CornerRadius = new CornerRadius(3),
+            Background = new SolidColorBrush(Color.FromArgb(90, 100, 100, 100)),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Cursor = System.Windows.Input.Cursors.SizeAll,
+            ToolTip = "Drag to move",
+            Child = new TextBlock
+            {
+                Text = "⋮⋮",
+                FontSize = 8,
+                Foreground = new SolidColorBrush(Color.FromArgb(140, 200, 200, 200)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        Canvas.SetLeft(_dragHandle, (WIDGET_WIDTH - 40) / 2);
+        Canvas.SetTop(_dragHandle, 0);
+        _dragHandle.MouseLeftButtonDown += DragHandle_MouseLeftButtonDown;
+        _canvas.Children.Add(_dragHandle);
+
         Content = _canvas;
+    }
+
+    /// <summary>
+    /// Allow dragging the widget from the grip handle.
+    /// </summary>
+    private void DragHandle_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        try
+        {
+            DragMove();
+            Config.X = Left;
+            Config.Y = Top;
+        }
+        catch (InvalidOperationException) { }
     }
 
     /// <summary>
@@ -235,10 +276,15 @@ public class ProximityFeedWidget : WidgetBase
 
         // Resize widget height dynamically
         int visibleCount = Math.Max(1, sorted.Count);
-        double targetHeight = (ROW_HEIGHT + ROW_GAP) * visibleCount + PADDING * 2;
+        double feedHeight = (ROW_HEIGHT + ROW_GAP) * visibleCount + PADDING * 2;
+        double handleSpace = _dragHandle.Visibility == Visibility.Visible ? 16 : 0;
+        double targetHeight = feedHeight + handleSpace;
         Height = targetHeight;
         _canvas.Height = targetHeight;
-        _backgroundBorder.Height = targetHeight;
+        _backgroundBorder.Height = feedHeight;
+
+        // Position drag handle at bottom of feed
+        Canvas.SetTop(_dragHandle, feedHeight);
     }
 
     private Border CreateEventRow(NearbyEvent evt)
@@ -402,7 +448,7 @@ public class ProximityFeedWidget : WidgetBase
     private static string FormatInterval(float interval)
     {
         string sign = interval >= 0 ? "+" : "";
-        return $"{sign}{interval:F1}s";
+        return $"{sign}{interval.ToString("F1", CultureInfo.InvariantCulture)}s";
     }
 
     private static Color GetSeverityColor(NearbyEventSeverity severity) => severity switch

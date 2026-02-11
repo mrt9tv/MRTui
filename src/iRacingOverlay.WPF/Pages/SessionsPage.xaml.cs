@@ -148,6 +148,7 @@ public partial class SessionsPage : UserControl
         if (_profileService == null) return;
         var active = _profileService.GetActiveProfile();
         if (active == null) return;
+        if (active.IsDefault) return; // Cannot delete default profiles
         _profileService.DeleteProfile(active.Id);
         SyncProfileList();
     }
@@ -197,6 +198,17 @@ public partial class SessionsPage : UserControl
                 row.Children.Add(selectBtn);
 
                 // Binding indicators
+                if (p.IsDefault)
+                {
+                    row.Children.Add(new TextBlock
+                    {
+                        Text = "\U0001F512",
+                        FontSize = 9,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(4, 0, 0, 0),
+                        ToolTip = "Default profile (cannot be deleted)",
+                    });
+                }
                 if (p.SessionBinding.HasValue)
                 {
                     row.Children.Add(new TextBlock
