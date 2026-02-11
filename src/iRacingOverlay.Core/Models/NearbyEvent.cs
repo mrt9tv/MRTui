@@ -113,6 +113,9 @@ public enum NearbyEventType
 
     /// <summary>Car spun (large yaw rate change — detected via rapid LapDistPct stall).</summary>
     Spin,
+
+    /// <summary>Higher-class car overtaking imminently (closing fast from behind).</summary>
+    OvertakingImminent,
 }
 
 /// <summary>

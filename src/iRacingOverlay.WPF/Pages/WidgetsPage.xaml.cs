@@ -588,6 +588,8 @@ public partial class WidgetsPage : UserControl
             ChkProxDirection.IsChecked = widget.ShowDirection;
             ChkProxInterval.IsChecked = widget.ShowInterval;
             ChkProxGrowUp.IsChecked = widget.GrowUpward;
+            ChkProxOvertaking.IsChecked = widget.ShowOvertakingAlert;
+            ChkProxDragMode.IsChecked = false; // always start unlocked
         }
         finally { _suppressControlEvents = false; }
     }
@@ -601,7 +603,20 @@ public partial class WidgetsPage : UserControl
         widget.ShowDirection = ChkProxDirection.IsChecked == true;
         widget.ShowInterval = ChkProxInterval.IsChecked == true;
         widget.GrowUpward = ChkProxGrowUp.IsChecked == true;
+        widget.ShowOvertakingAlert = ChkProxOvertaking.IsChecked == true;
         widget.SaveSettings();
+    }
+
+    private void ProximityFeedDragToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveProximityFeedWidget();
+        if (widget == null) return;
+
+        bool enableDrag = ChkProxDragMode.IsChecked == true;
+        // When drag mode is ON: unlock widget (IsHitTestVisible=true, _isLocked=false)
+        // When drag mode is OFF: lock widget back (click-through)
+        widget.SetLocked(!enableDrag);
     }
 
     // ── Field combos ────────────────────────────────────────────────

@@ -53,6 +53,11 @@ public class StandingsWidget : WidgetBase
     private const double FONT_DATA = 11.5;
     private const double FONT_HEADER = 9.5;
     private const int MAX_NAME_LENGTH = 14;
+    private const double LAPPED_DIM_OPACITY = 0.40;
+
+    /// <summary>Frame counter for blink effects (~60Hz).</summary>
+    private int _frameCount;
+    private const int BLINK_HALF_PERIOD = 30; // frames per half-cycle at 60Hz = 0.5s on/off
 
     #endregion
 
@@ -381,6 +386,9 @@ public class StandingsWidget : WidgetBase
 
     protected override void UpdateUI(TelemetryData data)
     {
+        _frameCount++;
+        bool isBlinkOn = (_frameCount / BLINK_HALF_PERIOD) % 2 == 0;
+
         var entries = _calculator.Calculate(data, MaxVisibleRows);
         int count = Math.Min(entries.Count, MAX_DISPLAY_ROWS);
 
@@ -411,6 +419,7 @@ public class StandingsWidget : WidgetBase
             // Position
             row.Pos.Text = e.OverallPosition.ToString();
             row.Pos.Foreground = e.IsPlayer ? BRUSH_TEAL : BRUSH_TEXT;
+            row.Pos.FontWeight = e.IsPlayer ? FontWeights.Bold : FontWeights.Normal;
             Canvas.SetLeft(row.Pos, _layout.PosX);
             Canvas.SetTop(row.Pos, y);
 
@@ -422,13 +431,20 @@ public class StandingsWidget : WidgetBase
 
             // Car number
             row.Num.Text = ShowCarNumber ? $"#{e.CarNumber}" : "";
+            row.Num.Foreground = e.IsPlayer ? BRUSH_TEAL : BRUSH_MUTED;
             row.Num.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
             Canvas.SetLeft(row.Num, _layout.NumX);
             Canvas.SetTop(row.Num, y);
 
-            // Driver name
+            // Driver name — yellow when in pit, teal for player, white otherwise
             row.Name.Text = FormatName(e.DriverName);
-            row.Name.Foreground = e.IsPlayer ? BRUSH_TEAL : (e.IsOnPitRoad ? BRUSH_PIT : BRUSH_TEXT);
+            if (e.IsPlayer)
+                row.Name.Foreground = BRUSH_TEAL;
+            else if (e.IsOnPitRoad)
+                row.Name.Foreground = isBlinkOn ? BRUSH_PIT : BRUSH_MUTED;
+            else
+                row.Name.Foreground = BRUSH_TEXT;
+            row.Name.FontWeight = e.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal;
             Canvas.SetLeft(row.Name, _layout.NameX);
             Canvas.SetTop(row.Name, y);
 
@@ -443,31 +459,45 @@ public class StandingsWidget : WidgetBase
             Canvas.SetLeft(row.PosDelta, _layout.PosDeltaX);
             Canvas.SetTop(row.PosDelta, y);
 
-            // Interval
+            // Interval — lapped cars shown in red
             row.Int.Visibility = ShowInterval ? Visibility.Visible : Visibility.Collapsed;
             if (ShowInterval)
             {
                 if (e.OverallPosition == 1)
                     row.Int.Text = "—";
                 else if (e.LapDelta < 0)
+                {
                     row.Int.Text = $"+{Math.Abs(e.LapDelta)}L";
+                    row.Int.Foreground = BRUSH_RED;
+                }
                 else
+                {
                     row.Int.Text = e.Interval > 0 ? $"+{e.Interval.ToString("F1", CultureInfo.InvariantCulture)}" : "—";
-                row.Int.Foreground = BRUSH_MUTED;
+                    row.Int.Foreground = BRUSH_MUTED;
+                }
             }
             Canvas.SetLeft(row.Int, _layout.IntX);
             Canvas.SetTop(row.Int, y);
 
-            // Gap to leader
+            // Gap to leader — lapped cars shown in red
             row.Gap.Visibility = ShowGapToLeader ? Visibility.Visible : Visibility.Collapsed;
             if (ShowGapToLeader)
             {
                 if (e.OverallPosition == 1)
+                {
                     row.Gap.Text = "—";
+                    row.Gap.Foreground = BRUSH_MUTED;
+                }
                 else if (e.LapDelta < 0)
+                {
                     row.Gap.Text = $"+{Math.Abs(e.LapDelta)}L";
+                    row.Gap.Foreground = BRUSH_RED;
+                }
                 else
+                {
                     row.Gap.Text = e.GapToLeader > 0 ? $"+{e.GapToLeader.ToString("F1", CultureInfo.InvariantCulture)}" : "—";
+                    row.Gap.Foreground = BRUSH_MUTED;
+                }
             }
             Canvas.SetLeft(row.Gap, _layout.GapX);
             Canvas.SetTop(row.Gap, y);
@@ -502,9 +532,13 @@ public class StandingsWidget : WidgetBase
             Canvas.SetLeft(row.IR, _layout.IRX);
             Canvas.SetTop(row.IR, y);
 
-            // License
+            // License — colored by license class (A=blue, B=green, C=yellow, D=orange, R=red)
             row.Lic.Visibility = ShowLicense ? Visibility.Visible : Visibility.Collapsed;
-            row.Lic.Text = ShowLicense ? e.LicenseClass : "";
+            if (ShowLicense)
+            {
+                row.Lic.Text = e.LicenseClass;
+                row.Lic.Foreground = GetLicenseBrush(e.LicenseClass);
+            }
             Canvas.SetLeft(row.Lic, _layout.LicX);
             Canvas.SetTop(row.Lic, y);
 
@@ -521,7 +555,7 @@ public class StandingsWidget : WidgetBase
             Canvas.SetTop(row.Nat, y);
 
             // Dim lapped cars
-            double rowOpacity = (DimLappedCars && e.LapDelta < 0 && !e.IsPlayer) ? 0.45 : 1.0;
+            double rowOpacity = (DimLappedCars && e.LapDelta < 0 && !e.IsPlayer) ? LAPPED_DIM_OPACITY : 1.0;
             foreach (var tb in AllCells(_rows[i]))
                 tb.Opacity = rowOpacity;
         }
@@ -582,6 +616,20 @@ public class StandingsWidget : WidgetBase
         var brush = Freeze(new SolidColorBrush(CLASS_COLORS[idx]));
         _classColorCache[classId] = brush;
         return brush;
+    }
+
+    private static SolidColorBrush GetLicenseBrush(string licenseClass)
+    {
+        if (string.IsNullOrEmpty(licenseClass)) return BRUSH_MUTED;
+        return licenseClass.ToUpperInvariant() switch
+        {
+            "A" or "PRO" or "WC" => BRUSH_LIC_A,
+            "B" => BRUSH_LIC_B,
+            "C" => BRUSH_LIC_C,
+            "D" => BRUSH_LIC_D,
+            "R" => BRUSH_LIC_R,
+            _ => BRUSH_MUTED,
+        };
     }
 
     #endregion

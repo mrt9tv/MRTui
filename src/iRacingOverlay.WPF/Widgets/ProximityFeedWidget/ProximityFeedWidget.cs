@@ -56,16 +56,17 @@ public class ProximityFeedWidget : WidgetBase
     // Per-event-type colors for richer visual differentiation
     private static readonly Color COLOR_OFF_TRACK = Color.FromRgb(255, 160, 0);     // orange
     private static readonly Color COLOR_COLLISION = Color.FromRgb(255, 30, 30);      // bright red
-    private static readonly Color COLOR_SLOW_CAR = Color.FromRgb(255, 200, 40);      // gold/yellow
-    private static readonly Color COLOR_STOPPED = Color.FromRgb(255, 50, 50);        // red
-    private static readonly Color COLOR_PITTING = Color.FromRgb(0, 170, 200);        // cyan/teal
-    private static readonly Color COLOR_IN_BOX = Color.FromRgb(0, 140, 160);         // dark teal
-    private static readonly Color COLOR_PIT_EXIT = Color.FromRgb(80, 200, 120);      // green
+    private static readonly Color COLOR_SLOW_CAR = Color.FromRgb(255, 200, 40);      // gold/yellow — static
+    private static readonly Color COLOR_STOPPED = Color.FromRgb(255, 50, 50);        // red — blink
+    private static readonly Color COLOR_PITTING = Color.FromRgb(255, 200, 50);       // yellow — static (like RelativeWidget)
+    private static readonly Color COLOR_IN_BOX = Color.FromRgb(0, 140, 160);         // dark teal (not displayed)
+    private static readonly Color COLOR_PIT_EXIT = Color.FromRgb(255, 200, 50);      // blinking yellow (like RelativeWidget)
     private static readonly Color COLOR_MEATBALL = Color.FromRgb(255, 100, 0);       // orange-red
     private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(180, 0, 180);     // magenta
     private static readonly Color COLOR_TOWED = Color.FromRgb(180, 80, 220);         // purple
     private static readonly Color COLOR_LOCAL_YELLOW = Color.FromRgb(255, 230, 0);   // bright yellow
     private static readonly Color COLOR_SPIN = Color.FromRgb(220, 120, 0);           // deep orange
+    private static readonly Color COLOR_OVERTAKING = Color.FromRgb(255, 140, 0);     // orange for higher-class overtake imminent
 
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
@@ -104,6 +105,9 @@ public class ProximityFeedWidget : WidgetBase
     /// <summary>Feed grows upward (newest at bottom, older slides up).</summary>
     public bool GrowUpward { get; set; } = false;
 
+    /// <summary>Show higher-class overtaking imminent alerts.</summary>
+    public bool ShowOvertakingAlert { get; set; } = true;
+
     #endregion
 
     public override WidgetType WidgetType => WidgetType.ProximityFeed;
@@ -139,6 +143,11 @@ public class ProximityFeedWidget : WidgetBase
             if (v4 is JsonElement je4) GrowUpward = je4.ValueKind == JsonValueKind.True;
             else if (v4 is bool b4) GrowUpward = b4;
         }
+        if (Config.Settings.TryGetValue("showOvertakingAlert", out var v5))
+        {
+            if (v5 is JsonElement je5) ShowOvertakingAlert = je5.ValueKind == JsonValueKind.True;
+            else if (v5 is bool b5) ShowOvertakingAlert = b5;
+        }
     }
 
     public void SaveSettings()
@@ -147,6 +156,7 @@ public class ProximityFeedWidget : WidgetBase
         Config.Settings["showDirection"] = ShowDirection;
         Config.Settings["showInterval"] = ShowInterval;
         Config.Settings["growUpward"] = GrowUpward;
+        Config.Settings["showOvertakingAlert"] = ShowOvertakingAlert;
     }
 
     private void InitializeWidget()
@@ -244,8 +254,13 @@ public class ProximityFeedWidget : WidgetBase
         _blinkFrame++;
         var events = _detector.ActiveEvents;
 
+        // Filter: never show InBox in proximity feed; filter overtaking if toggled off
+        var filtered = events.Where(e => e.EventType != NearbyEventType.InBox);
+        if (!ShowOvertakingAlert)
+            filtered = filtered.Where(e => e.EventType != NearbyEventType.OvertakingImminent);
+
         // Sort: severity desc, then newest first
-        var sorted = events
+        var sorted = filtered
             .OrderByDescending(e => e.Severity)
             .ThenByDescending(e => e.CreatedAt)
             .Take(MaxVisibleEvents)
@@ -335,7 +350,7 @@ public class ProximityFeedWidget : WidgetBase
             Margin = new Thickness(6, 0, 4, 0),
         };
 
-        // Direction arrow
+        // Direction arrow (live-updated in UpdateRowContent as interval sign changes)
         if (ShowDirection)
         {
             var arrow = new TextBlock
@@ -345,6 +360,7 @@ public class ProximityFeedWidget : WidgetBase
                 Foreground = evt.IsAhead ? new SolidColorBrush(COLOR_INFO) : new SolidColorBrush(COLOR_WARNING),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 3, 0),
+                Tag = "arrowText",
             };
             leftStack.Children.Add(arrow);
         }
@@ -407,7 +423,11 @@ public class ProximityFeedWidget : WidgetBase
         bool blinkVisible = (_blinkFrame / BLINK_HALF_PERIOD) % 2 == 0;
         bool shouldBlink = ShouldBlinkText(evt);
 
-        // Update interval text and apply text blink effect
+        // Overtaking imminent: static first 5s, then blink
+        if (evt.EventType == NearbyEventType.OvertakingImminent && evt.Age < 5.0)
+            shouldBlink = false;
+
+        // Update interval text, direction arrow, and apply text blink
         foreach (UIElement child in grid.Children)
         {
             if (child is TextBlock tb && tb.Tag as string == "intervalText")
@@ -418,22 +438,33 @@ public class ProximityFeedWidget : WidgetBase
             {
                 foreach (UIElement spChild in sp.Children)
                 {
-                    if (spChild is TextBlock etb && etb.Tag as string == "eventText")
+                    if (spChild is TextBlock etb)
                     {
-                        // Blink effect: toggle opacity of the event text only (not bar/border)
-                        if (shouldBlink)
-                            etb.Opacity = blinkVisible ? 1.0 : 0.25;
-                        else
-                            etb.Opacity = 1.0;
+                        if (etb.Tag as string == "eventText")
+                        {
+                            // Blink effect: toggle opacity of the event text only (not bar/border)
+                            if (shouldBlink)
+                                etb.Opacity = blinkVisible ? 1.0 : 0.25;
+                            else
+                                etb.Opacity = 1.0;
+                        }
+                        else if (etb.Tag as string == "arrowText")
+                        {
+                            // Live-update direction arrow as interval changes (overtakes)
+                            bool ahead = evt.IntervalToPlayer > 0;
+                            etb.Text = ahead ? "▲" : "▼";
+                            etb.Foreground = ahead
+                                ? new SolidColorBrush(COLOR_INFO)
+                                : new SolidColorBrush(COLOR_WARNING);
+                        }
                     }
                 }
             }
         }
 
-        // Ongoing indicator: show a pulsing "●" prefix while condition is active
+        // Ongoing indicator: keep full opacity while condition is active
         if (evt.IsOngoing)
         {
-            // Keep full opacity for ongoing events
             row.Opacity = 1.0;
             return;
         }
@@ -526,17 +557,21 @@ public class ProximityFeedWidget : WidgetBase
         NearbyEventType.Towed => COLOR_TOWED,
         NearbyEventType.LocalYellow => COLOR_LOCAL_YELLOW,
         NearbyEventType.Spin => COLOR_SPIN,
+        NearbyEventType.OvertakingImminent => COLOR_OVERTAKING,
         _ => GetSeverityColor(evt.Severity),
     };
 
     /// <summary>
-    /// Whether this event type should have blinking text (not bars) when active/ongoing.
+    /// Per-type blink rules:
+    ///   BLINK: OffTrack, Collision, Stopped, PitExit, MeatballFlag, LocalYellow, OvertakingImminent (after 5s)
+    ///   STATIC: Pitting, SlowCar, Towed, BlackFlag, Spin
     /// </summary>
     private static bool ShouldBlinkText(NearbyEvent evt) =>
-        evt.Severity >= NearbyEventSeverity.Danger ||
-        evt.IsOngoing ||
-        evt.EventType is NearbyEventType.Collision
+        evt.EventType is NearbyEventType.OffTrack
+            or NearbyEventType.Collision
             or NearbyEventType.Stopped
+            or NearbyEventType.PitExit
             or NearbyEventType.MeatballFlag
-            or NearbyEventType.LocalYellow;
+            or NearbyEventType.LocalYellow
+            or NearbyEventType.OvertakingImminent;
 }

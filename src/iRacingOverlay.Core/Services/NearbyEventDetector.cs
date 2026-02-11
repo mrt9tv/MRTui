@@ -311,6 +311,39 @@ public sealed class NearbyEventDetector
                 ClearOngoingEvent(i, NearbyEventType.SlowCar);
             }
 
+            // ── OVERTAKING IMMINENT (higher-class car closing from behind) ──
+            // Emit when a car from a faster class is within 3s behind and closing
+            if (interval < 0 && interval > -3.0f && surface == SURFACE_ON_TRACK && !onPitRoad)
+            {
+                int otherClass = (data.CarIdxClass != null && i < data.CarIdxClass.Length) ? data.CarIdxClass[i] : -1;
+                int playerClass = data.PlayerCarClass;
+                // Different class + car is behind player = potential lapping scenario
+                if (otherClass >= 0 && playerClass >= 0 && otherClass != playerClass)
+                {
+                    // Check if other car is in a higher overall position (likely faster class)
+                    int otherPos = entry.OverallPosition;
+                    int playerPos = data.PlayerCarPosition > 0 ? data.PlayerCarPosition : 999;
+                    if (otherPos < playerPos)
+                    {
+                        var existingOT = FindOngoingEvent(i, NearbyEventType.OvertakingImminent);
+                        if (existingOT != null)
+                        {
+                            ongoingStillActive.Add(existingOT.Id);
+                        }
+                        else
+                        {
+                            TryEmitOngoing(entry, NearbyEventType.OvertakingImminent,
+                                "FASTER CLASS",
+                                NearbyEventSeverity.Warning, 5.0f, ongoingStillActive);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                ClearOngoingEvent(i, NearbyEventType.OvertakingImminent);
+            }
+
             // Update previous state
             _prevTrackSurface[i] = surface;
             _prevOnPitRoad[i] = onPitRoad;

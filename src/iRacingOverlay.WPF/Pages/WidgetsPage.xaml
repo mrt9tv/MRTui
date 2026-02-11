@@ -298,7 +298,16 @@
                                 <CheckBox x:Name="ChkProxGrowUp" Content="Grow Upward" FontSize="10" IsChecked="False"
                                           Foreground="{StaticResource LightText}" Margin="0,0,10,4"
                                           Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
+                                <CheckBox x:Name="ChkProxOvertaking" Content="Overtaking Alert" FontSize="10" IsChecked="True"
+                                          Foreground="{StaticResource LightText}" Margin="0,0,10,4"
+                                          Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
                             </WrapPanel>
+
+                            <!-- Position / drag toggle -->
+                            <TextBlock Text="POSITION" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,8,0,4"/>
+                            <CheckBox x:Name="ChkProxDragMode" Content="Enable drag to reposition" FontSize="10" IsChecked="False"
+                                      Foreground="{StaticResource LightText}" Margin="0,0,0,4"
+                                      Checked="ProximityFeedDragToggle_Changed" Unchecked="ProximityFeedDragToggle_Changed"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
