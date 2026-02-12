@@ -20,4 +20,10 @@
     <FileVersion>0.7.1.0</FileVersion>
   </PropertyGroup>
 
+  <!-- Suppress .pdb files in Release publish -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
 </Project>

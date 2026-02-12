@@ -28,8 +28,9 @@ public class TurnTrackingService
         try
         {
             // Load from Data/TrackTurnDatabase.json
-            var assemblyPath = Path.GetDirectoryName(typeof(TurnTrackingService).Assembly.Location);
-            var jsonPath = Path.Combine(assemblyPath!, "Data", "TrackTurnDatabase.json");
+            // Use AppContext.BaseDirectory (works in single-file publish)
+            var assemblyPath = AppContext.BaseDirectory;
+            var jsonPath = Path.Combine(assemblyPath, "Data", "TrackTurnDatabase.json");
             
             if (!File.Exists(jsonPath))
             {

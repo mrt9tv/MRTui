@@ -17,7 +17,9 @@ dotnet publish "%~dp0src\iRacingOverlay.WPF\iRacingOverlay.WPF.csproj" ^
     -r win-x64 ^
     --no-self-contained ^
     -o "%~dp0build\release" ^
-    /p:PublishReadyToRun=true
+    /p:PublishSingleFile=true ^
+    /p:PublishReadyToRun=true ^
+    /p:IncludeNativeLibrariesForSelfExtract=true
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
