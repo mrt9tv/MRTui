@@ -65,6 +65,8 @@ public class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(240, 240, 240);   // white-on-black (special bg)
     private static readonly Color COLOR_TOWED = Color.FromRgb(180, 80, 220);         // purple
     private static readonly Color COLOR_LOCAL_YELLOW = Color.FromRgb(255, 230, 0);   // bright yellow
+    private static readonly Color COLOR_CHAOS_ORANGE = Color.FromRgb(255, 140, 0);  // CHAOS ZONE orange phase
+    private static readonly Color COLOR_CHAOS_RED = Color.FromRgb(255, 40, 20);     // CHAOS ZONE red phase
     private static readonly Color COLOR_SPIN = Color.FromRgb(220, 120, 0);           // deep orange
     private static readonly Color COLOR_OVERTAKING = Color.FromRgb(255, 140, 0);     // orange for higher-class overtake imminent
     private static readonly Color COLOR_DISQUALIFIED = Color.FromRgb(140, 0, 0);     // dark red
@@ -566,6 +568,15 @@ public class ProximityFeedWidget : WidgetBase
         if (evt.EventType == NearbyEventType.OvertakingImminent && evt.Age < 5.0)
             shouldBlink = false;
 
+        // CHAOS ZONE: blink entire row background between orange and red
+        bool isChaos = evt.EventType == NearbyEventType.LocalYellow && evt.CarIdx == -2;
+        if (isChaos)
+        {
+            var phase = blinkVisible ? COLOR_CHAOS_ORANGE : COLOR_CHAOS_RED;
+            row.Background = new SolidColorBrush(Color.FromArgb(80, phase.R, phase.G, phase.B));
+            row.BorderBrush = new SolidColorBrush(Color.FromArgb(180, phase.R, phase.G, phase.B));
+        }
+
         // Update interval text, direction arrow, and apply text blink
         foreach (UIElement child in grid.Children)
         {
@@ -687,6 +698,10 @@ public class ProximityFeedWidget : WidgetBase
         // Incident escalation overrides individual event colors
         if (evt.IsIncident)
             return evt.IsAhead ? COLOR_INCIDENT : COLOR_DANGER;
+
+        // CHAOS ZONE (pack density) — uses orange as base, blinks to red in UpdateRowContent
+        if (evt.EventType == NearbyEventType.LocalYellow && evt.CarIdx == -2)
+            return COLOR_CHAOS_ORANGE;
 
         return evt.EventType switch
         {

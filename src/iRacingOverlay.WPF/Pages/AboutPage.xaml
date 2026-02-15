@@ -19,21 +19,6 @@
                 </StackPanel>
             </Border>
             
-            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
-                <StackPanel>
-                    <TextBlock Text="CREDITS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
-                    <TextBlock FontSize="11" Foreground="{StaticResource LightText}" Margin="0,0,0,4">
-                        <Run Text="SDK: "/><Run Text="SVappsLAB iRacing Telemetry SDK" Foreground="{StaticResource TealPrimary}"/>
-                    </TextBlock>
-                    <TextBlock FontSize="11" Foreground="{StaticResource LightText}" Margin="0,0,0,4">
-                        <Run Text="Framework: "/><Run Text=".NET 8.0 / WPF" Foreground="{StaticResource TealPrimary}"/>
-                    </TextBlock>
-                    <TextBlock FontSize="11" Foreground="{StaticResource LightText}">
-                        <Run Text="Author: "/><Hyperlink NavigateUri="http://www.mrt9.com" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="MRT#9" Foreground="{StaticResource TealPrimary}"/></Hyperlink>
-                    </TextBlock>
-                </StackPanel>
-            </Border>
-
             <!-- Update check -->
             <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
                 <StackPanel>

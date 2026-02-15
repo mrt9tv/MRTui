@@ -13,7 +13,14 @@ if exist "%~dp0build\publish" (
     rmdir /s /q "%~dp0build\publish"
 )
 
-:: Publish
+:: Clean obj/bin to prevent stale artifact OOM
+echo Cleaning intermediate build files...
+if exist "%~dp0src\iRacingOverlay.Core\bin" rmdir /s /q "%~dp0src\iRacingOverlay.Core\bin"
+if exist "%~dp0src\iRacingOverlay.Core\obj" rmdir /s /q "%~dp0src\iRacingOverlay.Core\obj"
+if exist "%~dp0src\iRacingOverlay.WPF\bin" rmdir /s /q "%~dp0src\iRacingOverlay.WPF\bin"
+if exist "%~dp0src\iRacingOverlay.WPF\obj" rmdir /s /q "%~dp0src\iRacingOverlay.WPF\obj"
+
+:: Publish (single-threaded to reduce peak memory — avoids OOM with other apps running)
 echo Building Release...
 dotnet publish "%~dp0src\iRacingOverlay.WPF\iRacingOverlay.WPF.csproj" ^
     -c Release ^
@@ -22,7 +29,8 @@ dotnet publish "%~dp0src\iRacingOverlay.WPF\iRacingOverlay.WPF.csproj" ^
     -o "%~dp0build\publish" ^
     /p:PublishSingleFile=true ^
     /p:PublishReadyToRun=true ^
-    /p:IncludeNativeLibrariesForSelfExtract=true
+    /p:IncludeNativeLibrariesForSelfExtract=true ^
+    -m:1
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

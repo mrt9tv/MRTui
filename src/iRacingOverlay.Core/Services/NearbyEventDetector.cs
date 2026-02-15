@@ -744,9 +744,9 @@ public sealed class NearbyEventDetector
 
                 float interval = entry.IntervalToPlayer;
 
-                // When off-track, check cars from BOTH directions (player may be facing wrong way)
+                // When off-track OR stopped on track, check cars from BOTH directions
                 bool isBehind = interval < 0 && interval >= -INCOMING_FAST_RANGE;
-                bool isAhead = playerOffTrack && interval > 0 && interval <= INCOMING_AHEAD_RANGE;
+                bool isAhead = (playerOffTrack || playerStopped) && interval > 0 && interval <= INCOMING_AHEAD_RANGE;
                 if (!isBehind && !isAhead) continue;
 
                 int ciSurface = data.CarIdxTrackSurface != null && ci < data.CarIdxTrackSurface.Length

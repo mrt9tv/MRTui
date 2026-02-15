@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Velopack;
 
 namespace iRacingOverlay.WPF;
@@ -14,6 +15,11 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Force invariant culture so all numeric formatting uses '.' as decimal separator,
+        // regardless of the user's Windows regional settings.
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+
         // Velopack update hooks MUST be the very first code to execute.
         // This call may restart/terminate the process without returning.
         VelopackApp.Build().Run();
