@@ -157,6 +157,17 @@ public class ProximityCalculator
             // Skip cars on pit road if data available
             if (data.CarIdxOnPitRoad?[carIdx] == true)
                 continue;
+
+            // Skip cars not on track surface (garage, disconnected, spectating).
+            // These cars retain stale LapDistPct values which cause phantom radar contacts.
+            if (data.CarIdxTrackSurface != null && carIdx < data.CarIdxTrackSurface.Length)
+            {
+                int carSurface = data.CarIdxTrackSurface[carIdx];
+                // -1 = NotInWorld, 1 = InPitStall, 2 = ApproachingPits
+                // Only keep cars that are on track (3) or off-track (0, they're still on the circuit)
+                if (carSurface < 0 || carSurface == 1 || carSurface == 2)
+                    continue;
+            }
             
             int carLap = data.CarIdxLap?[carIdx] ?? 0;
             int carClass = data.CarIdxClass?[carIdx] ?? 0;

@@ -47,6 +47,7 @@
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
                                 HorizontalContentAlignment="Left" Padding="8,2"
+                                Visibility="Collapsed"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetProximityFeed" Content="Prox Feed"
                                 Style="{StaticResource MRT.Button.Secondary}"
@@ -306,6 +307,51 @@
                                           Checked="ProximityFeedToggle_Changed" Unchecked="ProximityFeedToggle_Changed"/>
                             </WrapPanel>
 
+                            <!-- Detection range and max rows -->
+                            <TextBlock Text="DETECTION RANGE" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,6,0,4"/>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="60"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="28"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Ahead:" FontSize="10" Foreground="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SliderProxAhead" Grid.Column="1" Minimum="2" Maximum="30" Value="12"
+                                        VerticalAlignment="Center" Margin="4,0,4,0"
+                                        IsSnapToTickEnabled="True" TickFrequency="1"
+                                        ValueChanged="ProximityFeedSlider_Changed"/>
+                                <TextBlock x:Name="TxtProxAhead" Grid.Column="2" Text="12s" FontSize="10"
+                                           Foreground="{StaticResource LightText}" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="60"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="28"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Behind:" FontSize="10" Foreground="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SliderProxBehind" Grid.Column="1" Minimum="1" Maximum="15" Value="6"
+                                        VerticalAlignment="Center" Margin="4,0,4,0"
+                                        IsSnapToTickEnabled="True" TickFrequency="1"
+                                        ValueChanged="ProximityFeedSlider_Changed"/>
+                                <TextBlock x:Name="TxtProxBehind" Grid.Column="2" Text="6s" FontSize="10"
+                                           Foreground="{StaticResource LightText}" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="60"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="28"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Max Rows:" FontSize="10" Foreground="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                                <Slider x:Name="SliderProxMaxRows" Grid.Column="1" Minimum="1" Maximum="6" Value="6"
+                                        VerticalAlignment="Center" Margin="4,0,4,0"
+                                        IsSnapToTickEnabled="True" TickFrequency="1"
+                                        ValueChanged="ProximityFeedSlider_Changed"/>
+                                <TextBlock x:Name="TxtProxMaxRows" Grid.Column="2" Text="6" FontSize="10"
+                                           Foreground="{StaticResource LightText}" VerticalAlignment="Center"/>
+                            </Grid>
+
                             <!-- Session event toggles -->
                             <TextBlock Text="SESSION EVENTS" FontSize="9" Foreground="{StaticResource TealPrimary}" Margin="0,6,0,4"/>
                             <WrapPanel>
@@ -447,13 +493,57 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="OPACITY" Style="{StaticResource MRT.Text.Label}"/>
+                                <TextBlock Text="OVERALL OPACITY" Style="{StaticResource MRT.Text.Label}"/>
                                 <TextBlock x:Name="TxtMRTOneOpacity" Grid.Column="1" Text="100%" FontSize="11"
                                            Foreground="{StaticResource TealPrimary}"/>
                             </Grid>
                             <Slider x:Name="SliderMRTOneOpacity" Style="{StaticResource MRT.Slider}"
                                     Minimum="30" Maximum="100" Value="100" TickFrequency="5" IsSnapToTickEnabled="True"
                                     ValueChanged="MRTOneOpacity_ValueChanged"/>
+                            <Grid Margin="0,8,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="BG OPACITY" Style="{StaticResource MRT.Text.Label}"/>
+                                <TextBlock x:Name="TxtMRTOneBgOpacity" Grid.Column="1" Text="100%" FontSize="11"
+                                           Foreground="{StaticResource TealPrimary}"/>
+                            </Grid>
+                            <Slider x:Name="SliderMRTOneBgOpacity" Style="{StaticResource MRT.Slider}"
+                                    Minimum="0" Maximum="100" Value="85" TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="MRTOneBgOpacity_ValueChanged"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ═══════ PROXIMITY FEED: OPACITY ═══════ -->
+                <StackPanel x:Name="ProximityFeedRightPanel" Visibility="Collapsed">
+                    <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="OVERALL OPACITY" Style="{StaticResource MRT.Text.Label}"/>
+                                <TextBlock x:Name="TxtProxFeedOpacity" Grid.Column="1" Text="100%" FontSize="11"
+                                           Foreground="{StaticResource TealPrimary}"/>
+                            </Grid>
+                            <Slider x:Name="SliderProxFeedOpacity" Style="{StaticResource MRT.Slider}"
+                                    Minimum="30" Maximum="100" Value="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="ProxFeedOpacity_ValueChanged"/>
+                            <Grid Margin="0,8,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="BG OPACITY" Style="{StaticResource MRT.Text.Label}"/>
+                                <TextBlock x:Name="TxtProxFeedBgOpacity" Grid.Column="1" Text="100%" FontSize="11"
+                                           Foreground="{StaticResource TealPrimary}"/>
+                            </Grid>
+                            <Slider x:Name="SliderProxFeedBgOpacity" Style="{StaticResource MRT.Slider}"
+                                    Minimum="0" Maximum="100" Value="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="ProxFeedBgOpacity_ValueChanged"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>

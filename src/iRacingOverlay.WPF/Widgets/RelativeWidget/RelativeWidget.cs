@@ -341,6 +341,8 @@ public class RelativeWidget : WidgetBase
         if (TryGetBool("showSafetyRating", out var oldSr) && oldSr) ShowDriverInfo = true;
     }
 
+    protected override void SaveWidgetSettings() => SaveSettings();
+
     public void SaveSettings()
     {
         Config.Settings ??= new Dictionary<string, object>();

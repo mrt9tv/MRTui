@@ -128,6 +128,7 @@ public partial class WidgetsPage : UserControl
         RelativePanel.Visibility = _selectedWidgetType == WidgetType.Relative ? Visibility.Visible : Visibility.Collapsed;
         RelativeRightPanel.Visibility = _selectedWidgetType == WidgetType.Relative ? Visibility.Visible : Visibility.Collapsed;
         ProximityFeedPanel.Visibility = _selectedWidgetType == WidgetType.ProximityFeed ? Visibility.Visible : Visibility.Collapsed;
+        ProximityFeedRightPanel.Visibility = _selectedWidgetType == WidgetType.ProximityFeed ? Visibility.Visible : Visibility.Collapsed;
         StandingsPanel.Visibility = _selectedWidgetType == WidgetType.Standings ? Visibility.Visible : Visibility.Collapsed;
 
         if (_selectedWidgetType == WidgetType.MRTOne) SyncPanelToMRTOne();
@@ -170,6 +171,8 @@ public partial class WidgetsPage : UserControl
             ChkAutoSwap.IsChecked = s.EnableAutoSwap;
             SliderMRTOneOpacity.Value = widget.Opacity * 100;
             TxtMRTOneOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
+            SliderMRTOneBgOpacity.Value = widget.BackgroundOpacity * 100;
+            TxtMRTOneBgOpacity.Text = $"{(int)(widget.BackgroundOpacity * 100)}%";
 
             ChkFuelYellow.IsChecked = _fuelAlertSettings.EnableYellowAlert;
             ChkFuelRed.IsChecked = _fuelAlertSettings.EnableRedAlert;
@@ -249,6 +252,15 @@ public partial class WidgetsPage : UserControl
         TxtMRTOneOpacity.Text = $"{pct}%";
         var widget = GetActiveMRTOneWidget();
         if (widget != null) widget.Opacity = pct / 100.0;
+    }
+
+    private void MRTOneBgOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents || TxtMRTOneBgOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtMRTOneBgOpacity.Text = $"{pct}%";
+        var widget = GetActiveMRTOneWidget();
+        if (widget != null) widget.BackgroundOpacity = pct / 100.0;
     }
 
     // ── Fuel alert handlers ─────────────────────────────────────────
@@ -593,6 +605,20 @@ public partial class WidgetsPage : UserControl
             ChkProxCheckered.IsChecked = widget.ShowCheckeredFlag;
             ChkProxPaceFlags.IsChecked = widget.ShowPaceFlags;
             ChkProxDragMode.IsChecked = false; // always start unlocked
+
+            // Detection range + max rows sliders
+            SliderProxAhead.Value = widget.DetectionAheadSeconds;
+            TxtProxAhead.Text = $"{(int)widget.DetectionAheadSeconds}s";
+            SliderProxBehind.Value = widget.DetectionBehindSeconds;
+            TxtProxBehind.Text = $"{(int)widget.DetectionBehindSeconds}s";
+            SliderProxMaxRows.Value = widget.MaxVisibleEvents;
+            TxtProxMaxRows.Text = $"{widget.MaxVisibleEvents}";
+
+            // Opacity sliders (right panel)
+            SliderProxFeedOpacity.Value = widget.Opacity * 100;
+            TxtProxFeedOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
+            SliderProxFeedBgOpacity.Value = widget.BackgroundOpacity * 100;
+            TxtProxFeedBgOpacity.Text = $"{(int)(widget.BackgroundOpacity * 100)}%";
         }
         finally { _suppressControlEvents = false; }
     }
@@ -626,6 +652,39 @@ public partial class WidgetsPage : UserControl
         widget.UpdateDragHandleVisibility(enableDrag);
     }
 
+    private void ProximityFeedSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActiveProximityFeedWidget();
+        if (widget == null) return;
+
+        widget.DetectionAheadSeconds = (float)SliderProxAhead.Value;
+        widget.DetectionBehindSeconds = (float)SliderProxBehind.Value;
+        widget.MaxVisibleEvents = (int)SliderProxMaxRows.Value;
+
+        TxtProxAhead.Text = $"{(int)SliderProxAhead.Value}s";
+        TxtProxBehind.Text = $"{(int)SliderProxBehind.Value}s";
+        TxtProxMaxRows.Text = $"{(int)SliderProxMaxRows.Value}";
+
+        widget.SaveSettings();
+    }
+    private void ProxFeedOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents || TxtProxFeedOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtProxFeedOpacity.Text = $"{pct}%";
+        var widget = GetActiveProximityFeedWidget();
+        if (widget != null) widget.Opacity = pct / 100.0;
+    }
+
+    private void ProxFeedBgOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents || TxtProxFeedBgOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtProxFeedBgOpacity.Text = $"{pct}%";
+        var widget = GetActiveProximityFeedWidget();
+        if (widget != null) widget.BackgroundOpacity = pct / 100.0;
+    }
     // ── Field combos ────────────────────────────────────────────────
 
     private void PopulateFieldCombos()

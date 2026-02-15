@@ -247,6 +247,16 @@ public static class MRTOneDataFormatter
             TelemetryField.SteeringAngle when value is float rad =>
                 $"{(rad * 57.2958f):F1}°",
             
+            // Wind
+            TelemetryField.WindSpeed when value is float vel =>
+                useMetricUnits ? $"{vel:F1}" : $"{(vel * 2.23694f):F1}", // m/s or mph
+            TelemetryField.WindDirection when value is float dir =>
+                FormatWindArrow(dir),
+            
+            // Push-to-Pass / Boost
+            TelemetryField.PushToPassCount when value is int count => count > 0 ? $"{count}" : "N/A",
+            TelemetryField.PushToPassActive when value is bool active => active ? "ON" : "OFF",
+            
             // Speed variants
             TelemetryField.SpeedKmh when value is float speedMs =>
                 $"{(int)UnitConversions.MpsToKmh(speedMs)}",
@@ -417,6 +427,11 @@ public static class MRTOneDataFormatter
             TelemetryField.ABSActive => "",  // No label (value is "ABS")
             TelemetryField.TractionControl => "TC",
             TelemetryField.WheelLock => "",  // No label (value is "WHEEL LOCKUP")
+            
+            TelemetryField.WindSpeed => useMetricUnits ? "WIND m/s" : "WIND mph",
+            TelemetryField.WindDirection => "WIND",
+            TelemetryField.PushToPassCount => "P2P",
+            TelemetryField.PushToPassActive => "BOOST",
 
             _ => field.ToString().ToUpper()
         };
@@ -460,6 +475,18 @@ public static class MRTOneDataFormatter
         {
             if (tcValue < 0) return primaryColor;      // Theme color when N/A
             return tcValue == 0 ? secondaryColor : primaryColor; // Secondary when OFF, primary when active
+        }
+
+        // Handle Push-to-Pass active (ON = green, OFF = theme primary)
+        if (field == TelemetryField.PushToPassActive && value is bool p2pActive)
+        {
+            return p2pActive ? Colors.Lime : primaryColor;
+        }
+
+        // Handle Push-to-Pass count (0 = red/depleted, >0 = theme primary)
+        if (field == TelemetryField.PushToPassCount && value is int p2pCount)
+        {
+            return p2pCount <= 0 ? Colors.Red : primaryColor;
         }
 
         // Handle fuel fields with FuelAlertSettings (doable laps threshold system)
@@ -514,6 +541,35 @@ public static class MRTOneDataFormatter
         TelemetryField.FuelProjectedDelta => true,
         _ => false
     };
+
+    #endregion
+
+    #region Wind Direction
+
+    /// <summary>
+    /// Format wind direction (radians) as a compass arrow character.
+    /// iRacing wind direction is in radians, 0 = North, clockwise.
+    /// </summary>
+    private static string FormatWindArrow(float dirRadians)
+    {
+        // Convert radians to degrees (0-360)
+        double degrees = (dirRadians * 57.2958) % 360;
+        if (degrees < 0) degrees += 360;
+
+        // 8-point compass arrow (wind is COMING FROM this direction)
+        return degrees switch
+        {
+            >= 337.5 or < 22.5 => "↓ N",   // Wind from North (blows south)
+            >= 22.5 and < 67.5 => "↙ NE",
+            >= 67.5 and < 112.5 => "← E",
+            >= 112.5 and < 157.5 => "↖ SE",
+            >= 157.5 and < 202.5 => "↑ S",
+            >= 202.5 and < 247.5 => "↗ SW",
+            >= 247.5 and < 292.5 => "→ W",
+            >= 292.5 and < 337.5 => "↘ NW",
+            _ => "?"
+        };
+    }
 
     #endregion
 }

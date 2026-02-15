@@ -71,6 +71,13 @@ public class NearbyEvent
     public bool IsExpired => IsOngoing ? false
         : ClearedAt.HasValue ? AgeSinceCleared > DisplayDuration
         : Age > DisplayDuration;
+
+    /// <summary>
+    /// Whether this event has been escalated to INCIDENT status due to
+    /// repeated dangerous events from the same car in a short time window.
+    /// When true, the UI renders with enhanced visuals (blink, color escalation).
+    /// </summary>
+    public bool IsIncident { get; set; }
 }
 
 /// <summary>
@@ -132,6 +139,9 @@ public enum NearbyEventType
     /// <summary>Checkered flag has been shown — race is ending.</summary>
     CheckeredFlag,
 
+    /// <summary>White flag — final lap.</summary>
+    WhiteFlag,
+
     /// <summary>Red flag — session stopped.</summary>
     RedFlag,
 
@@ -143,6 +153,9 @@ public enum NearbyEventType
 
     /// <summary>Per-car pace flag: driver told to wave around the pace car.</summary>
     PaceWaveAround,
+
+    /// <summary>Player is stopped/slow and a fast car is closing from behind.</summary>
+    IncomingFast,
 }
 
 /// <summary>

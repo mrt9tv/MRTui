@@ -118,6 +118,14 @@ public enum TelemetryField
     // Steering
     SteeringAngle,
     
+    // Wind
+    WindSpeed,           // Wind speed (m/s or km/h based on unit setting)
+    WindDirection,       // Wind direction as compass arrow (↑ N, → E, etc.)
+    
+    // Push-to-Pass / Boost
+    PushToPassCount,     // Remaining P2P activations (0 if N/A)
+    PushToPassActive,    // Whether P2P is currently active (bool → ON/OFF)
+    
     // None (default)
     None
 }

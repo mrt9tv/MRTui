@@ -99,6 +99,8 @@ public class TurnDisplayWidget : WidgetBase
         }
     }
 
+    protected override void SaveWidgetSettings() => SaveSettings();
+
     public void SaveSettings()
     {
         if (Config == null) return;

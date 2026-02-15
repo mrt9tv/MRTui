@@ -652,7 +652,19 @@ WidgetBase class, WidgetManager with factories, layout save/load (JSON), per-wid
 
 ---
 
-## 📝 Legend
+## � Deferred Ideas (Session 6)
+
+> Items requested during session 6 and noted for future implementation.
+
+- [ ] **Startup widget animation** — fade-in / slide-in animation when widgets first appear on screen
+- [ ] **Per-car/track layout profiles** — auto-switch overlay layout based on car + track combination (extends Phase 3 Auto-switch)
+- [ ] **Relative/Standings class color fade** — row backgrounds use a subtle class-color gradient instead of uniform dark background
+- [ ] **Session presets per-widget collapsible** — move preset toggles from a separate card into per-widget expandable sections in the active widgets list
+- [ ] **ERS / Hybrid battery telemetry** — add EnergyERSBatteryPct (if available in SDK) as a TelemetryField for hybrid cars
+
+---
+
+## �📝 Legend
 
 | Symbol | Meaning |
 |--------|---------|

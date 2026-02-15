@@ -1,7 +1,7 @@
 <Window x:Class="iRacingOverlay.WPF.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MRT UI | iRacing Overlay" 
+        Title="MRT UI" 
         Height="720" Width="740"
         MinHeight="600" MinWidth="640"
         WindowStartupLocation="CenterScreen"
@@ -28,11 +28,11 @@
                     <TextBlock x:Name="TitleVersionText"
                                Text="v1.0.0" FontSize="11" 
                                Foreground="{StaticResource MutedText}"
-                               VerticalAlignment="Bottom" Margin="0,0,8,2"/>
-                    <TextBlock Text="| iRacing Overlay" 
-                               FontSize="13" 
-                               Foreground="{StaticResource LightText}"
-                               VerticalAlignment="Center"/>
+                               VerticalAlignment="Bottom" Margin="0,0,6,2"/>
+                    <TextBlock x:Name="TitleUpdateStatus"
+                               Text="" FontSize="10" 
+                               Foreground="{StaticResource MutedText}"
+                               VerticalAlignment="Bottom" Margin="0,0,0,2"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -92,6 +92,9 @@
                     <TextBlock x:Name="ConnectionStatusText" 
                                Text="Disconnected" FontSize="10"
                                Foreground="#888888" Margin="0,0,12,0"/>
+                    <TextBlock x:Name="SessionTypeText" Text=""
+                               FontSize="9" FontWeight="SemiBold"
+                               Foreground="{StaticResource TealPrimary}" Margin="0,0,12,0"/>
                     <TextBlock Text="Rate: " FontSize="9"
                                Foreground="{StaticResource MutedText}" Margin="0,0,2,0"/>
                     <TextBlock x:Name="UpdateRateText" Text="0 Hz" FontSize="9"

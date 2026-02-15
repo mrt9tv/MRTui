@@ -36,8 +36,8 @@ public class ProximityFeedWidget : WidgetBase
     private const int MAX_VISIBLE_ROWS = 6;
 
     // Animation durations
-    private const double FADE_IN_MS = 250;
-    private const double FADE_OUT_MS = 400;
+    private const double FADE_IN_MS = 150;
+    private const double FADE_OUT_MS = 300;
 
     #endregion
 
@@ -62,7 +62,7 @@ public class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_IN_BOX = Color.FromRgb(0, 140, 160);         // dark teal (not displayed)
     private static readonly Color COLOR_PIT_EXIT = Color.FromRgb(255, 200, 50);      // blinking yellow (like RelativeWidget)
     private static readonly Color COLOR_MEATBALL = Color.FromRgb(255, 100, 0);       // orange-red
-    private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(180, 0, 180);     // magenta
+    private static readonly Color COLOR_BLACK_FLAG = Color.FromRgb(240, 240, 240);   // white-on-black (special bg)
     private static readonly Color COLOR_TOWED = Color.FromRgb(180, 80, 220);         // purple
     private static readonly Color COLOR_LOCAL_YELLOW = Color.FromRgb(255, 230, 0);   // bright yellow
     private static readonly Color COLOR_SPIN = Color.FromRgb(220, 120, 0);           // deep orange
@@ -73,7 +73,10 @@ public class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_START_SEQ = Color.FromRgb(0, 200, 80);       // green (GO!)
     private static readonly Color COLOR_CHECKERED = Color.FromRgb(255, 255, 255);    // white
     private static readonly Color COLOR_RED_FLAG = Color.FromRgb(255, 0, 0);         // red
+    private static readonly Color COLOR_WHITE_FLAG = Color.FromRgb(255, 255, 255);    // white (final lap)
     private static readonly Color COLOR_PACE_FLAG = Color.FromRgb(200, 200, 80);     // warm yellow-green
+    private static readonly Color COLOR_INCOMING_FAST = Color.FromRgb(255, 160, 0);   // orange — approaching warning
+    private static readonly Color COLOR_INCIDENT = Color.FromRgb(255, 40, 0);        // red-orange — escalated incident
 
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
@@ -130,13 +133,30 @@ public class ProximityFeedWidget : WidgetBase
     /// <summary>Detection range behind the player in seconds (1-15, default 6).</summary>
     public float DetectionBehindSeconds { get; set; } = 6.0f;
 
-    /// <summary>Whether the player has crossed S/F at least once (suppresses feed before then).</summary>
-    private bool _playerHasCrossedSF;
-    private int _prevLapsCompleted = -1;
+    /// <summary>Whether stopped/slow suppression is active (formation lap or race start grace).</summary>
+    /// <remarks>
+    /// Replaces the old _playerHasCrossedSF approach which suppressed until a full lap
+    /// was completed — too aggressive on long tracks. Now uses session state + detector
+    /// grace period for a tighter, more accurate suppression window.
+    /// </remarks>
+    private bool _isFormationPhase;
+
+    // iRacing SessionState constants (mirrored from NearbyEventDetector for UI logic)
+    private const int SESSION_STATE_PARADE_LAPS = 3;
+    private const int SESSION_STATE_RACING = 4;
 
     #endregion
 
     public override WidgetType WidgetType => WidgetType.ProximityFeed;
+
+    /// <summary>Current background alpha (0–255) based on BackgroundOpacity.</summary>
+    private byte _bgAlpha = 220;
+
+    /// <inheritdoc/>
+    protected override void OnBackgroundOpacityChanged(double opacity)
+    {
+        _bgAlpha = (byte)(220 * opacity);
+    }
 
     public ProximityFeedWidget(
         ITelemetryService telemetryService,
@@ -205,6 +225,8 @@ public class ProximityFeedWidget : WidgetBase
         _detector.DetectionAheadSeconds = DetectionAheadSeconds;
         _detector.DetectionBehindSeconds = DetectionBehindSeconds;
     }
+
+    protected override void SaveWidgetSettings() => SaveSettings();
 
     public void SaveSettings()
     {
@@ -306,18 +328,15 @@ public class ProximityFeedWidget : WidgetBase
     /// </summary>
     protected override void UpdateUI(TelemetryData data)
     {
-        // Track S/F crossing: used to suppress formation-lap noise (stopped/slow)
-        // while still allowing meaningful events (off-track, collision, session events)
         // Sync adjustable detection range to detector
         _detector.DetectionAheadSeconds = DetectionAheadSeconds;
         _detector.DetectionBehindSeconds = DetectionBehindSeconds;
 
-        if (!_playerHasCrossedSF)
-        {
-            if (data.LapsCompleted >= 1 && _prevLapsCompleted >= 0 && data.LapsCompleted > _prevLapsCompleted)
-                _playerHasCrossedSF = true;
-            _prevLapsCompleted = data.LapsCompleted;
-        }
+        // Track formation phase: suppress Stopped/SlowCar during parade laps
+        // and during the race start grace period (detector handles the timer).
+        // Once the session is RACING and grace has expired, all events are shown.
+        _isFormationPhase = data.SessionState == SESSION_STATE_PARADE_LAPS
+            || (data.SessionState == SESSION_STATE_RACING && _detector.IsRaceStartGraceActive);
 
         // Get relative entries from the calculator (already computed this frame)
         IReadOnlyList<RelativeEntry>? relatives = null;
@@ -339,8 +358,8 @@ public class ProximityFeedWidget : WidgetBase
         _blinkFrame++;
         var events = _detector.ActiveEvents;
 
-        // Filter: never show InBox in proximity feed; respect per-type toggles
-        var filtered = events.Where(e => e.EventType != NearbyEventType.InBox);
+        // Apply per-type toggle filters
+        var filtered = events.AsEnumerable();
         if (!ShowOvertakingAlert)
             filtered = filtered.Where(e => e.EventType != NearbyEventType.OvertakingImminent);
         if (!ShowStartSequence)
@@ -353,13 +372,27 @@ public class ProximityFeedWidget : WidgetBase
                 && e.EventType != NearbyEventType.PaceFreePass
                 && e.EventType != NearbyEventType.PaceWaveAround);
 
-        // Before first S/F crossing: suppress stopped/slow noise (all cars are slow during formation)
-        if (!_playerHasCrossedSF)
+        // During formation/parade laps and race start grace: suppress stopped/slow noise
+        // (all cars are slow during formation). Other events like collisions still show.
+        if (_isFormationPhase)
             filtered = filtered.Where(e => e.EventType != NearbyEventType.Stopped
                 && e.EventType != NearbyEventType.SlowCar);
 
+        // ── PER-CAR DEDUP: show at most ONE event per driver ────
+        // Group by CarIdx (session-level events use CarIdx=-1, keep all of those).
+        // For each driver, keep only the highest-severity / newest event.
+        var deduped = filtered
+            .GroupBy(e => e.CarIdx)
+            .SelectMany(g =>
+            {
+                if (g.Key < 0) return g; // session-level events — keep all
+                return g.OrderByDescending(e => e.Severity)
+                         .ThenByDescending(e => e.CreatedAt)
+                         .Take(1);
+            });
+
         // Sort: severity desc, then newest first
-        var sorted = filtered
+        var sorted = deduped
             .OrderByDescending(e => e.Severity)
             .ThenByDescending(e => e.CreatedAt)
             .Take(MaxVisibleEvents)
@@ -369,7 +402,7 @@ public class ProximityFeedWidget : WidgetBase
 
         // Show/hide background based on whether there are events
         _backgroundBorder.Background = sorted.Count > 0
-            ? new SolidColorBrush(COLOR_BG)
+            ? new SolidColorBrush(Color.FromArgb(_bgAlpha, 18, 18, 18))
             : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
 
         // Track which event IDs are still active
@@ -426,13 +459,20 @@ public class ProximityFeedWidget : WidgetBase
         var eventColor = GetEventTypeColor(evt);
         var eventBrush = new SolidColorBrush(eventColor);
 
+        // Black flag: special black background with white text
+        bool isBlackFlag = evt.EventType == NearbyEventType.BlackFlag;
+
         var row = new Border
         {
             Height = ROW_HEIGHT,
             Margin = new Thickness(0, 0, 0, ROW_GAP),
             CornerRadius = new CornerRadius(3),
-            Background = new SolidColorBrush(Color.FromArgb(40, eventColor.R, eventColor.G, eventColor.B)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(80, eventColor.R, eventColor.G, eventColor.B)),
+            Background = isBlackFlag
+                ? new SolidColorBrush(Color.FromArgb(220, 10, 10, 10))
+                : new SolidColorBrush(Color.FromArgb(40, eventColor.R, eventColor.G, eventColor.B)),
+            BorderBrush = isBlackFlag
+                ? new SolidColorBrush(Color.FromArgb(160, 80, 80, 80))
+                : new SolidColorBrush(Color.FromArgb(80, eventColor.R, eventColor.G, eventColor.B)),
             BorderThickness = new Thickness(STRIPE_WIDTH, 0, 0, 0),
             Opacity = 0, // start invisible for fade-in
         };
@@ -642,8 +682,14 @@ public class ProximityFeedWidget : WidgetBase
     /// Get event-specific color for richer visual differentiation.
     /// Falls back to severity color for unknown types.
     /// </summary>
-    private static Color GetEventTypeColor(NearbyEvent evt) => evt.EventType switch
+    private static Color GetEventTypeColor(NearbyEvent evt)
     {
+        // Incident escalation overrides individual event colors
+        if (evt.IsIncident)
+            return evt.IsAhead ? COLOR_INCIDENT : COLOR_DANGER;
+
+        return evt.EventType switch
+        {
         NearbyEventType.OffTrack => COLOR_OFF_TRACK,
         NearbyEventType.Collision => COLOR_COLLISION,
         NearbyEventType.SlowCar => COLOR_SLOW_CAR,
@@ -662,12 +708,15 @@ public class ProximityFeedWidget : WidgetBase
         NearbyEventType.SafetyCar => COLOR_SAFETY_CAR,
         NearbyEventType.StartSequence => COLOR_START_SEQ,
         NearbyEventType.CheckeredFlag => COLOR_CHECKERED,
+        NearbyEventType.WhiteFlag => COLOR_WHITE_FLAG,
         NearbyEventType.RedFlag => COLOR_RED_FLAG,
         NearbyEventType.PaceEndOfLine => COLOR_PACE_FLAG,
         NearbyEventType.PaceFreePass => COLOR_PACE_FLAG,
         NearbyEventType.PaceWaveAround => COLOR_PACE_FLAG,
+        NearbyEventType.IncomingFast => COLOR_INCOMING_FAST,
         _ => GetSeverityColor(evt.Severity),
     };
+    }
 
     /// <summary>
     /// Per-type blink rules:
@@ -676,7 +725,8 @@ public class ProximityFeedWidget : WidgetBase
     ///   STATIC: Pitting, SlowCar, Towed, BlackFlag, Spin, Disqualified, PaceEndOfLine, PaceFreePass, PaceWaveAround
     /// </summary>
     private static bool ShouldBlinkText(NearbyEvent evt) =>
-        evt.EventType is NearbyEventType.OffTrack
+        evt.IsIncident  // Incidents always blink
+        || evt.EventType is NearbyEventType.OffTrack
             or NearbyEventType.Collision
             or NearbyEventType.Stopped
             or NearbyEventType.PitExit
@@ -685,7 +735,9 @@ public class ProximityFeedWidget : WidgetBase
             or NearbyEventType.OvertakingImminent
             or NearbyEventType.RedFlag
             or NearbyEventType.CheckeredFlag
+            or NearbyEventType.WhiteFlag
             or NearbyEventType.StartSequence
             or NearbyEventType.BlueFlagged
-            or NearbyEventType.SafetyCar;
+            or NearbyEventType.SafetyCar
+            or NearbyEventType.IncomingFast;
 }

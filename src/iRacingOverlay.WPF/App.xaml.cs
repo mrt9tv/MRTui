@@ -11,6 +11,7 @@ namespace iRacingOverlay.WPF;
 
 /// <summary>
 /// Application entry point — sets up DI and launches the main window.
+/// Velopack hooks run in Program.cs Main() before this.
 /// </summary>
 public partial class App : System.Windows.Application
 {
@@ -32,6 +33,7 @@ public partial class App : System.Windows.Application
                 services.AddSingleton<WidgetManager>();
                 services.AddSingleton<SessionConfigService>();
                 services.AddSingleton<ProfileStorageService>();
+                services.AddSingleton<UpdateService>();
                 services.AddLogging(builder =>
                 {
                     builder.AddConsole();

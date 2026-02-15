@@ -25,11 +25,23 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _updateRateTimer;
     private GlobalHotkey? _toggleLockHotkey;
     private GlobalHotkey? _toggleVisibilityHotkey;
+    private readonly TrayIconService _trayIcon = new();
+    private readonly UpdateService _updateService;
+
+    /// <summary>When true, Close() will actually exit instead of minimizing to tray.</summary>
+    private bool _forceClose;
+
+    /// <summary>Tracks whether the player is currently in pit lane for auto-hide.</summary>
+    private bool _playerInPits;
+    /// <summary>Widget IDs that were hidden by auto-hide-in-pits (to restore only those).</summary>
+    private readonly HashSet<Guid> _autoHiddenWidgets = new();
 
     // ── Pages ────────────────────────────────────────────────────────────
     private DashboardPage? _dashboardPage;
     private WidgetsPage? _widgetsPage;
+#if DEBUG
     private SessionsPage? _sessionsPage;
+#endif
     private SettingsPage? _settingsPage;
     private AboutPage? _aboutPage;
     private string _currentNav = "Dashboard";
@@ -46,6 +58,7 @@ public partial class MainWindow : Window
         _sessionConfig = services.GetRequiredService<SessionConfigService>();
         _profileService = services.GetRequiredService<ProfileStorageService>();
         _logger = services.GetRequiredService<ILogger<MainWindow>>();
+        _updateService = services.GetRequiredService<UpdateService>();
 
         // Wire profile service into session config for auto-switching
         _sessionConfig.ProfileService = _profileService;
@@ -69,26 +82,34 @@ public partial class MainWindow : Window
         ApplyWindowSettings();
         if (!_widgetManager.LoadSavedLayout())
         {
-            // First run — create default widgets (MRT One, Relative, ProxFeed)
+            // First run — create only MRT One by default
             _widgetManager.CreateWidget(Models.WidgetType.MRTOne);
-            _widgetManager.CreateWidget(Models.WidgetType.Relative);
-            _widgetManager.CreateWidget(Models.WidgetType.ProximityFeed);
         }
 
         // Create pages (lazy-init on first nav, but pre-build dashboard)
         _dashboardPage = new DashboardPage(_widgetManager, _telemetryService, _sessionConfig);
         _widgetsPage = new WidgetsPage(_widgetManager, _telemetryService);
+#if DEBUG
         _sessionsPage = new SessionsPage(_sessionConfig);
         _sessionsPage.SetProfileService(_profileService, _widgetManager);
+#endif
         _settingsPage = new SettingsPage();
         _aboutPage = new AboutPage();
+        _aboutPage.SetUpdateService(_updateService);
 
         // Wire settings change events
-        _settingsPage.SettingsChanged += () => Topmost = AppSettings.Instance.AlwaysOnTop;
+        _settingsPage.SettingsChanged += OnSettingsChanged;
+        _settingsPage.ResetLayoutRequested += OnResetLayout;
+
+        // Initialize tray icon
+        _trayIcon.Initialize();
+        _trayIcon.RestoreRequested += (_, _) => Dispatcher.Invoke(RestoreFromTray);
+        _trayIcon.ExitRequested += (_, _) => Dispatcher.Invoke(() => { _forceClose = true; Close(); });
 
         // Show last-used page (persisted between sessions)
         UpdateConnectionStatus(_telemetryService.Status);
         TitleVersionText.Text = VersionInfo.DisplayVersion;
+        CheckForUpdateStatusAsync();
         UpdateHotkeysDisplay();
 
         NavigateTo(AppSettings.Instance.LastNavPage);
@@ -99,11 +120,47 @@ public partial class MainWindow : Window
         // Build nav button lookup
         _navButtons["Dashboard"] = NavDashboard;
         _navButtons["Widgets"] = NavWidgets;
+#if DEBUG
         _navButtons["Sessions"] = NavSessions;
+#else
+        NavSessions.Visibility = Visibility.Collapsed;
+#endif
         _navButtons["Settings"] = NavSettings;
         _navButtons["About"] = NavAbout;
 
         RegisterGlobalHotkeys();
+    }
+
+    /// <summary>
+    /// Check for updates in the background and display status next to version.
+    /// </summary>
+    private async void CheckForUpdateStatusAsync()
+    {
+        try
+        {
+            bool hasUpdate = await _updateService.CheckForUpdatesAsync().ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (hasUpdate)
+                {
+                    TitleUpdateStatus.Text = "(update available)";
+                    TitleUpdateStatus.Foreground = FindResource("OrangePrimary") as System.Windows.Media.Brush
+                        ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 160, 0));
+                }
+                else if (_updateService.IsInstalled)
+                {
+                    TitleUpdateStatus.Text = "(up to date)";
+                }
+                else
+                {
+                    TitleUpdateStatus.Text = "(dev build)";
+                }
+            });
+        }
+        catch
+        {
+            // Silently ignore update check failures
+        }
     }
 
     // ── Page Navigation ─────────────────────────────────────────────────
@@ -121,7 +178,9 @@ public partial class MainWindow : Window
         {
             "Dashboard" => _dashboardPage,
             "Widgets" => _widgetsPage,
+#if DEBUG
             "Sessions" => _sessionsPage,
+#endif
             "Settings" => _settingsPage,
             "About" => _aboutPage,
             _ => _dashboardPage,
@@ -142,7 +201,56 @@ public partial class MainWindow : Window
 
     private void OnTelemetryUpdatedForSession(object? sender, TelemetryData data)
     {
-        Dispatcher.Invoke(() => _sessionConfig.CheckSessionChange(data));
+        Dispatcher.Invoke(() =>
+        {
+            _sessionConfig.CheckSessionChange(data);
+            CheckPlayerPitState(data);
+        });
+    }
+
+    /// <summary>
+    /// Check if the player has entered or exited pit lane and auto-hide/show widgets.
+    /// </summary>
+    private void CheckPlayerPitState(TelemetryData data)
+    {
+        var settings = AppSettings.Instance;
+        if (!settings.AutoHideInPitsEnabled) return;
+
+        bool isInPits = data.OnPitRoad || data.PlayerCarInPitStall;
+
+        if (isInPits && !_playerInPits)
+        {
+            // Player entered pits — hide configured widgets
+            _playerInPits = true;
+            _autoHiddenWidgets.Clear();
+
+            foreach (var kvp in settings.AutoHideInPitsWidgets)
+            {
+                if (!kvp.Value) continue; // not configured to auto-hide
+                if (!Enum.TryParse<WidgetType>(kvp.Key, out var wt)) continue;
+
+                foreach (var widget in _widgetManager.GetWidgetsByType(wt))
+                {
+                    if (widget.IsVisible)
+                    {
+                        _autoHiddenWidgets.Add(widget.WidgetId);
+                        widget.SetUserVisibility(false);
+                    }
+                }
+            }
+        }
+        else if (!isInPits && _playerInPits)
+        {
+            // Player exited pits — restore auto-hidden widgets
+            _playerInPits = false;
+
+            foreach (var widgetId in _autoHiddenWidgets)
+            {
+                if (_widgetManager.ActiveWidgets.TryGetValue(widgetId, out var widget))
+                    widget.SetUserVisibility(true);
+            }
+            _autoHiddenWidgets.Clear();
+        }
     }
 
     private void OnSessionCategoryChanged(object? sender, SessionCategory category)
@@ -202,6 +310,17 @@ public partial class MainWindow : Window
     {
         var rate = _telemetryService.UpdateRate;
         UpdateRateText.Text = rate > 0 ? $"{rate:F0} Hz" : "0 Hz";
+
+        // Update session type badge from current telemetry
+        var category = _sessionConfig.CurrentCategory;
+        SessionTypeText.Text = category switch
+        {
+            SessionCategory.Practice => "Practice",
+            SessionCategory.Qualifying => "Qualifying",
+            SessionCategory.Race => "Race",
+            SessionCategory.Warmup => "Warmup",
+            _ => ""
+        };
     }
 
     // ── Global hotkeys ──────────────────────────────────────────────────
@@ -257,9 +376,12 @@ public partial class MainWindow : Window
         _toggleVisibilityHotkey?.Dispose();
         _widgetManager.SaveCurrentLayout();
         _widgetManager.RemoveAllWidgets();
+        _trayIcon.Dispose();
         (_dashboardPage as IDisposable)?.Dispose();
         (_widgetsPage as IDisposable)?.Dispose();
+#if DEBUG
         (_sessionsPage as IDisposable)?.Dispose();
+#endif
         System.Windows.Application.Current.Shutdown();
         base.OnClosed(e);
     }
@@ -283,13 +405,26 @@ public partial class MainWindow : Window
 
     private static bool IsPositionOnScreen(double left, double top)
     {
-        return left >= SystemParameters.VirtualScreenLeft &&
-               left < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth &&
-               top >= SystemParameters.VirtualScreenTop &&
-               top < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight;
+        // Check against full virtual screen (all monitors)
+        return left >= SystemParameters.VirtualScreenLeft - 100 &&
+               left < SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth + 100 &&
+               top >= SystemParameters.VirtualScreenTop - 100 &&
+               top < SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight + 100;
     }
 
-    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e) => SaveWindowState();
+    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        var s = AppSettings.Instance;
+        // If CloseToTray + MinimizeToTray are both on, intercept close → tray
+        // (but NOT when user explicitly clicks Exit from tray menu)
+        if (!_forceClose && s.MinimizeToTray && s.CloseToTray)
+        {
+            e.Cancel = true;
+            WindowState = WindowState.Minimized; // triggers StateChanged → tray
+            return;
+        }
+        SaveWindowState();
+    }
     private void MainWindow_LocationChanged(object? sender, EventArgs e) { if (WindowState == WindowState.Normal) SaveWindowState(); }
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e) { if (WindowState == WindowState.Normal) SaveWindowState(); }
     private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -297,6 +432,37 @@ public partial class MainWindow : Window
         var s = AppSettings.Instance;
         s.WindowMaximized = WindowState == WindowState.Maximized;
         s.Save();
+
+        // Minimize to tray when setting is enabled
+        if (WindowState == WindowState.Minimized && s.MinimizeToTray)
+        {
+            Hide();
+            ShowInTaskbar = false;
+            _trayIcon.Show();
+            _trayIcon.ShowBalloon("MRT UI", "Minimized to tray. Double-click to restore.");
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        _trayIcon.Hide();
+        Show();
+        ShowInTaskbar = true;
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void OnSettingsChanged()
+    {
+        Topmost = AppSettings.Instance.AlwaysOnTop;
+    }
+
+    private void OnResetLayout()
+    {
+        _widgetManager.RemoveAllWidgets();
+        _widgetManager.CreateWidget(Models.WidgetType.MRTOne);
+        _widgetManager.SaveCurrentLayout();
+        _widgetsPage?.SyncPanelToActiveWidget();
     }
 
     private void SaveWindowState()

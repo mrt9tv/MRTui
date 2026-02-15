@@ -205,6 +205,8 @@ public class FuelWidget : WidgetBase
         }
     }
 
+    protected override void SaveWidgetSettings() => SaveSettings();
+
     public void SaveSettings()
     {
         Config.Settings ??= new Dictionary<string, object>();
@@ -469,8 +471,10 @@ public class FuelWidget : WidgetBase
             _ => BRUSH_TEXT
         };
 
-        // L/Lap — prefer measured data, fall back to blended estimate from calculator
-        float lPerLap = fuel.AvgFuelPerLap;
+        // L/Lap — show the LAST completed lap's actual fuel usage.
+        // This is distinct from AVG L5 which shows a rolling 5-lap average.
+        // Falls back to blended estimate when no completed laps yet.
+        float lPerLap = fuel.AvgFuelPerLap_Last;
         bool usingEstimate = false;
         if (lPerLap <= 0)
         {
@@ -478,7 +482,7 @@ public class FuelWidget : WidgetBase
             if (fuel.EffectiveAvgFuelPerLap > 0)
             {
                 lPerLap = fuel.EffectiveAvgFuelPerLap;
-                usingEstimate = fuel.LapsCompleted < 3; // mark as estimate until 3 clean laps
+                usingEstimate = fuel.LapsCompleted < 1; // mark as estimate until 1 clean lap
             }
             // Last resort: raw SDK estimate
             else if (fuel.SdkFuelEstimate > 0)

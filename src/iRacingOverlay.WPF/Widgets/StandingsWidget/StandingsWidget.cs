@@ -687,6 +687,8 @@ public class StandingsWidget : WidgetBase
         row.ClassPos.Visibility = ShowClassPosition ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    protected override void SaveWidgetSettings() => SaveSettings();
+
     public void SaveSettings()
     {
         Config.Settings ??= new Dictionary<string, object>();

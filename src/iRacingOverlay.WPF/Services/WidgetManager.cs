@@ -23,6 +23,14 @@ public class WidgetManager
 
     public IReadOnlyDictionary<Guid, WidgetBase> ActiveWidgets => _activeWidgets;
 
+    /// <summary>Widget types enabled in this build. Release restricts to shipped widgets only.</summary>
+    public static readonly HashSet<WidgetType> SupportedWidgetTypes =
+#if DEBUG
+        new(Enum.GetValues<WidgetType>());
+#else
+        new() { WidgetType.MRTOne, WidgetType.ProximityFeed };
+#endif
+
     public event EventHandler<WidgetBase>? WidgetCreated;
     public event EventHandler<Guid>? WidgetRemoved;
     public event EventHandler? WidgetVisibilityChanged;
@@ -102,23 +110,44 @@ public class WidgetManager
             RemoveWidget(id, saveLayout: false);
     }
 
+    /// <summary>Set of widget IDs that were visible before the last HideAllWidgets call.
+    /// Used by ToggleAllWidgets to restore only previously-visible widgets.</summary>
+    private readonly HashSet<Guid> _visibleBeforeHide = new();
+
     public void ShowAllWidgets()
     {
+        // Only restore supported widgets that were visible before the hide
         foreach (var w in _activeWidgets.Values)
-            w.SetUserVisibility(true);
+        {
+            if (!SupportedWidgetTypes.Contains(w.WidgetType)) continue;
+            if (_visibleBeforeHide.Count == 0 || _visibleBeforeHide.Contains(w.WidgetId))
+                w.SetUserVisibility(true);
+        }
         WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void HideAllWidgets()
     {
+        // Remember which supported widgets are currently visible before hiding
+        _visibleBeforeHide.Clear();
         foreach (var w in _activeWidgets.Values)
+        {
+            if (!SupportedWidgetTypes.Contains(w.WidgetType)) continue;
+            if (w.IsVisible)
+                _visibleBeforeHide.Add(w.WidgetId);
+        }
+
+        foreach (var w in _activeWidgets.Values)
+        {
+            if (!SupportedWidgetTypes.Contains(w.WidgetType)) continue;
             w.SetUserVisibility(false);
+        }
         WidgetVisibilityChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void ToggleAllWidgets()
     {
-        if (_activeWidgets.Values.Any(w => w.IsVisible))
+        if (_activeWidgets.Values.Any(w => SupportedWidgetTypes.Contains(w.WidgetType) && w.IsVisible))
             HideAllWidgets();
         else
             ShowAllWidgets();
@@ -145,6 +174,8 @@ public class WidgetManager
     {
         foreach (var (widgetType, shouldBeVisible) in preset.WidgetVisibility)
         {
+            if (!SupportedWidgetTypes.Contains(widgetType)) continue;
+
             bool exists = HasWidgetType(widgetType);
             if (shouldBeVisible)
             {
@@ -192,6 +223,11 @@ public class WidgetManager
 
         foreach (var wc in layout.Widgets)
         {
+            if (!SupportedWidgetTypes.Contains(wc.Type))
+            {
+                _logger.LogInformation("Skipping unsupported widget type from layout: {Type}", wc.Type);
+                continue;
+            }
             try { CreateWidget(wc.Type, wc); }
             catch (Exception ex) { _logger.LogError(ex, "Failed to create widget: {Type}", wc.Type); }
         }

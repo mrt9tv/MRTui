@@ -136,7 +136,7 @@ public class SessionConfigService
                 { WidgetType.TurnDisplay, true },
                 { WidgetType.FuelCalculator, true },
                 { WidgetType.Relative, true },
-                { WidgetType.ProximityFeed, false },
+                { WidgetType.ProximityFeed, true },
                 { WidgetType.Standings, false },
             }
         };
@@ -178,7 +178,7 @@ public class SessionConfigService
                 { WidgetType.TurnDisplay, false },
                 { WidgetType.FuelCalculator, false },
                 { WidgetType.Relative, true },
-                { WidgetType.ProximityFeed, false },
+                { WidgetType.ProximityFeed, true },
                 { WidgetType.Standings, false },
             }
         };

@@ -129,6 +129,14 @@ public static class TelemetryDataMapper
             // Steering
             TelemetryField.SteeringAngle => data.SteeringWheelAngle,
             
+            // Wind
+            TelemetryField.WindSpeed => data.WindVel,
+            TelemetryField.WindDirection => data.WindDir, // radians, formatted by display layer
+            
+            // Push-to-Pass / Boost
+            TelemetryField.PushToPassCount => GetPlayerP2PCount(data),
+            TelemetryField.PushToPassActive => GetPlayerP2PActive(data),
+            
             // None
             TelemetryField.None => null,
             
@@ -522,5 +530,28 @@ public static class TelemetryDataMapper
         
         // In a turn without name
         return $"T{data.TurnNumber}";
+    }
+
+    /// <summary>
+    /// Get player's push-to-pass remaining count from per-car array.
+    /// Returns 0 if the car doesn't support P2P.
+    /// </summary>
+    private static int GetPlayerP2PCount(TelemetryData data)
+    {
+        int idx = data.PlayerCarIdx;
+        if (data.CarIdxP2P_Count != null && idx >= 0 && idx < data.CarIdxP2P_Count.Length)
+            return data.CarIdxP2P_Count[idx];
+        return 0;
+    }
+
+    /// <summary>
+    /// Get whether player's push-to-pass is currently active.
+    /// </summary>
+    private static bool GetPlayerP2PActive(TelemetryData data)
+    {
+        int idx = data.PlayerCarIdx;
+        if (data.CarIdxP2P_Status != null && idx >= 0 && idx < data.CarIdxP2P_Status.Length)
+            return data.CarIdxP2P_Status[idx];
+        return false;
     }
 }

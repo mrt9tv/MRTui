@@ -28,19 +28,19 @@ public sealed class NearbyEventDetector
     private const float STOPPED_SPEED_THRESHOLD = 1.5f;
 
     /// <summary>Minimum seconds off-track before emitting event (avoids curb touches).</summary>
-    private const float OFF_TRACK_MIN_DURATION = 1.5f;
+    private const float OFF_TRACK_MIN_DURATION = 0.5f;
 
     /// <summary>Seconds a "slow car" must persist before emitting.</summary>
-    private const float SLOW_CAR_MIN_DURATION = 3.0f;
+    private const float SLOW_CAR_MIN_DURATION = 1.5f;
 
     /// <summary>Seconds a "stopped" car must persist before emitting.</summary>
-    private const float STOPPED_MIN_DURATION = 2.0f;
+    private const float STOPPED_MIN_DURATION = 0.8f;
 
     /// <summary>Minimum display duration for any event (seconds).</summary>
-    private const float MIN_DISPLAY_DURATION = 4.0f;
+    private const float MIN_DISPLAY_DURATION = 3.0f;
 
     /// <summary>Cooldown per car per event type (seconds) to prevent spam.</summary>
-    private const float EVENT_COOLDOWN = 8.0f;
+    private const float EVENT_COOLDOWN = 3.0f;
 
     /// <summary>Maximum active events displayed simultaneously.</summary>
     private const int MAX_ACTIVE_EVENTS = 6;
@@ -61,6 +61,7 @@ public sealed class NearbyEventDetector
 
     // iRacing SessionFlags bits (global)
     private const uint SFLAG_CHECKERED = 0x01;
+    private const uint SFLAG_WHITE = 0x02;
     private const uint SFLAG_RED = 0x10;
     private const uint SFLAG_GREEN = 0x04;
     private const uint SFLAG_CAUTION = 0x4000;
@@ -77,15 +78,42 @@ public sealed class NearbyEventDetector
     private const int PACE_WAVE_AROUND = 0x04;
 
     // Spin detection thresholds
-    /// <summary>Minimum backward speed (m/s) to count as a spin (~11 km/h).
-    /// Filters out U-turns and minor LapDistPct noise.</summary>
-    private const float SPIN_BACKWARD_SPEED_MIN = 3.0f;
+    /// <summary>Minimum backward speed (m/s) to count as a spin (~18 km/h).
+    /// Raised from 3.0 to reduce false positives on tight hairpins.</summary>
+    private const float SPIN_BACKWARD_SPEED_MIN = 5.0f;
 
     /// <summary>Minimum prior forward speed (m/s) to qualify as a spin (~29 km/h).
     /// A real spin starts from speed; a U-turn starts from near-zero.</summary>
     private const float SPIN_PRIOR_FORWARD_MIN = 8.0f;
 
-    private const float SPIN_MIN_DURATION = 0.5f;
+    /// <summary>Minimum seconds of backward movement to confirm a spin.
+    /// Raised from 0.5 to 1.0 to filter hairpin-induced LapDistPct jitter.</summary>
+    private const float SPIN_MIN_DURATION = 1.0f;
+
+    /// <summary>Grace period after pit exit (seconds) — suppresses Stopped/SlowCar
+    /// while the car is accelerating out of pit lane.</summary>
+    private const float PIT_EXIT_GRACE_SECONDS = 5.0f;
+
+    /// <summary>Player speed (m/s) below which we consider the player stopped for incoming-fast warnings.</summary>
+    private const float PLAYER_STOPPED_THRESHOLD = 5.0f;
+
+    /// <summary>Minimum speed (m/s) of an approaching car to qualify as "incoming fast" (~36 km/h).</summary>
+    private const float INCOMING_FAST_SPEED_MIN = 10.0f;
+
+    /// <summary>Max interval (seconds behind player) for incoming-fast detection.</summary>
+    private const float INCOMING_FAST_RANGE = 8.0f;
+
+    /// <summary>Max interval (seconds ahead of player) for approaching-from-ahead when off-track.</summary>
+    private const float INCOMING_AHEAD_RANGE = 6.0f;
+
+    /// <summary>Maximum interval (seconds) for pit entry/exit events.
+    /// Tighter than the general detection range to avoid false alerts from
+    /// distant cars whose pit-road position gives misleading intervals.</summary>
+    private const float PIT_EVENT_MAX_INTERVAL = 5.0f;
+
+    /// <summary>Minimum consecutive seconds a car must be on pit road before
+    /// emitting a Pitting event. Filters one-frame "on pit road" glitches.</summary>
+    private const float PIT_ENTRY_DEBOUNCE = 0.3f;
 
     // ── Event priority (higher = overrides lower for same car) ──
     // When a higher-priority ongoing event is active for a car,
@@ -103,6 +131,8 @@ public sealed class NearbyEventDetector
         NearbyEventType.Disqualified => 45,
         NearbyEventType.BlueFlagged => 40,
         NearbyEventType.LocalYellow => 35,
+        NearbyEventType.WhiteFlag => 32,
+        NearbyEventType.IncomingFast => 95,
         NearbyEventType.OvertakingImminent => 30,
         NearbyEventType.PaceEndOfLine => 25,
         NearbyEventType.PaceFreePass => 25,
@@ -116,7 +146,7 @@ public sealed class NearbyEventDetector
 
     /// <summary>Grace period after race start (seconds) — suppresses Stopped/SlowCar
     /// detection while the grid is still getting up to speed.</summary>
-    private const float RACE_START_GRACE_SECONDS = 2.5f;
+    private const float RACE_START_GRACE_SECONDS = 5.0f;
 
     // ── Per-car tracking state ──────────────────────────────────────
     private readonly int[] _prevTrackSurface = new int[MAX_CARS];
@@ -131,14 +161,48 @@ public sealed class NearbyEventDetector
     /// <summary>Smoothed forward speed per car — retains memory of prior speed for spin detection.</summary>
     private readonly float[] _priorForwardSpeed = new float[MAX_CARS];
     private readonly int[] _prevPaceFlags = new int[MAX_CARS];
+    /// <summary>Remaining seconds of pit-exit grace per car (suppresses slow/stopped after pit exit).</summary>
+    private readonly float[] _pitExitGrace = new float[MAX_CARS];
+    /// <summary>Accumulated seconds car has been on pit road (for debounce).</summary>
+    private readonly float[] _pitRoadDuration = new float[MAX_CARS];
+    /// <summary>Whether a Pitting event has been emitted for this pit road visit.</summary>
+    private readonly bool[] _pittingEmitted = new bool[MAX_CARS];
+
+    // ── Incident escalation tracking ────────────────────────────────
+    /// <summary>Timestamps of recent dangerous events per car for incident detection.</summary>
+    private readonly List<DateTime>[] _recentDangerEvents = new List<DateTime>[MAX_CARS];
+    /// <summary>Time window for counting events toward incident escalation.</summary>
+    private const float INCIDENT_WINDOW_SECONDS = 15.0f;
+    /// <summary>Number of dangerous events in window to trigger incident escalation.</summary>
+    private const int INCIDENT_THRESHOLD = 2;
+    /// <summary>Dangerous event types that count toward incident escalation.</summary>
+    private static readonly HashSet<NearbyEventType> INCIDENT_EVENT_TYPES = new()
+    {
+        NearbyEventType.Collision,
+        NearbyEventType.Spin,
+        NearbyEventType.Stopped,
+        NearbyEventType.OffTrack,
+    };
 
     // ── Session-level tracking ──────────────────────────────────────
     private int _prevSessionState;
     private uint _prevSessionFlags;
     private bool _cautionWasActive;
     private bool _redFlagActive;
+    private bool _checkeredActive;
+    private bool _paceLapsActive;
+    private bool _whiteFlagActive;
+    private bool _playerBlueFlagActive;
     /// <summary>Remaining seconds of race-start grace (suppresses slow/stopped during grid launch).</summary>
     private float _raceStartGraceRemaining;
+    /// <summary>Whether the player was on pit road last tick (for detecting player pit exit).</summary>
+    private bool _playerWasOnPitRoad;
+    /// <summary>Remaining seconds of player-pit-exit grace — keeps APPROACHING active while merging.</summary>
+    private float _playerPitExitGrace;
+    /// <summary>Grace period (seconds) after player exits pits to warn about approaching cars.</summary>
+    private const float PLAYER_PIT_EXIT_GRACE = 6.0f;
+    /// <summary>Speed threshold for pit-exit merge warning — higher than normal APPROACHING.</summary>
+    private const float PIT_EXIT_MERGE_SPEED_THRESHOLD = 25.0f;
 
     // ── Cooldown tracking (per car × event type) ────────────────────
     private readonly Dictionary<(int carIdx, NearbyEventType type), DateTime> _cooldowns = new();
@@ -150,6 +214,12 @@ public sealed class NearbyEventDetector
 
     /// <summary>Read-only snapshot of currently active (non-expired) events.</summary>
     public IReadOnlyList<NearbyEvent> ActiveEvents => _activeEvents;
+
+    /// <summary>Current session state as tracked by the detector (iRacing SessionState enum).</summary>
+    public int CurrentSessionState => _prevSessionState;
+
+    /// <summary>Whether the race start grace period is still active.</summary>
+    public bool IsRaceStartGraceActive => _raceStartGraceRemaining > 0;
 
     /// <summary>
     /// Reset all state. Call on session/car/track change.
@@ -167,6 +237,11 @@ public sealed class NearbyEventDetector
         Array.Clear(_spinDuration);
         Array.Clear(_priorForwardSpeed);
         Array.Clear(_prevPaceFlags);
+        Array.Clear(_pitExitGrace);
+        Array.Clear(_pitRoadDuration);
+        Array.Clear(_pittingEmitted);
+        for (int i = 0; i < MAX_CARS; i++)
+            _recentDangerEvents[i]?.Clear();
         _cooldowns.Clear();
         _activeEvents.Clear();
         _nextEventId = 1;
@@ -175,7 +250,10 @@ public sealed class NearbyEventDetector
         _prevSessionFlags = 0;
         _cautionWasActive = false;
         _redFlagActive = false;
+        _playerBlueFlagActive = false;
         _raceStartGraceRemaining = 0f;
+        _playerWasOnPitRoad = false;
+        _playerPitExitGrace = 0f;
     }
 
     /// <summary>
@@ -188,7 +266,11 @@ public sealed class NearbyEventDetector
         float dt = (float)(now - _lastUpdateTime).TotalSeconds;
         _lastUpdateTime = now;
 
-        // Clamp dt to avoid huge jumps after pause/alt-tab
+        // When dt is too large (pause/alt-tab/focus loss), skip speed-based
+        // detections this tick. The pctDelta would be real accumulated movement
+        // but divided by tiny clamped dt → wildly inflated speed values.
+        // We still update _prevLapDistPct so the NEXT tick has clean state.
+        bool skipSpeedDetection = dt > 0.5f;
         if (dt > 1.0f) dt = 1.0f / 60f;
 
         // Expire old events
@@ -228,7 +310,12 @@ public sealed class NearbyEventDetector
             int i = entry.CarIdx;
             if (i == playerIdx) continue;
             if (i < 0 || i >= MAX_CARS) continue;
-            if (!entry.IsConnected) continue;
+            if (!entry.IsConnected)
+            {
+                // Disconnected car — clear any lingering events quickly
+                ClearAllEventsForCar(i);
+                continue;
+            }
 
             float interval = entry.IntervalToPlayer;
             // Asymmetric detection: ahead (positive), behind (negative)
@@ -236,6 +323,23 @@ public sealed class NearbyEventDetector
 
             int surface = data.CarIdxTrackSurface != null && i < data.CarIdxTrackSurface.Length
                 ? data.CarIdxTrackSurface[i] : SURFACE_NOT_IN_WORLD;
+
+            // ── INSTANT CLEAR: car left the world (tow/disconnect) → kill all events now ──
+            if (surface == SURFACE_NOT_IN_WORLD)
+            {
+                ClearAllEventsForCar(i);
+                _prevTrackSurface[i] = surface;
+                _prevOnPitRoad[i] = false;
+                _offTrackDuration[i] = 0;
+                _slowDuration[i] = 0;
+                _spinDuration[i] = 0;
+                _pitRoadDuration[i] = 0;
+                _pittingEmitted[i] = false;
+                if (data.CarIdxLapDistPct != null && i < data.CarIdxLapDistPct.Length)
+                    _prevLapDistPct[i] = data.CarIdxLapDistPct[i];
+                continue;
+            }
+
             bool onPitRoad = data.CarIdxOnPitRoad != null && i < data.CarIdxOnPitRoad.Length
                 && data.CarIdxOnPitRoad[i];
             int flags = data.CarIdxSessionFlags != null && i < data.CarIdxSessionFlags.Length
@@ -274,25 +378,43 @@ public sealed class NearbyEventDetector
             }
 
             // ── PITTING (entered pit road) ──────────────────────
-            if (onPitRoad && !_prevOnPitRoad[i] && surface != SURFACE_IN_PIT_STALL)
+            // Debounce: require car to stay on pit road for PIT_ENTRY_DEBOUNCE seconds.
+            // Range filter: only emit within PIT_EVENT_MAX_INTERVAL to avoid distant false alarms.
+            if (onPitRoad)
             {
-                TryEmit(entry, NearbyEventType.Pitting, "PITTING",
-                    NearbyEventSeverity.Info, 3.0f);
+                _pitRoadDuration[i] += dt;
+                if (!_pittingEmitted[i]
+                    && _pitRoadDuration[i] >= PIT_ENTRY_DEBOUNCE
+                    && surface != SURFACE_IN_PIT_STALL
+                    && Math.Abs(interval) <= PIT_EVENT_MAX_INTERVAL)
+                {
+                    TryEmit(entry, NearbyEventType.Pitting, "PITTING",
+                        NearbyEventSeverity.Info, 3.0f);
+                    _pittingEmitted[i] = true;
+                }
+            }
+            else
+            {
+                _pitRoadDuration[i] = 0;
+                _pittingEmitted[i] = false;
             }
 
-            // ── IN BOX (entered pit stall) ──────────────────────
-            if (surface == SURFACE_IN_PIT_STALL && !_wasInPitStall[i])
-            {
-                TryEmit(entry, NearbyEventType.InBox, "IN BOX",
-                    NearbyEventSeverity.Info, 3.0f);
-            }
+            // ── IN BOX — tracked for state only (not emitted; always filtered out in UI)
             _wasInPitStall[i] = surface == SURFACE_IN_PIT_STALL;
 
             // ── PIT EXIT (left pit road back to track) ──────────
-            if (!onPitRoad && _prevOnPitRoad[i] && surface == SURFACE_ON_TRACK)
+            // Range filter: only emit within PIT_EVENT_MAX_INTERVAL
+            if (!onPitRoad && _prevOnPitRoad[i] && surface == SURFACE_ON_TRACK
+                && Math.Abs(interval) <= PIT_EVENT_MAX_INTERVAL)
             {
                 TryEmit(entry, NearbyEventType.PitExit, "PIT EXIT",
                     NearbyEventSeverity.Info, 3.0f);
+                _pitExitGrace[i] = PIT_EXIT_GRACE_SECONDS; // suppress slow/stopped while accelerating
+            }
+            else if (!onPitRoad && _prevOnPitRoad[i] && surface == SURFACE_ON_TRACK)
+            {
+                // Still need grace period even for distant pit exits (to avoid false slow/stopped)
+                _pitExitGrace[i] = PIT_EXIT_GRACE_SECONDS;
             }
 
             // ── TOWED (was on track, jumped to pit stall without traversing pit road approach) ──
@@ -328,19 +450,30 @@ public sealed class NearbyEventDetector
                     NearbyEventSeverity.Danger, 4.0f);
             }
 
-            // ── LOCAL YELLOW FLAG ───────────────────────────────
-            if ((flags & FLAG_YELLOW) != 0 && (_prevFlags[i] & FLAG_YELLOW) == 0)
+            // ── LOCAL YELLOW FLAG (ongoing while flag bit is set) ─
+            if ((flags & FLAG_YELLOW) != 0)
             {
                 bool isAhead = interval > 0;
-                TryEmit(entry, NearbyEventType.LocalYellow,
+                TryEmitOngoing(entry, NearbyEventType.LocalYellow,
                     isAhead ? "⚑ YELLOW AHEAD" : "⚑ YELLOW",
-                    NearbyEventSeverity.Danger, 4.0f);
+                    NearbyEventSeverity.Danger, 4.0f, ongoingStillActive);
+            }
+            else if ((_prevFlags[i] & FLAG_YELLOW) != 0)
+            {
+                ClearOngoingEvent(i, NearbyEventType.LocalYellow);
             }
 
             // ── SLOW CAR / STOPPED (ongoing) ────────────────────
             // Suppress during race-start grace period (grid accelerating from standing still).
             // Real pile-ups at the start are caught by Collision (incident flags) and OffTrack.
-            if (surface == SURFACE_ON_TRACK && !onPitRoad && _raceStartGraceRemaining <= 0)
+            // Skip when dt was too large (alt-tab) — speed data would be garbage.
+            // Also skip when LapDistPct jumps too far in one frame (teleport/tow/respawn) —
+            // the wrap-around correction can't distinguish a real half-track spin from a tow.
+            // Tick down pit-exit grace for this car
+            if (_pitExitGrace[i] > 0) _pitExitGrace[i] = Math.Max(0, _pitExitGrace[i] - dt);
+
+            if (surface == SURFACE_ON_TRACK && !onPitRoad && _raceStartGraceRemaining <= 0
+                && _pitExitGrace[i] <= 0 && !skipSpeedDetection)
             {
                 float prevPct = _prevLapDistPct[i];
                 float curPct = data.CarIdxLapDistPct![i];
@@ -349,9 +482,15 @@ public sealed class NearbyEventDetector
                 if (pctDelta < -0.5f) pctDelta += 1.0f;
                 if (pctDelta > 0.5f) pctDelta -= 1.0f;
 
+                // Guard: if the position jumped more than ~10% of track in one frame,
+                // this is almost certainly a teleport (tow, respawn, game glitch), not
+                // real movement. At 60Hz, even 400 km/h on a 4km track is only ~1.7%/frame.
+                // 10% threshold gives ample headroom for long straights + high speed.
+                bool isPositionJump = Math.Abs(pctDelta) > 0.10f;
+
                 // Convert pctDelta to approximate m/s (trackLength * pctDelta / dt)
                 float trackLen = data.TrackLength > 0 ? data.TrackLength : 4000f;
-                float approxSpeed = dt > 0 ? (Math.Abs(pctDelta) * trackLen / dt) : 999f;
+                float approxSpeed = (!isPositionJump && dt > 0) ? (Math.Abs(pctDelta) * trackLen / dt) : 999f;
 
                 if (approxSpeed < STOPPED_SPEED_THRESHOLD)
                 {
@@ -443,7 +582,8 @@ public sealed class NearbyEventDetector
             //           (2) car was moving forward at SPIN_PRIOR_FORWARD_MIN (~8 m/s) recently.
             // This filters deliberate U-turns (start from near-zero speed, reverse slowly)
             // and minor LapDistPct noise from tight corners.
-            if (surface == SURFACE_ON_TRACK && !onPitRoad)
+            // Skip when dt was too large (alt-tab) — speed data would be garbage.
+            if (surface == SURFACE_ON_TRACK && !onPitRoad && !skipSpeedDetection)
             {
                 float prevPctSpin = _prevLapDistPct[i];
                 float curPctSpin = data.CarIdxLapDistPct![i];
@@ -451,8 +591,12 @@ public sealed class NearbyEventDetector
                 if (pctDeltaSpin < -0.5f) pctDeltaSpin += 1.0f;
                 if (pctDeltaSpin > 0.5f) pctDeltaSpin -= 1.0f;
 
+                // Guard: skip spin detection if position jumped >10% of track in one frame
+                // (teleport/tow/respawn — not a real spin)
+                bool isSpinPositionJump = Math.Abs(pctDeltaSpin) > 0.10f;
+
                 float trackLen = data.TrackLength > 0 ? data.TrackLength : 4000f;
-                float speedSigned = dt > 0 ? (pctDeltaSpin * trackLen / dt) : 0f;
+                float speedSigned = (!isSpinPositionJump && dt > 0) ? (pctDeltaSpin * trackLen / dt) : 0f;
                 float backwardSpeed = speedSigned < 0 ? -speedSigned : 0f;
 
                 // Track prior forward speed (smoothed) — retains memory of how fast the car was
@@ -545,6 +689,110 @@ public sealed class NearbyEventDetector
                 _prevLapDistPct[i] = data.CarIdxLapDistPct[i];
         }
 
+        // ── PLAYER PIT EXIT DETECTION ──────────────────────────────
+        // Track when the player leaves pit road to activate merge warnings.
+        // Also detect when player is DRIVING on pit road (not in stall) to
+        // show "CAR BEHIND" while still on pit lane heading for pit exit.
+        int playerSurface = data.CarIdxTrackSurface != null
+            && playerIdx >= 0 && playerIdx < data.CarIdxTrackSurface.Length
+            ? data.CarIdxTrackSurface[playerIdx] : SURFACE_NOT_IN_WORLD;
+        bool playerOnOrOffTrack = playerSurface == SURFACE_ON_TRACK || playerSurface == SURFACE_OFF_TRACK;
+        bool playerInPits = data.CarIdxOnPitRoad != null && playerIdx >= 0
+            && playerIdx < data.CarIdxOnPitRoad.Length && data.CarIdxOnPitRoad[playerIdx];
+        bool playerInPitStall = playerSurface == SURFACE_IN_PIT_STALL;
+
+        // Detect player exiting pits → start grace period for merge warnings
+        if (_playerWasOnPitRoad && !playerInPits && playerOnOrOffTrack)
+            _playerPitExitGrace = PLAYER_PIT_EXIT_GRACE;
+        _playerWasOnPitRoad = playerInPits;
+
+        // Tick down player pit-exit grace
+        if (_playerPitExitGrace > 0)
+            _playerPitExitGrace = Math.Max(0, _playerPitExitGrace - dt);
+
+        // Detect player driving on pit road (not stationary in stall):
+        // When the player is on pit road, NOT in pit stall, and moving — they're
+        // heading for pit exit and should see "CAR BEHIND" warnings.
+        bool playerDrivingOnPitRoad = playerInPits && !playerInPitStall
+            && data.Speed > PLAYER_STOPPED_THRESHOLD;
+
+        // ── APPROACHING (player is stopped/slow OR exiting/on pit road) ──────
+        // Case 1: Player is stopped/slow on track → warn about fast cars behind
+        // Case 2: Player just exited pits → warn about fast cars behind (merge warning)
+        // Case 3: Player is driving on pit road (heading for exit) → early merge warning
+        // Case 4: Player is off-track → warn about traffic from BOTH directions
+        bool playerStopped = playerOnOrOffTrack && !playerInPits
+            && data.Speed < PLAYER_STOPPED_THRESHOLD;
+        bool playerOffTrack = playerSurface == SURFACE_OFF_TRACK && !playerInPits;
+        bool playerMerging = (_playerPitExitGrace > 0 && playerOnOrOffTrack) || playerDrivingOnPitRoad;
+
+        // Any vulnerable state triggers approaching detection
+        bool playerVulnerable = playerStopped || playerMerging || playerOffTrack;
+
+        // Use higher speed threshold for merge check (car is accelerating but still slow)
+        float incomingSpeedThreshold = playerMerging && !playerStopped
+            ? PIT_EXIT_MERGE_SPEED_THRESHOLD : INCOMING_FAST_SPEED_MIN;
+
+        if (playerVulnerable && !skipSpeedDetection)
+        {
+            float trackLen = data.TrackLength > 0 ? data.TrackLength : 4000f;
+            foreach (var entry in relativeEntries)
+            {
+                int ci = entry.CarIdx;
+                if (ci == playerIdx || ci < 0 || ci >= MAX_CARS) continue;
+                if (!entry.IsConnected) continue;
+
+                float interval = entry.IntervalToPlayer;
+
+                // When off-track, check cars from BOTH directions (player may be facing wrong way)
+                bool isBehind = interval < 0 && interval >= -INCOMING_FAST_RANGE;
+                bool isAhead = playerOffTrack && interval > 0 && interval <= INCOMING_AHEAD_RANGE;
+                if (!isBehind && !isAhead) continue;
+
+                int ciSurface = data.CarIdxTrackSurface != null && ci < data.CarIdxTrackSurface.Length
+                    ? data.CarIdxTrackSurface[ci] : SURFACE_NOT_IN_WORLD;
+                if (ciSurface != SURFACE_ON_TRACK) continue;
+
+                // Estimate approaching car speed from LapDistPct delta
+                float prevPctCI = _prevLapDistPct[ci];
+                float curPctCI = data.CarIdxLapDistPct![ci];
+                float pctDeltaCI = curPctCI - prevPctCI;
+                if (pctDeltaCI < -0.5f) pctDeltaCI += 1.0f;
+                if (pctDeltaCI > 0.5f) pctDeltaCI -= 1.0f;
+                if (Math.Abs(pctDeltaCI) > 0.10f) continue; // teleport guard
+
+                float approxSpeedCI = dt > 0 ? (Math.Abs(pctDeltaCI) * trackLen / dt) : 0f;
+
+                if (approxSpeedCI >= incomingSpeedThreshold)
+                {
+                    var existingIncoming = FindOngoingEvent(ci, NearbyEventType.IncomingFast);
+                    if (existingIncoming != null)
+                    {
+                        ongoingStillActive.Add(existingIncoming.Id);
+                    }
+                    else
+                    {
+                        string label = playerMerging && !playerStopped && !playerOffTrack
+                            ? "⚠ CAR BEHIND"
+                            : isAhead ? "⚠ CAR AHEAD" : "⚠ APPROACHING";
+                        TryEmitOngoing(entry, NearbyEventType.IncomingFast,
+                            label,
+                            NearbyEventSeverity.Warning, 5.0f, ongoingStillActive);
+                    }
+                }
+                else
+                {
+                    ClearOngoingEvent(ci, NearbyEventType.IncomingFast);
+                }
+            }
+        }
+        else
+        {
+            // Player moving at speed and not merging and not off-track — clear all incoming-fast events
+            for (int ci = 0; ci < MAX_CARS; ci++)
+                ClearOngoingEvent(ci, NearbyEventType.IncomingFast);
+        }
+
         // Any ongoing events whose condition was NOT confirmed this tick → clear them
         foreach (var evt in _activeEvents)
         {
@@ -552,6 +800,43 @@ public sealed class NearbyEventDetector
             {
                 evt.IsOngoing = false;
                 evt.ClearedAt = DateTime.UtcNow;
+            }
+        }
+
+        // ── PACK DENSITY: detect chaotic pack when 3+ per-car events are active ──
+        int perCarEventCount = _activeEvents.Count(e =>
+            !e.IsExpired && e.CarIdx >= 0
+            && e.EventType != NearbyEventType.IncomingFast);
+        if (perCarEventCount >= 3 && !_activeEvents.Any(e =>
+            e.EventType == NearbyEventType.LocalYellow && e.CarIdx == -2 && !e.IsExpired))
+        {
+            // Emit a session-level "PACK" warning (CarIdx=-2 to distinguish from normal local yellow)
+            var packEvt = new NearbyEvent
+            {
+                Id = _nextEventId++,
+                CarIdx = -2,
+                EventType = NearbyEventType.LocalYellow,
+                DisplayText = "⚡ CHAOS ZONE",
+                Severity = NearbyEventSeverity.Danger,
+                DisplayDuration = 5.0f,
+                IntervalToPlayer = 0.01f,
+                DriverName = $"{perCarEventCount} events",
+                CarNumber = "",
+                CreatedAt = DateTime.UtcNow,
+                IsOngoing = true,
+            };
+            _activeEvents.Add(packEvt);
+            ongoingStillActive.Add(packEvt.Id);
+        }
+        else if (perCarEventCount < 3)
+        {
+            // Clear pack density event when events drop below threshold
+            var packEvt = _activeEvents.FirstOrDefault(e =>
+                e.EventType == NearbyEventType.LocalYellow && e.CarIdx == -2 && e.IsOngoing);
+            if (packEvt != null)
+            {
+                packEvt.IsOngoing = false;
+                packEvt.ClearedAt = DateTime.UtcNow;
             }
         }
     }
@@ -563,9 +848,9 @@ public sealed class NearbyEventDetector
     {
         var key = (entry.CarIdx, type);
 
-        // Priority check: if a higher-priority ongoing event exists for this car, skip
+        // Priority check: if a higher-priority active event exists for this car, skip
         int myPriority = GetEventPriority(type);
-        if (HasHigherPriorityOngoing(entry.CarIdx, myPriority))
+        if (HasHigherPriorityActive(entry.CarIdx, myPriority))
             return;
 
         // Dedup: skip if an active (non-expired) event already exists for this car + type
@@ -595,7 +880,7 @@ public sealed class NearbyEventDetector
             _activeEvents.Remove(weakest);
         }
 
-        _activeEvents.Add(new NearbyEvent
+        var newEvt = new NearbyEvent
         {
             Id = _nextEventId++,
             CarIdx = entry.CarIdx,
@@ -607,7 +892,38 @@ public sealed class NearbyEventDetector
             DisplayText = text,
             Severity = severity,
             DisplayDuration = Math.Max(duration, MIN_DISPLAY_DURATION),
-        });
+        };
+
+        // Incident escalation: track dangerous events per car
+        if (INCIDENT_EVENT_TYPES.Contains(type))
+        {
+            _recentDangerEvents[entry.CarIdx] ??= new List<DateTime>();
+            var list = _recentDangerEvents[entry.CarIdx];
+            list.Add(DateTime.UtcNow);
+            // Prune old entries
+            list.RemoveAll(t => (DateTime.UtcNow - t).TotalSeconds > INCIDENT_WINDOW_SECONDS);
+
+            if (list.Count >= INCIDENT_THRESHOLD)
+            {
+                // Escalate: mark this event and any existing active events for this car
+                bool isAhead = entry.IntervalToPlayer > 0;
+                newEvt.IsIncident = true;
+                newEvt.DisplayText = isAhead ? "⚠ INCIDENT AHEAD" : "⚠ INCIDENT";
+                newEvt.Severity = isAhead ? NearbyEventSeverity.Critical : NearbyEventSeverity.Danger;
+
+                // Also escalate any existing active events for this car
+                foreach (var existing in _activeEvents)
+                {
+                    if (existing.CarIdx == entry.CarIdx && !existing.IsExpired
+                        && INCIDENT_EVENT_TYPES.Contains(existing.EventType))
+                    {
+                        existing.IsIncident = true;
+                    }
+                }
+            }
+        }
+
+        _activeEvents.Add(newEvt);
 
         _cooldowns[key] = DateTime.UtcNow;
 
@@ -638,9 +954,23 @@ public sealed class NearbyEventDetector
             return;
         }
 
-        // Priority check: if a higher-priority ongoing event exists for this car, skip
+        // Check for recently-cleared (non-ongoing) event of same type still in list.
+        // Re-activate it instead of creating a duplicate row for the same driver+event.
+        for (int j = 0; j < _activeEvents.Count; j++)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == entry.CarIdx && e.EventType == type && !e.IsExpired && !e.IsOngoing)
+            {
+                e.IsOngoing = true;
+                e.ClearedAt = null;
+                ongoingStillActive.Add(e.Id);
+                return;
+            }
+        }
+
+        // Priority check: if a higher-priority active event exists for this car, skip
         int myPriority = GetEventPriority(type);
-        if (HasHigherPriorityOngoing(entry.CarIdx, myPriority))
+        if (HasHigherPriorityActive(entry.CarIdx, myPriority))
             return;
 
         // Clear any lower-priority ongoing events for this car
@@ -690,16 +1020,17 @@ public sealed class NearbyEventDetector
     }
 
     /// <summary>
-    /// Check if a higher-priority ongoing event already exists for this car.
+    /// Check if a higher-priority active (non-expired) event already exists for this car.
+    /// Checks ALL events (ongoing and one-shot), not just ongoing.
     /// Session-level events (CarIdx=-1) are excluded from per-car priority checks.
     /// </summary>
-    private bool HasHigherPriorityOngoing(int carIdx, int myPriority)
+    private bool HasHigherPriorityActive(int carIdx, int myPriority)
     {
         if (carIdx < 0) return false; // session-level events don't compete
         for (int j = 0; j < _activeEvents.Count; j++)
         {
             var e = _activeEvents[j];
-            if (e.CarIdx == carIdx && e.IsOngoing && GetEventPriority(e.EventType) > myPriority)
+            if (e.CarIdx == carIdx && !e.IsExpired && GetEventPriority(e.EventType) > myPriority)
                 return true;
         }
         return false;
@@ -736,6 +1067,24 @@ public sealed class NearbyEventDetector
             {
                 e.IsOngoing = false;
                 e.ClearedAt = DateTime.UtcNow;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Instantly clear ALL events for a car (used when car leaves the world / tows).
+    /// Sets a very short display duration so events fade quickly.
+    /// </summary>
+    private void ClearAllEventsForCar(int carIdx)
+    {
+        for (int j = _activeEvents.Count - 1; j >= 0; j--)
+        {
+            var e = _activeEvents[j];
+            if (e.CarIdx == carIdx && !e.IsExpired)
+            {
+                e.IsOngoing = false;
+                e.ClearedAt = DateTime.UtcNow;
+                e.DisplayDuration = 0.5f; // fade out in 0.5s
             }
         }
     }
@@ -778,11 +1127,24 @@ public sealed class NearbyEventDetector
         }
         _redFlagActive = redNow;
 
-        // ── START SEQUENCE (ParadeLaps → Racing transition) ─────
+        // ── WHITE FLAG (ongoing while final lap) ────────────────
+        bool whiteNow = (sf & SFLAG_WHITE) != 0;
+        if (whiteNow && !_whiteFlagActive)
+        {
+            EmitSessionEvent(NearbyEventType.WhiteFlag, "🏳 WHITE FLAG",
+                NearbyEventSeverity.Info, 6.0f, isOngoing: true);
+        }
+        else if (!whiteNow && _whiteFlagActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.WhiteFlag);
+        }
+        _whiteFlagActive = whiteNow;
+
+        // ── START SEQUENCE (green flag — 5s max, not ongoing) ───
         if (ss == SESSION_STATE_RACING && _prevSessionState == SESSION_STATE_PARADE_LAPS)
         {
             EmitSessionEvent(NearbyEventType.StartSequence, "🟢 GO GO GO!",
-                NearbyEventSeverity.Info, 4.0f);
+                NearbyEventSeverity.Info, 5.0f);
             // Begin grace period: suppress Stopped/SlowCar while grid accelerates
             _raceStartGraceRemaining = RACE_START_GRACE_SECONDS;
         }
@@ -791,18 +1153,50 @@ public sealed class NearbyEventDetector
         {
             _raceStartGraceRemaining = RACE_START_GRACE_SECONDS;
         }
-        else if (ss == SESSION_STATE_PARADE_LAPS && _prevSessionState != SESSION_STATE_PARADE_LAPS && _prevSessionState > 0)
+
+        // ── PACE LAPS (ongoing while in parade state) ───────────
+        bool paceNow = ss == SESSION_STATE_PARADE_LAPS;
+        if (paceNow && !_paceLapsActive)
         {
             EmitSessionEvent(NearbyEventType.StartSequence, "🟡 PACE LAPS",
-                NearbyEventSeverity.Info, 4.0f);
+                NearbyEventSeverity.Info, 6.0f, isOngoing: true);
         }
+        else if (!paceNow && _paceLapsActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.StartSequence);
+        }
+        _paceLapsActive = paceNow;
 
-        // ── CHECKERED FLAG ──────────────────────────────────────
-        if (ss == SESSION_STATE_CHECKERED && _prevSessionState == SESSION_STATE_RACING)
+        // ── CHECKERED FLAG (ongoing while session state is checkered) ─
+        bool checkeredNow = ss == SESSION_STATE_CHECKERED;
+        if (checkeredNow && !_checkeredActive)
         {
             EmitSessionEvent(NearbyEventType.CheckeredFlag, "🏁 CHECKERED",
-                NearbyEventSeverity.Info, 6.0f);
+                NearbyEventSeverity.Info, 8.0f, isOngoing: true);
         }
+        else if (!checkeredNow && _checkeredActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.CheckeredFlag);
+        }
+        _checkeredActive = checkeredNow;
+
+        // ── PLAYER'S OWN BLUE FLAG (relative to the driver using the widget) ──
+        // This is the player-centric "you need to yield" alert.
+        int playerIdx = data.PlayerCarIdx;
+        bool playerHasBlue = data.CarIdxSessionFlags != null
+            && playerIdx >= 0 && playerIdx < data.CarIdxSessionFlags.Length
+            && (data.CarIdxSessionFlags[playerIdx] & FLAG_BLUE) != 0;
+
+        if (playerHasBlue && !_playerBlueFlagActive)
+        {
+            EmitSessionEvent(NearbyEventType.BlueFlagged, "🔵 BLUE — YIELD",
+                NearbyEventSeverity.Warning, 6.0f, isOngoing: true);
+        }
+        else if (!playerHasBlue && _playerBlueFlagActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.BlueFlagged);
+        }
+        _playerBlueFlagActive = playerHasBlue;
 
         _prevSessionState = ss;
         _prevSessionFlags = sf;

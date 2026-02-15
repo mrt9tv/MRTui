@@ -708,6 +708,18 @@ public class MRTOneWidget : WidgetBase
     }
     
     public override WidgetType WidgetType => WidgetType.MRTOne;
+
+    /// <inheritdoc/>
+    protected override void OnBackgroundOpacityChanged(double opacity)
+    {
+        _backgroundOpacity = opacity;
+        if (_gaugeCircle != null)
+        {
+            _gaugeCircle.Fill = new SolidColorBrush(Color.FromArgb(
+                (byte)(255 * _backgroundOpacity), 20, 20, 20));
+            ApplyVisualEnhancements();
+        }
+    }
     
     /// <summary>
     /// Load MRTOneSettings from Config.Settings dictionary, or return defaults
@@ -2066,20 +2078,15 @@ public class MRTOneWidget : WidgetBase
         }
     }
     
-    public new WidgetConfig GetConfiguration()
+    public override WidgetConfig GetConfiguration()
     {
-        var config = base.GetConfiguration();
-        
-        // Ensure latest settings are saved to Config.Settings before retrieving
-        SaveSettings();
-        
-        // The SaveSettings() method already stored MRTOneSettings in Config.Settings["mrtone"]
-        // No need to manually add individual fields - they're all in the mrtone settings object
-        
-        return config;
+        // base.GetConfiguration() calls SaveWidgetSettings() which calls SaveSettings()
+        return base.GetConfiguration();
     }
+
+    protected override void SaveWidgetSettings() => SaveSettings();
     
-    public new void UpdateConfiguration(WidgetConfig config)
+    public override void UpdateConfiguration(WidgetConfig config)
     {
         base.UpdateConfiguration(config);
         

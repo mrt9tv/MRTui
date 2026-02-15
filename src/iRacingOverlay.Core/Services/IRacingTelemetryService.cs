@@ -116,6 +116,8 @@ namespace iRacingOverlay.Core.Services;
     TelemetryVar.Skies,           // int - Sky condition enum (0=clear, 3=overcast)
     TelemetryVar.WeatherType,     // int - Weather type enum
     TelemetryVar.FogLevel,        // % - Fog density
+    TelemetryVar.WindVel,         // m/s - Wind speed
+    TelemetryVar.WindDir,         // rad - Wind direction (heading in radians)
     
     // Motion & Orientation
     TelemetryVar.VelocityX,       // m/s - World-space X velocity
@@ -677,6 +679,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 Skies = (int)sdkData.Skies.GetValueOrDefault(),
                 WeatherType = (int)sdkData.WeatherType.GetValueOrDefault(),
                 FogLevel = sdkData.FogLevel.GetValueOrDefault(),
+                WindVel = sdkData.WindVel.GetValueOrDefault(),
+                WindDir = sdkData.WindDir.GetValueOrDefault(),
                 
                 // Motion & Orientation
                 VelocityX = sdkData.VelocityX.GetValueOrDefault(),

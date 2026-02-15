@@ -47,7 +47,48 @@
                                   Style="{StaticResource MRT.ToggleButton}"
                                   Margin="0,0,10,6"
                                   Checked="WindowBehavior_Changed" Unchecked="WindowBehavior_Changed"/>
+                        <CheckBox x:Name="ChkCloseToTray" Content="Close to Tray"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,6" ToolTip="X button minimizes to tray instead of exiting"
+                                  Checked="WindowBehavior_Changed" Unchecked="WindowBehavior_Changed"/>
                     </WrapPanel>
+                </StackPanel>
+            </Border>
+            
+            <!-- AUTO-HIDE IN PITS -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="AUTO-HIDE IN PITS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Automatically hide selected widgets when you enter pit lane."
+                               FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                    <CheckBox x:Name="ChkAutoHideInPits" Content="Enable auto-hide in pits"
+                              Style="{StaticResource MRT.ToggleButton}"
+                              Margin="0,0,0,8"
+                              Checked="AutoHideInPits_Changed" Unchecked="AutoHideInPits_Changed"/>
+                    <StackPanel x:Name="PanelAutoHideWidgets" Margin="12,0,0,0">
+                        <TextBlock Text="Widgets to hide:" FontSize="10"
+                                   Foreground="{StaticResource MutedText}" Margin="0,0,0,4"/>
+                        <CheckBox x:Name="ChkAutoHideMRTOne" Content="MRT One"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,4"
+                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
+                        <CheckBox x:Name="ChkAutoHideProxFeed" Content="Proximity Feed"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,4"
+                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
+                        <CheckBox x:Name="ChkAutoHideFuelCalc" Content="Fuel Calculator"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,4"
+                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
+                        <CheckBox x:Name="ChkAutoHideStandings" Content="Standings"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,4"
+                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
+                        <CheckBox x:Name="ChkAutoHideRelative" Content="Relative"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,4"
+                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
             
@@ -91,6 +132,40 @@
                               Style="{StaticResource MRT.ToggleButton}"
                               IsChecked="True" Margin="0,0,10,4"
                               Checked="Units_Changed" Unchecked="Units_Changed"/>
+                </StackPanel>
+            </Border>
+
+            <!-- LAYOUT -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="LAYOUT" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Reset all widget positions and sizes to defaults."
+                               FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                    <Button x:Name="BtnResetLayout" Content="Reset Widget Layout"
+                            Style="{StaticResource MRT.Button.Secondary}"
+                            Click="BtnResetLayout_Click"
+                            Height="28" FontSize="11" Padding="10,2" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- CONFIG EXPORT / IMPORT -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="CONFIGURATION" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Export or import your settings and widget layout."
+                               FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                    <WrapPanel>
+                        <Button x:Name="BtnExportConfig" Content="Export"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnExportConfig_Click"
+                                Height="28" Width="80" FontSize="11" Padding="10,2" Margin="0,0,6,0"/>
+                        <Button x:Name="BtnImportConfig" Content="Import"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnImportConfig_Click"
+                                Height="28" Width="80" FontSize="11" Padding="10,2"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="TxtConfigStatus" Text=""
+                               FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
             

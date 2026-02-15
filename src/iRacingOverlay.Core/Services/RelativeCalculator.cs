@@ -549,11 +549,38 @@ public class RelativeCalculator
 
     private void UpdateReferenceLapTime(TelemetryData data)
     {
+        // Prefer player's own best/last lap time (most relevant to player's pace)
         if (data.LapBestLapTime > 1.0f)
+        {
             _referenceLapTime = data.LapBestLapTime;
-        else if (data.LapLastLapTime > 1.0f)
+            return;
+        }
+        if (data.LapLastLapTime > 1.0f)
+        {
             _referenceLapTime = data.LapLastLapTime;
-        // else: keep previous or default
+            return;
+        }
+
+        // Fallback: use the best lap time from ANY car in the field.
+        // Critical for early-race accuracy — without this, _referenceLapTime stays
+        // at 90s default until the player finishes a lap, causing wildly wrong
+        // intervals on tracks where actual lap time differs significantly
+        // (e.g., Nordschleife ~180s would show events for cars 2× too far away;
+        //  short ovals ~45s would miss nearby events entirely).
+        if (_referenceLapTime == DEFAULT_LAP_TIME && data.CarIdxBestLapTime != null)
+        {
+            float bestFieldTime = float.MaxValue;
+            int count = Math.Min(data.CarIdxBestLapTime.Length, MAX_CARS);
+            for (int i = 0; i < count; i++)
+            {
+                float t = data.CarIdxBestLapTime[i];
+                if (t > 1.0f && t < bestFieldTime)
+                    bestFieldTime = t;
+            }
+            if (bestFieldTime < float.MaxValue)
+                _referenceLapTime = bestFieldTime;
+        }
+        // else: keep previous or default (90s)
     }
 
     private static int ArrayInt(int[]? arr, int idx, int def)

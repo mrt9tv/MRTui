@@ -10,7 +10,7 @@
                 <StackPanel>
                     <TextBlock Text="MRT UI" FontSize="28" FontWeight="Bold"
                                Foreground="{StaticResource TealPrimary}" Margin="0,0,0,4"/>
-                    <TextBlock x:Name="TxtVersion" Text="v0.7.1"
+                    <TextBlock x:Name="TxtVersion" Text="v0.1.000"
                                FontSize="14" Foreground="{StaticResource MutedText}" Margin="0,0,0,12"/>
                     <TextBlock Text="iRacing Telemetry Overlay"
                                FontSize="14" Foreground="{StaticResource LightText}" Margin="0,0,0,8"/>
@@ -29,7 +29,46 @@
                         <Run Text="Framework: "/><Run Text=".NET 8.0 / WPF" Foreground="{StaticResource TealPrimary}"/>
                     </TextBlock>
                     <TextBlock FontSize="11" Foreground="{StaticResource LightText}">
-                        <Run Text="Author: "/><Run Text="mrt9tv" Foreground="{StaticResource TealPrimary}"/>
+                        <Run Text="Author: "/><Hyperlink NavigateUri="http://www.mrt9.com" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="MRT#9" Foreground="{StaticResource TealPrimary}"/></Hyperlink>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- Update check -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="UPDATES" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <Button x:Name="BtnCheckUpdate"
+                                Content="Check for Updates"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnCheckUpdate_Click"
+                                Height="28" FontSize="11" Padding="10,2" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="TxtUpdateStatus"
+                                   Text=""
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedText}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <TextBlock x:Name="TxtUpdateInfo"
+                               Text=""
+                               FontSize="10"
+                               Foreground="{StaticResource MutedText}"
+                               TextWrapping="Wrap"
+                               Margin="0,2,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Changelog -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="CHANGELOG" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock FontSize="11" Foreground="{StaticResource MutedText}" Margin="0,0,0,6" TextWrapping="Wrap"
+                               Text="See what's new in each release."/>
+                    <TextBlock FontSize="11">
+                        <Hyperlink NavigateUri="https://github.com/mrt9tv/MRTui/releases" RequestNavigate="Hyperlink_RequestNavigate">
+                            <Run Text="View Changelog on GitHub" Foreground="{StaticResource TealPrimary}"/>
+                        </Hyperlink>
                     </TextBlock>
                 </StackPanel>
             </Border>

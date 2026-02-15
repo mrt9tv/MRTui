@@ -43,6 +43,19 @@ public abstract class WidgetBase : Window
     /// </summary>
     private bool _userWantsVisible = true;
 
+    /// <summary>
+    /// Background-only opacity (0.0–1.0). Affects only the widget background, not text/content.
+    /// </summary>
+    public double BackgroundOpacity
+    {
+        get => Config.BackgroundOpacity;
+        set
+        {
+            Config.BackgroundOpacity = Math.Clamp(value, 0.0, 1.0);
+            OnBackgroundOpacityChanged(Config.BackgroundOpacity);
+        }
+    }
+
     protected WidgetBase(ITelemetryService telemetryService, WidgetConfig? config = null)
     {
         _telemetryService = telemetryService ?? throw new ArgumentNullException(nameof(telemetryService));
@@ -124,18 +137,16 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
-    /// Get the working area of the screen the widget is currently on
+    /// Get the working area of the virtual screen (all monitors combined).
+    /// Uses VirtualScreen parameters to support multi-monitor setups.
     /// </summary>
-    private Rect GetCurrentScreenBounds()
+    private static Rect GetCurrentScreenBounds()
     {
-        // Use WPF SystemParameters for screen dimensions (no WinForms dependency)
-        // This returns the primary screen work area (excludes taskbar)
-        double workAreaWidth = SystemParameters.WorkArea.Width;
-        double workAreaHeight = SystemParameters.WorkArea.Height;
-        double workAreaLeft = SystemParameters.WorkArea.Left;
-        double workAreaTop = SystemParameters.WorkArea.Top;
-
-        return new Rect(workAreaLeft, workAreaTop, workAreaWidth, workAreaHeight);
+        return new Rect(
+            SystemParameters.VirtualScreenLeft,
+            SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth,
+            SystemParameters.VirtualScreenHeight);
     }
 
     #endregion
@@ -218,6 +229,7 @@ public abstract class WidgetBase : Window
         Width = Config.Width;
         Height = Config.Height;
         Opacity = Config.Opacity;
+        OnBackgroundOpacityChanged(Config.BackgroundOpacity);
 
         _userWantsVisible = Config.IsVisible;
 
@@ -236,6 +248,7 @@ public abstract class WidgetBase : Window
         Width = Config.Width;
         Height = Config.Height;
         Opacity = Config.Opacity;
+        OnBackgroundOpacityChanged(Config.BackgroundOpacity);
     }
 
     /// <summary>
@@ -315,10 +328,25 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
+    /// Called before layout save to persist widget-specific settings into Config.Settings.
+    /// Override in derived classes to save custom settings.
+    /// </summary>
+    protected virtual void SaveWidgetSettings() { }
+
+    /// <summary>
+    /// Called when BackgroundOpacity changes. Override in derived classes
+    /// to adjust the background panel/brush alpha independently of content.
+    /// </summary>
+    protected virtual void OnBackgroundOpacityChanged(double opacity) { }
+
+    /// <summary>
     /// Get current widget configuration (for saving)
     /// </summary>
-    public WidgetConfig GetConfiguration()
+    public virtual WidgetConfig GetConfiguration()
     {
+        // Persist widget-specific settings first
+        SaveWidgetSettings();
+
         // Update config with current window state
         Config.X = Left;
         Config.Y = Top;
@@ -333,7 +361,7 @@ public abstract class WidgetBase : Window
     /// <summary>
     /// Update configuration and apply changes
     /// </summary>
-    public void UpdateConfiguration(WidgetConfig config)
+    public virtual void UpdateConfiguration(WidgetConfig config)
     {
         Config = config;
         ApplyConfiguration();

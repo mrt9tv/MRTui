@@ -265,7 +265,31 @@ public class AppSettings : INotifyPropertyChanged
     /// <summary>
     /// Minimize to system tray instead of taskbar
     /// </summary>
-    public bool MinimizeToTray { get; set; } = false;
+    public bool MinimizeToTray { get; set; } = true;
+
+    /// <summary>
+    /// When true, clicking the window close button (X) minimizes to tray
+    /// instead of exiting the application (requires MinimizeToTray = true).
+    /// </summary>
+    public bool CloseToTray { get; set; } = true;
+
+    // ===== AUTO-HIDE IN PITS =====
+
+    /// <summary>
+    /// When true, automatically hide configured widgets when the player enters pit lane.
+    /// Widgets are restored when the player exits pit lane.
+    /// </summary>
+    public bool AutoHideInPitsEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Per-widget-type auto-hide setting. Key = WidgetType name, Value = true to auto-hide.
+    /// Default: ProximityFeed hidden in pits, MRTOne kept visible.
+    /// </summary>
+    public Dictionary<string, bool> AutoHideInPitsWidgets { get; set; } = new()
+    {
+        { "MRTOne", false },
+        { "ProximityFeed", true },
+    };
 
     // ===== GLOBAL FONT SCALE =====
     

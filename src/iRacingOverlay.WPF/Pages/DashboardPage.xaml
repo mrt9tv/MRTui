@@ -101,6 +101,76 @@
                 </StackPanel>
             </Border>
             
+            <!-- SESSION AUTO-PRESETS -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="SESSION AUTO-PRESETS" Style="{StaticResource MRT.Text.Label}"/>
+                            <TextBlock Text="Auto-switch widget visibility when session type changes."
+                                       FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <CheckBox x:Name="ChkSessionPresetsEnabled" Grid.Column="1"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  VerticalAlignment="Top" Margin="8,0,0,0"
+                                  Checked="SessionPresetsEnabled_Changed"
+                                  Unchecked="SessionPresetsEnabled_Changed"/>
+                    </Grid>
+                    
+                    <StackPanel x:Name="PanelSessionPresets" Margin="0,4,0,0">
+                        <Button x:Name="BtnExpandPresets" Content="▶ Show preset details"
+                                Background="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource TealPrimary}"
+                                FontSize="11" HorizontalAlignment="Left" Cursor="Hand"
+                                Padding="0,2" Click="BtnExpandPresets_Click"/>
+                        
+                        <StackPanel x:Name="PanelPresetDetails" Visibility="Collapsed" Margin="0,6,0,0">
+                            <!-- Each session type gets a mini-section -->
+                            
+                            <!-- PRACTICE -->
+                            <Border Background="#1A1A1A" CornerRadius="4" Margin="0,0,0,4" Padding="10,6">
+                                <StackPanel>
+                                    <TextBlock Text="PRACTICE" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#00BCD4" Margin="0,0,0,4"/>
+                                    <WrapPanel x:Name="WrapPractice"/>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- QUALIFYING -->
+                            <Border Background="#1A1A1A" CornerRadius="4" Margin="0,0,0,4" Padding="10,6">
+                                <StackPanel>
+                                    <TextBlock Text="QUALIFYING" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#AB47BC" Margin="0,0,0,4"/>
+                                    <WrapPanel x:Name="WrapQualifying"/>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- RACE -->
+                            <Border Background="#1A1A1A" CornerRadius="4" Margin="0,0,0,4" Padding="10,6">
+                                <StackPanel>
+                                    <TextBlock Text="RACE" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#4CAF50" Margin="0,0,0,4"/>
+                                    <WrapPanel x:Name="WrapRace"/>
+                                </StackPanel>
+                            </Border>
+                            
+                            <!-- WARMUP -->
+                            <Border Background="#1A1A1A" CornerRadius="4" Margin="0,0,0,4" Padding="10,6">
+                                <StackPanel>
+                                    <TextBlock Text="WARMUP" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="#FF9800" Margin="0,0,0,4"/>
+                                    <WrapPanel x:Name="WrapWarmup"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            
             <!-- HOTKEYS REMINDER -->
             <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
                 <StackPanel>
@@ -108,6 +178,16 @@
                     <TextBlock x:Name="TxtHotkeys" 
                                Text="Ctrl+L Lock | Ctrl+H Show/Hide"
                                FontSize="11" Foreground="{StaticResource MutedText}"/>
+                </StackPanel>
+            </Border>
+            
+            <!-- PERFORMANCE FOOTER -->
+            <Border Background="#0D0D0D" CornerRadius="6" Padding="10,6" Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock Text="CPU: " FontSize="10" Foreground="{StaticResource MutedText}"/>
+                    <TextBlock x:Name="TxtCpuUsage" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="0,0,14,0"/>
+                    <TextBlock Text="MEM: " FontSize="10" Foreground="{StaticResource MutedText}"/>
+                    <TextBlock x:Name="TxtMemUsage" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}"/>
                 </StackPanel>
             </Border>
             

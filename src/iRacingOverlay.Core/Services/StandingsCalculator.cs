@@ -169,10 +169,19 @@ public class StandingsCalculator
             var leader = entries[0];
             float best = leader.BestLapTime;
             float last = leader.LastLapTime;
-            float newRef = best > 10 ? best : last > 10 ? last : 0f;
+            float newRef = best > 1.0f ? best : last > 1.0f ? last : 0f;
             // Also try player's best if leader has nothing yet
             if (newRef <= 0)
-                newRef = data.LapBestLapTime > 10 ? data.LapBestLapTime : 0f;
+                newRef = data.LapBestLapTime > 1.0f ? data.LapBestLapTime : 0f;
+            // Last resort: scan field for ANY car's best lap (early-race fallback)
+            if (newRef <= 0 && data.CarIdxBestLapTime != null)
+            {
+                for (int idx = 0; idx < Math.Min(data.CarIdxBestLapTime.Length, MAX_CARS); idx++)
+                {
+                    float t = data.CarIdxBestLapTime[idx];
+                    if (t > 1.0f) { newRef = t; break; }
+                }
+            }
             if (newRef > 0)
                 _referenceLapTime = newRef;
         }

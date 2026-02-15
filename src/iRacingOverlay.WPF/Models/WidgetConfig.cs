@@ -45,6 +45,12 @@ public class WidgetConfig
     public double Opacity { get; set; } = 1.0;
 
     /// <summary>
+    /// Background-only opacity (0.0 to 1.0).
+    /// Controls just the widget background transparency, not text/content.
+    /// </summary>
+    public double BackgroundOpacity { get; set; } = 1.0;
+
+    /// <summary>
     /// Widget-specific settings (different for each widget type)
     /// Example: { "showKph": true, "showMph": false, "fontSize": 24 }
     /// </summary>
