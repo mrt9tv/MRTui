@@ -43,13 +43,6 @@ MRT UI renders transparent, always-on-top widgets over iRacing that update at ~6
 - **H.NotifyIcon.Wpf** — system tray
 - **Velopack** — single-file packaging and auto-update
 
-## Build
-
-```bash
-dotnet build iRacingOverlay.sln -c Release
-# or use BUILD_RELEASE.bat for full packaging
-```
-
 ## License
 
 MIT
