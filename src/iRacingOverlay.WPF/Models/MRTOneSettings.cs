@@ -36,7 +36,7 @@ public class MRTOneSettings
     /// Telemetry field to display in right side box
     /// </summary>
     [JsonPropertyName("rightField")]
-    public string? RightField { get; set; } = "Brake";
+    public string? RightField { get; set; } = "BrakeBias";
     
     /// <summary>
     /// Show/hide top section
@@ -76,13 +76,13 @@ public class MRTOneSettings
     /// Enable gradient background (radial gradient for depth effect) - ON by default
     /// </summary>
     [JsonPropertyName("enableGradientBackground")]
-    public bool EnableGradientBackground { get; set; } = true;
+    public bool EnableGradientBackground { get; set; } = false;
     
     /// <summary>
     /// Enable animated shift point ring (arc fills as RPM approaches shift point)
     /// </summary>
     [JsonPropertyName("enableShiftPointRing")]
-    public bool EnableShiftPointRing { get; set; } = false;
+    public bool EnableShiftPointRing { get; set; } = true;
     
     /// <summary>
     /// Enable glow effects (drop shadows on critical elements)
@@ -112,7 +112,7 @@ public class MRTOneSettings
     /// Enable enhanced radar visibility (larger squares 16px vs 12px, thicker borders 2px vs 1px) - OFF by default (legacy mode)
     /// </summary>
     [JsonPropertyName("enableEnhancedRadar")]
-    public bool EnableEnhancedRadar { get; set; } = false;
+    public bool EnableEnhancedRadar { get; set; } = true;
 
     // ============================================
     // Contextual Center Auto-Swap (Priority Engine)

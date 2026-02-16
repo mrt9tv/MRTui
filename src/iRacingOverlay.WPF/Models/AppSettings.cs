@@ -271,7 +271,7 @@ public class AppSettings : INotifyPropertyChanged
     /// When true, clicking the window close button (X) minimizes to tray
     /// instead of exiting the application (requires MinimizeToTray = true).
     /// </summary>
-    public bool CloseToTray { get; set; } = true;
+    public bool CloseToTray { get; set; } = false;
 
     // ===== AUTO-HIDE IN PITS =====
 
