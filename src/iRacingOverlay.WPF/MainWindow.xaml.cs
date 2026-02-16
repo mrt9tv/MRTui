@@ -82,8 +82,15 @@ public partial class MainWindow : Window
         ApplyWindowSettings();
         if (!_widgetManager.LoadSavedLayout())
         {
-            // First run — create only MRT One by default
+            // First run — create default widgets
             _widgetManager.CreateWidget(Models.WidgetType.MRTOne);
+            _widgetManager.CreateWidget(Models.WidgetType.ProximityFeed);
+        }
+        else
+        {
+            // Ensure ProximityFeed exists even if saved layout didn't include it
+            if (!_widgetManager.ActiveWidgets.Values.Any(w => w.WidgetType == Models.WidgetType.ProximityFeed))
+                _widgetManager.CreateWidget(Models.WidgetType.ProximityFeed);
         }
 
         // Create pages (lazy-init on first nav, but pre-build dashboard)

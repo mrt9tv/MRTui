@@ -18,6 +18,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.001] - 2026-02-13
+
+### Added
+- **Relative Data Fields** — 4 new MRT One data fields:
+  - Gap Ahead / Gap Behind (time gap in seconds to nearest car)
+  - Dist Ahead / Dist Behind (distance in meters to nearest car)
+  - Computed from `CarIdxLapDistPct` delta × reference lap time
+  - Labels: "GAP ▲", "GAP ▼", "DIST ▲", "DIST ▼"
+
+### Changed
+- **MRT One Side Boxes** — Repositioned CUR/LAST/BEST lap displays
+  - `SIDE_BOX_MARGIN_H` reduced from 30 → 15 for better centering between edge and gauge
+- **Turn Display** — Simplified to show turn numbers only (removed turn names)
+  - `FormatTurnInfo()` now returns `T{number}` instead of `T{number}: {name}`
+
+### Fixed
+- **ProxFeed disappearing on startup** — ProximityFeed widget now auto-created alongside MRT One on first run, and auto-injected if missing from saved layout
+- **Decimal comma locale issue** — Global `InvariantCulture` set in `Program.cs` to ensure dot-decimal formatting everywhere
+
+---
+
 ## [0.7.1] - 2026-02-08
 
 ### Added
@@ -287,7 +308,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/mrt9tv/MRTui/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/mrt9tv/MRTui/compare/v0.1.001...HEAD
+[0.1.001]: https://github.com/mrt9tv/MRTui/compare/v0.7.1...v0.1.001
 [0.7.1]: https://github.com/mrt9tv/MRTui/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mrt9tv/MRTui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mrt9tv/MRTui/compare/v0.5.0...v0.6.0

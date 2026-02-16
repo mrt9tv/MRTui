@@ -137,6 +137,12 @@ public static class TelemetryDataMapper
             TelemetryField.PushToPassCount => GetPlayerP2PCount(data),
             TelemetryField.PushToPassActive => GetPlayerP2PActive(data),
             
+            // Relative / Gap
+            TelemetryField.RelativeGapAhead => data.GapAhead,
+            TelemetryField.RelativeGapBehind => data.GapBehind,
+            TelemetryField.RelativeDistAhead => data.CarDistAhead,
+            TelemetryField.RelativeDistBehind => data.CarDistBehind,
+            
             // None
             TelemetryField.None => null,
             
@@ -524,11 +530,7 @@ public static class TelemetryDataMapper
         if (data.TurnNumber == 0)
             return "-";
         
-        // In a turn with name
-        if (!string.IsNullOrEmpty(data.TurnName) && data.TurnName != "-")
-            return $"T{data.TurnNumber}: {data.TurnName}";
-        
-        // In a turn without name
+        // Show turn number only (no name)
         return $"T{data.TurnNumber}";
     }
 

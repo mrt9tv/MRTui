@@ -811,6 +811,10 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             data.NextTurnNumber = nextTurn.Number;
             data.NextTurnName = nextTurn.Name;
             
+            // ===== RELATIVE GAP CALCULATION =====
+            // Compute time gap to nearest car ahead and behind from LapDistPct
+            ComputeRelativeGaps(data);
+            
             // ===== CRITICAL: CALCULATE ACTUAL LEADING LAP & RACE LEADER LAP =====
             // These values are ESSENTIAL for accurate race end and fuel calculations
             // ActualLeadingLapNumber = highest lap any car is on (regardless of position)
@@ -1602,5 +1606,57 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         }
 
         _disposed = true;
+    }
+
+    /// <summary>
+    /// Compute time gap (seconds) to the nearest car ahead and behind the player.
+    /// Uses CarIdxLapDistPct and CarIdxEstTime arrays.
+    /// </summary>
+    private static void ComputeRelativeGaps(Models.TelemetryData data)
+    {
+        const int SURFACE_ON_TRACK = 3;
+        const float MIN_VALID = 0.001f;
+
+        var pcts = data.CarIdxLapDistPct;
+        var estTimes = data.CarIdxEstTime;
+        var surfaces = data.CarIdxTrackSurface;
+        if (pcts == null || estTimes == null || surfaces == null) return;
+
+        int playerIdx = data.PlayerCarIdx;
+        if (playerIdx < 0 || playerIdx >= pcts.Length) return;
+
+        float playerPct = pcts[playerIdx];
+        if (playerPct < MIN_VALID) return;
+
+        // Use player's estimated lap time as reference for distance → time conversion
+        float refTime = estTimes[playerIdx];
+        if (refTime <= 0) refTime = 90f; // fallback
+
+        float closestAheadGap = float.MaxValue;
+        float closestBehindGap = float.MaxValue;
+
+        for (int i = 0; i < Math.Min(pcts.Length, 64); i++)
+        {
+            if (i == playerIdx) continue;
+            if (i >= surfaces.Length || surfaces[i] != SURFACE_ON_TRACK) continue;
+
+            float carPct = pcts[i];
+            if (carPct < MIN_VALID) continue;
+
+            // Delta from player to car (positive = car is ahead)
+            float delta = carPct - playerPct;
+            if (delta > 0.5f) delta -= 1.0f;
+            if (delta < -0.5f) delta += 1.0f;
+
+            float gapSeconds = Math.Abs(delta) * refTime;
+
+            if (delta > 0 && gapSeconds < closestAheadGap)
+                closestAheadGap = gapSeconds;
+            else if (delta < 0 && gapSeconds < closestBehindGap)
+                closestBehindGap = gapSeconds;
+        }
+
+        data.GapAhead = closestAheadGap < float.MaxValue ? closestAheadGap : 0f;
+        data.GapBehind = closestBehindGap < float.MaxValue ? closestBehindGap : 0f;
     }
 }

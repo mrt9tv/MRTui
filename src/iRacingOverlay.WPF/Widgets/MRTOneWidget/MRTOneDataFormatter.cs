@@ -273,6 +273,16 @@ public static class MRTOneDataFormatter
             TelemetryField.CarNumber when value is string num => $"#{num}",
             TelemetryField.TrackName when value is string track => track,
 
+            // Relative / Gap
+            TelemetryField.RelativeGapAhead when value is float gap =>
+                gap > 0 ? gap.ToString("F1", CultureInfo.InvariantCulture) : "-",
+            TelemetryField.RelativeGapBehind when value is float gap =>
+                gap > 0 ? gap.ToString("F1", CultureInfo.InvariantCulture) : "-",
+            TelemetryField.RelativeDistAhead when value is float dist =>
+                dist > 0 ? $"{(int)dist}m" : "-",
+            TelemetryField.RelativeDistBehind when value is float dist =>
+                dist > 0 ? $"{(int)dist}m" : "-",
+
             // Default fallback
             _ => value?.ToString() ?? "-"
         };
@@ -432,6 +442,11 @@ public static class MRTOneDataFormatter
             TelemetryField.WindDirection => "WIND",
             TelemetryField.PushToPassCount => "P2P",
             TelemetryField.PushToPassActive => "BOOST",
+
+            TelemetryField.RelativeGapAhead => "GAP ▲",
+            TelemetryField.RelativeGapBehind => "GAP ▼",
+            TelemetryField.RelativeDistAhead => "DIST ▲",
+            TelemetryField.RelativeDistBehind => "DIST ▼",
 
             _ => field.ToString().ToUpper()
         };

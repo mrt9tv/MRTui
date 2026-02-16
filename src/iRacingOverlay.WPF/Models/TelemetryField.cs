@@ -126,6 +126,12 @@ public enum TelemetryField
     PushToPassCount,     // Remaining P2P activations (0 if N/A)
     PushToPassActive,    // Whether P2P is currently active (bool → ON/OFF)
     
+    // Relative / Gap
+    RelativeGapAhead,    // Time gap to nearest car ahead (seconds)
+    RelativeGapBehind,   // Time gap to nearest car behind (seconds)
+    RelativeDistAhead,   // Distance to nearest car ahead (meters)
+    RelativeDistBehind,  // Distance to nearest car behind (meters)
+    
     // None (default)
     None
 }

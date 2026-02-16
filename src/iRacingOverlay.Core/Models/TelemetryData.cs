@@ -785,6 +785,18 @@ public class TelemetryData
     /// Distance to the car directly behind in meters (SDK-provided, track-distance based)
     /// </summary>
     public float CarDistBehind { get; set; }
+
+    /// <summary>
+    /// Time gap to nearest car ahead in seconds (computed from LapDistPct and EstTime).
+    /// Positive value. 0 = no car ahead or data unavailable.
+    /// </summary>
+    public float GapAhead { get; set; }
+
+    /// <summary>
+    /// Time gap to nearest car behind in seconds (computed from LapDistPct and EstTime).
+    /// Positive value. 0 = no car behind or data unavailable.
+    /// </summary>
+    public float GapBehind { get; set; }
     
     /// <summary>
     /// Track position percentage for each car (0.0-1.0). Array of 64 cars.

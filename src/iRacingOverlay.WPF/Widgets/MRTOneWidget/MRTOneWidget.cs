@@ -71,8 +71,8 @@ public class MRTOneWidget : WidgetBase
         public const double TOP_SECTION_MARGIN = 30;
         /// <summary>Bottom section margin from bottom (15% of grid size)</summary>
         public const double BOTTOM_SECTION_MARGIN = 30;
-        /// <summary>Side box horizontal margin (15% of grid size)</summary>
-        public const double SIDE_BOX_MARGIN_H = 30;
+        /// <summary>Side box horizontal margin — controls how far from the ring edge the side data sits</summary>
+        public const double SIDE_BOX_MARGIN_H = 15;
         /// <summary>Side box vertical margin (negative to align value with center text)</summary>
         public const double SIDE_BOX_MARGIN_V = -9;
 

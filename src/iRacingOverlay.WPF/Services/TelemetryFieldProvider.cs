@@ -131,6 +131,12 @@ public static class TelemetryFieldProvider
         new(TelemetryField.TurnNumber, "Turn #", "Track", "Current turn number (1-based)"),
         new(TelemetryField.TurnName, "Turn Name", "Track", "Current turn name"),
         new(TelemetryField.TurnInfo, "Turn", "Track", "Combined turn info (T#: Name)"),
+
+        // ── Relative / Gap ──────────────────────────────────────────────
+        new(TelemetryField.RelativeGapAhead, "Gap Ahead", "Relative", "Time gap to next car ahead (seconds)"),
+        new(TelemetryField.RelativeGapBehind, "Gap Behind", "Relative", "Time gap to next car behind (seconds)"),
+        new(TelemetryField.RelativeDistAhead, "Dist Ahead", "Relative", "Distance to next car ahead (meters)"),
+        new(TelemetryField.RelativeDistBehind, "Dist Behind", "Relative", "Distance to next car behind (meters)"),
     };
 
     /// <summary>
