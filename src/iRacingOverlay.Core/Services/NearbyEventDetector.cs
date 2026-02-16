@@ -197,11 +197,9 @@ public sealed class NearbyEventDetector
     private float _raceStartGraceRemaining;
     /// <summary>Whether the player was on pit road last tick (for detecting player pit exit).</summary>
     private bool _playerWasOnPitRoad;
-    /// <summary>Remaining seconds of player-pit-exit grace — keeps APPROACHING active while merging.</summary>
-    private float _playerPitExitGrace;
-    /// <summary>Grace period (seconds) after player exits pits to warn about approaching cars.</summary>
-    private const float PLAYER_PIT_EXIT_GRACE = 6.0f;
-    /// <summary>Speed threshold for pit-exit merge warning — higher than normal APPROACHING.</summary>
+    /// <summary>Whether the player is in pit-exit merge mode — stays true from pit road departure until racing speed is reached.</summary>
+    private bool _playerInPitExitMerge;
+    /// <summary>Speed threshold (m/s) the player must reach to clear pit-exit merge mode (~90 km/h).</summary>
     private const float PIT_EXIT_MERGE_SPEED_THRESHOLD = 25.0f;
 
     // ── Cooldown tracking (per car × event type) ────────────────────
@@ -253,7 +251,7 @@ public sealed class NearbyEventDetector
         _playerBlueFlagActive = false;
         _raceStartGraceRemaining = 0f;
         _playerWasOnPitRoad = false;
-        _playerPitExitGrace = 0f;
+        _playerInPitExitMerge = false;
     }
 
     /// <summary>
@@ -691,8 +689,7 @@ public sealed class NearbyEventDetector
 
         // ── PLAYER PIT EXIT DETECTION ──────────────────────────────
         // Track when the player leaves pit road to activate merge warnings.
-        // Also detect when player is DRIVING on pit road (not in stall) to
-        // show "CAR BEHIND" while still on pit lane heading for pit exit.
+        // Merge mode stays active the ENTIRE time on pit road + until racing speed after exit.
         int playerSurface = data.CarIdxTrackSurface != null
             && playerIdx >= 0 && playerIdx < data.CarIdxTrackSurface.Length
             ? data.CarIdxTrackSurface[playerIdx] : SURFACE_NOT_IN_WORLD;
@@ -701,20 +698,19 @@ public sealed class NearbyEventDetector
             && playerIdx < data.CarIdxOnPitRoad.Length && data.CarIdxOnPitRoad[playerIdx];
         bool playerInPitStall = playerSurface == SURFACE_IN_PIT_STALL;
 
-        // Detect player exiting pits → start grace period for merge warnings
+        // Detect player exiting pits → enter merge mode (stays active until racing speed)
         if (_playerWasOnPitRoad && !playerInPits && playerOnOrOffTrack)
-            _playerPitExitGrace = PLAYER_PIT_EXIT_GRACE;
+            _playerInPitExitMerge = true;
         _playerWasOnPitRoad = playerInPits;
 
-        // Tick down player pit-exit grace
-        if (_playerPitExitGrace > 0)
-            _playerPitExitGrace = Math.Max(0, _playerPitExitGrace - dt);
+        // Clear merge mode once player reaches racing speed on track
+        if (_playerInPitExitMerge && playerOnOrOffTrack && !playerInPits
+            && data.Speed >= PIT_EXIT_MERGE_SPEED_THRESHOLD)
+            _playerInPitExitMerge = false;
 
-        // Detect player driving on pit road (not stationary in stall):
-        // When the player is on pit road, NOT in pit stall, and moving — they're
-        // heading for pit exit and should see "CAR BEHIND" warnings.
-        bool playerDrivingOnPitRoad = playerInPits && !playerInPitStall
-            && data.Speed > PLAYER_STOPPED_THRESHOLD;
+        // Player driving on pit road (not stationary in pit stall) —
+        // warn about traffic the entire time they're heading for pit exit.
+        bool playerDrivingOnPitRoad = playerInPits && !playerInPitStall;
 
         // ── APPROACHING (player is stopped/slow OR exiting/on pit road) ──────
         // Case 1: Player is stopped/slow on track → warn about fast cars behind
@@ -724,7 +720,7 @@ public sealed class NearbyEventDetector
         bool playerStopped = playerOnOrOffTrack && !playerInPits
             && data.Speed < PLAYER_STOPPED_THRESHOLD;
         bool playerOffTrack = playerSurface == SURFACE_OFF_TRACK && !playerInPits;
-        bool playerMerging = (_playerPitExitGrace > 0 && playerOnOrOffTrack) || playerDrivingOnPitRoad;
+        bool playerMerging = _playerInPitExitMerge || playerDrivingOnPitRoad;
 
         // Any vulnerable state triggers approaching detection
         bool playerVulnerable = playerStopped || playerMerging || playerOffTrack;

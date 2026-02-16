@@ -10,7 +10,7 @@
                 <StackPanel>
                     <TextBlock Text="MRT UI" FontSize="28" FontWeight="Bold"
                                Foreground="{StaticResource TealPrimary}" Margin="0,0,0,4"/>
-                    <TextBlock x:Name="TxtVersion" Text="v0.1.000"
+                    <TextBlock x:Name="TxtVersion" Text="v0.1.001"
                                FontSize="14" Foreground="{StaticResource MutedText}" Margin="0,0,0,12"/>
                     <TextBlock Text="iRacing Telemetry Overlay"
                                FontSize="14" Foreground="{StaticResource LightText}" Margin="0,0,0,8"/>

@@ -52,7 +52,7 @@ public static class VersionInfo
 
     /// <summary>
     /// Formatted version string with 'v' prefix for display.
-    /// Example: "v0.1.000"
+    /// Example: "v0.1.001"
     /// </summary>
     public static string DisplayVersion => $"v{APP_VERSION}";
 

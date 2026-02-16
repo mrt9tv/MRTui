@@ -1,8 +1,8 @@
 # MRT UI — iRacing Telemetry Overlay
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=.net)](https://dotnet.microsoft.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.7.1-blue.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-0.1.001-blue.svg)](CHANGELOG.md)
 
 > **Professional-grade telemetry overlay system for iRacing featuring modular widgets, intelligent fuel strategy, and race-optimized UI design.**
 
@@ -271,7 +271,12 @@ Contributions are welcome! Please:
 
 ## 📄 License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) file for details.
+MRT UI is proprietary software. Copyright (c) 2026 MRT9. All rights reserved.
+
+The Software is provided for personal, non-commercial use only. Redistribution,
+reverse engineering, and modification are prohibited. See [LICENSE](LICENSE) for full terms.
+
+This project uses third-party open-source components. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attributions and license details.
 
 ---
 
