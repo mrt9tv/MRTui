@@ -31,7 +31,7 @@ MRT UI renders transparent, always-on-top widgets over iRacing that update at ~6
 ## Quick Start
 
 1. Install [.NET 8.0 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (Windows x64)
-2. Run `START_OVERLAY.bat` or launch the `.exe`
+2. Run `MRT.MRTui.exe`
 3. Enter any iRacing session — widgets appear when telemetry connects
 
 **Typical footprint:** ~2% CPU, ~260 MB RAM (both widgets active at 60 Hz).
