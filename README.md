@@ -1,7 +1,6 @@
 # MRT UI — iRacing Telemetry Overlay
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=.net)](https://dotnet.microsoft.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-0.1.0-blue.svg)](CHANGELOG.md)
 
 > Real-time telemetry overlay for iRacing — modular, glanceable, and race‑optimized.
@@ -42,7 +41,3 @@ MRT UI renders transparent, always-on-top widgets over iRacing that update at ~6
 - **SVappsLAB.iRacingTelemetrySDK** — source-generated iRacing data binding
 - **H.NotifyIcon.Wpf** — system tray
 - **Velopack** — single-file packaging and auto-update
-
-## License
-
-MIT
