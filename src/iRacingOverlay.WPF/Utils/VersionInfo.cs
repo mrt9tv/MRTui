@@ -32,7 +32,7 @@ public static class VersionInfo
     /// <summary>
     /// Minor version number.
     /// </summary>
-    public const int VERSION_MINOR = 1;
+    public const int VERSION_MINOR = 2;
 
     /// <summary>
     /// Patch version number (zero-padded to 3 digits in display).
