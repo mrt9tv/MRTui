@@ -51,7 +51,7 @@ if exist "%~dp0src\iRacingOverlay.Core\Data\TrackTurnDatabase.json" (
 
 :: Get version from VersionInfo.cs (extract major.minor.patch)
 :: Velopack uses SemVer: X.Y.Z (not zero-padded)
-set PACK_VERSION=0.1.0
+set PACK_VERSION=0.2.0
 echo Packing version: %PACK_VERSION%
 
 :: Pack with Velopack (vpk CLI)

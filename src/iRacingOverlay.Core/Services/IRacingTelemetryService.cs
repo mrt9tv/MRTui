@@ -269,6 +269,26 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private int _paceCarIdx = -1; // CarIdx of the pace/safety car (-1 if none)
     private readonly object _driverDataLock = new(); // Thread safety for async session callbacks
     
+    // ── Pre-allocated buffers for zero-alloc enum array casting (Phase 3 perf optimization) ──
+    private readonly int[] _trackSurfaceBuffer = new int[64];
+    private readonly int[] _sessionFlagsBuffer = new int[64];
+    private readonly int[] _paceFlagsBuffer = new int[64];
+    private readonly int[] _surfaceMaterialBuffer = new int[64];
+    private readonly bool[] _recentIncidentBuffer = new bool[64];
+    private readonly int[] _recentIncidentDeltaBuffer = new int[64];
+    
+    // ── Versioned dictionary snapshots — only re-copy when source data changes ──
+    private int _driverDataVersion = 0;         // Incremented when any dict changes
+    private int _lastCopiedDriverDataVersion = -1;
+    private Dictionary<int, string>? _snapshotCarNumber;
+    private Dictionary<int, string>? _snapshotDriverName;
+    private Dictionary<int, int>?    _snapshotIRating;
+    private Dictionary<int, float>?  _snapshotSafetyRating;
+    private Dictionary<int, string>? _snapshotLicenseClass;
+    private Dictionary<int, int>?    _snapshotIncidentCount;
+    private Dictionary<int, string>? _snapshotCarModel;
+    private Dictionary<int, string>? _snapshotCountryCode;
+    
     // Tier 2: SessionInfo version tracking - Only parse when SDK increments SessionInfoUpdate
     // Note: Weather data (TrackTemp, AirTemp, WeatherType) comes from SDK real-time telemetry (60Hz),
     //       NOT from YAML SessionInfo. YAML parsing is for static session metadata only.
@@ -537,6 +557,10 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             float deltaToBest = sdkData.LapDeltaToBestLap.GetValueOrDefault();
             float deltaToSession = sdkData.LapDeltaToSessionBestLap.GetValueOrDefault();
             
+            // ── Pre-compute reusable snapshots (zero-alloc when unchanged) ──
+            RefreshDriverDataSnapshots();       // Only re-copies dicts when _driverDataVersion changed
+            CopyRecentIncidentsToBuffers();     // Copies into pre-allocated bool[64] + int[64]
+
             // Convert SDK TelemetryData to our Models.TelemetryData
             var data = new Models.TelemetryData
             {
@@ -707,17 +731,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 SessionType = _sessionType,
                 TrackLength = _trackLength,
                 TrackPitSpeedLimit = _trackPitSpeedLimit,
-                // Thread-safe copy of driver data (populated by typed session callback)
-                CarIdxToCarNumber = CopyDictSafe(_carIdxToCarNumber),
-                CarIdxToDriverName = CopyDictSafe(_carIdxToDriverName),
-                CarIdxToIRating = CopyDictSafe(_carIdxToIRating),
-                CarIdxToSafetyRating = CopyDictSafe(_carIdxToSafetyRating),
-                CarIdxToLicenseClass = CopyDictSafe(_carIdxToLicenseClass),
-                CarIdxToIncidentCount = CopyDictSafe(_carIdxToIncidentCount),
-                CarIdxRecentIncident = CopyRecentIncidents(out var recentDelta),
-                CarIdxRecentIncidentDelta = recentDelta,
-                CarIdxToCarModel = CopyDictSafe(_carIdxToCarModel),
-                CarIdxToCountryCode = CopyDictSafe(_carIdxToCountryCode),
+                // Thread-safe snapshots of driver data (version-stamped, only copied when changed)
+                CarIdxToCarNumber = _snapshotCarNumber,
+                CarIdxToDriverName = _snapshotDriverName,
+                CarIdxToIRating = _snapshotIRating,
+                CarIdxToSafetyRating = _snapshotSafetyRating,
+                CarIdxToLicenseClass = _snapshotLicenseClass,
+                CarIdxToIncidentCount = _snapshotIncidentCount,
+                CarIdxRecentIncident = _recentIncidentBuffer,
+                CarIdxRecentIncidentDelta = _recentIncidentDeltaBuffer,
+                CarIdxToCarModel = _snapshotCarModel,
+                CarIdxToCountryCode = _snapshotCountryCode,
 
                 // Live Position Calculation
                 SessionState = (int)sdkData.SessionState.GetValueOrDefault(),
@@ -736,7 +760,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // Multi-Car Position Arrays (CarIdx[64])
                 CarIdxLapDistPct = sdkData.CarIdxLapDistPct,
                 CarIdxOnPitRoad = sdkData.CarIdxOnPitRoad,
-                CarIdxTrackSurface = sdkData.CarIdxTrackSurface?.Select(t => (int)t).ToArray(), // Cast enum array
+                CarIdxTrackSurface = CastEnumArrayToBuffer(sdkData.CarIdxTrackSurface, _trackSurfaceBuffer),
                 CarIdxClass = sdkData.CarIdxClass,
                 CarIdxLap = sdkData.CarIdxLap,
                 CarIdxPosition = sdkData.CarIdxPosition,
@@ -747,7 +771,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxF2Time = sdkData.CarIdxF2Time,
                 CarIdxLastLapTime = sdkData.CarIdxLastLapTime,
                 CarIdxBestLapTime = sdkData.CarIdxBestLapTime,
-                CarIdxSessionFlags = sdkData.CarIdxSessionFlags?.Select(f => (int)f).ToArray(),
+                CarIdxSessionFlags = CastEnumArrayToBuffer(sdkData.CarIdxSessionFlags, _sessionFlagsBuffer),
 
                 // Additional CarIdx arrays (complete SDK coverage)
                 CarIdxBestLapNum = sdkData.CarIdxBestLapNum,
@@ -755,14 +779,14 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxFastRepairsUsed = sdkData.CarIdxFastRepairsUsed,
                 CarIdxP2P_Count = sdkData.CarIdxP2P_Count,
                 CarIdxP2P_Status = sdkData.CarIdxP2P_Status,
-                CarIdxPaceFlags = sdkData.CarIdxPaceFlags?.Select(f => (int)f).ToArray(),
+                CarIdxPaceFlags = CastEnumArrayToBuffer(sdkData.CarIdxPaceFlags, _paceFlagsBuffer),
                 CarIdxPaceLine = sdkData.CarIdxPaceLine,
                 CarIdxPaceRow = sdkData.CarIdxPaceRow,
                 CarIdxQualTireCompound = sdkData.CarIdxQualTireCompound,
                 CarIdxQualTireCompoundLocked = sdkData.CarIdxQualTireCompoundLocked,
                 CarIdxSteer = sdkData.CarIdxSteer,
                 CarIdxTireCompound = sdkData.CarIdxTireCompound,
-                CarIdxTrackSurfaceMaterial = sdkData.CarIdxTrackSurfaceMaterial?.Select(m => (int)m).ToArray(),
+                CarIdxTrackSurfaceMaterial = CastEnumArrayToBuffer(sdkData.CarIdxTrackSurfaceMaterial, _surfaceMaterialBuffer),
 
                 // Player Orientation
                 Yaw = sdkData.Yaw.GetValueOrDefault(),
@@ -913,30 +937,53 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
 
     // ── Thread-safe dictionary copy helpers ──────────────────────────────
 
-    private Dictionary<int, string>? CopyDictSafe(Dictionary<int, string> src)
+    /// <summary>
+    /// Only re-snapshot dictionaries when the source data version has changed.
+    /// Session info callbacks increment _driverDataVersion, so we only copy
+    /// when actual changes occurred (typically once per new driver / session change).
+    /// </summary>
+    private void RefreshDriverDataSnapshots()
     {
+        if (_lastCopiedDriverDataVersion == _driverDataVersion)
+            return; // No changes since last copy
+
         lock (_driverDataLock)
-            return src.Count > 0 ? new Dictionary<int, string>(src) : null;
+        {
+            _snapshotCarNumber   = _carIdxToCarNumber.Count > 0 ? new Dictionary<int, string>(_carIdxToCarNumber) : null;
+            _snapshotDriverName  = _carIdxToDriverName.Count > 0 ? new Dictionary<int, string>(_carIdxToDriverName) : null;
+            _snapshotIRating     = _carIdxToIRating.Count > 0 ? new Dictionary<int, int>(_carIdxToIRating) : null;
+            _snapshotSafetyRating = _carIdxToSafetyRating.Count > 0 ? new Dictionary<int, float>(_carIdxToSafetyRating) : null;
+            _snapshotLicenseClass = _carIdxToLicenseClass.Count > 0 ? new Dictionary<int, string>(_carIdxToLicenseClass) : null;
+            _snapshotIncidentCount = _carIdxToIncidentCount.Count > 0 ? new Dictionary<int, int>(_carIdxToIncidentCount) : null;
+            _snapshotCarModel    = _carIdxToCarModel.Count > 0 ? new Dictionary<int, string>(_carIdxToCarModel) : null;
+            _snapshotCountryCode = _carIdxToCountryCode.Count > 0 ? new Dictionary<int, string>(_carIdxToCountryCode) : null;
+            _lastCopiedDriverDataVersion = _driverDataVersion;
+        }
     }
 
-    private Dictionary<int, int>? CopyDictSafe(Dictionary<int, int> src)
+    /// <summary>Copy enum array into pre-allocated int[] buffer (zero-allocation).</summary>
+    private static int[] CastEnumArrayToBuffer<T>(T[]? source, int[] buffer) where T : struct, Enum
     {
-        lock (_driverDataLock)
-            return src.Count > 0 ? new Dictionary<int, int>(src) : null;
+        if (source == null)
+        {
+            Array.Clear(buffer);
+            return buffer;
+        }
+        int len = Math.Min(source.Length, buffer.Length);
+        for (int i = 0; i < len; i++)
+            buffer[i] = Convert.ToInt32(source[i]);
+        // Clear remaining slots
+        for (int i = len; i < buffer.Length; i++)
+            buffer[i] = 0;
+        return buffer;
     }
 
-    private Dictionary<int, float>? CopyDictSafe(Dictionary<int, float> src)
-    {
-        lock (_driverDataLock)
-            return src.Count > 0 ? new Dictionary<int, float>(src) : null;
-    }
-
-    /// <summary>Copy recent incident flags and deltas, clearing any that are older than 8 seconds.</summary>
-    private bool[] CopyRecentIncidents(out int[] deltas)
+    /// <summary>Copy recent incident flags and deltas into pre-allocated buffers, clearing stale entries.</summary>
+    private void CopyRecentIncidentsToBuffers()
     {
         var now = DateTime.UtcNow;
-        var result = new bool[64];
-        deltas = new int[64];
+        Array.Clear(_recentIncidentBuffer);
+        Array.Clear(_recentIncidentDeltaBuffer);
         lock (_driverDataLock)
         {
             for (int i = 0; i < 64; i++)
@@ -945,18 +992,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 {
                     if ((now - _carIdxIncidentTime[i]).TotalSeconds > 8.0)
                     {
-                        _carIdxRecentIncident[i] = false; // auto-clear after 8s
+                        _carIdxRecentIncident[i] = false;
                         _carIdxRecentIncidentDelta[i] = 0;
                     }
                     else
                     {
-                        result[i] = true;
-                        deltas[i] = _carIdxRecentIncidentDelta[i];
+                        _recentIncidentBuffer[i] = true;
+                        _recentIncidentDeltaBuffer[i] = _carIdxRecentIncidentDelta[i];
                     }
                 }
             }
         }
-        return result;
     }
 
     /// <summary>Make a 3-letter car model abbreviation from the full car name.</summary>
@@ -1110,6 +1156,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     }
                 }
             }
+
+            // Signal that driver data has changed — snapshot will be refreshed on next telemetry tick
+            Interlocked.Increment(ref _driverDataVersion);
 
             _logger.LogInformation("Typed session info: {Count} drivers, player CarIdx={PlayerIdx}",
                 session.DriverInfo.Drivers.Count, driverCarIdx);

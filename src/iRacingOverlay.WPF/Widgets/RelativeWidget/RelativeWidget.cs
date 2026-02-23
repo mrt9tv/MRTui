@@ -11,6 +11,7 @@ using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.Widgets.RelativeWidget;
 
@@ -294,6 +295,9 @@ public class RelativeWidget : WidgetBase
     // ── Construction ────────────────────────────────────────────────
 
     public override WidgetType WidgetType => WidgetType.Relative;
+
+    /// <summary>Update at 20Hz (every 3rd tick) — gap times change slowly, animations handle smooth visuals.</summary>
+    protected override int UpdateIntervalTicks => 3;
 
     public RelativeWidget(ITelemetryService telemetryService, WidgetConfig? config = null)
         : base(telemetryService, config)
@@ -1089,16 +1093,16 @@ public class RelativeWidget : WidgetBase
             var flashColor = flashGained
                 ? Color.FromArgb(alpha, 0, 200, 0)   // green flash for gaining positions
                 : Color.FromArgb(alpha, 200, 0, 0);  // red flash for losing positions
-            row.Background.Background = new SolidColorBrush(flashColor);
+            row.Background.Background = BrushCache.Get(flashColor);
         }
         else if (isDanger)
         {
             // Danger glow: subtle red tint background
-            row.Background.Background = new SolidColorBrush(COLOR_DANGER_GLOW);
+            row.Background.Background = BrushCache.Get(COLOR_DANGER_GLOW);
         }
         else if (ShowAlternateRowShading && rowIndex % 2 == 1)
         {
-            row.Background.Background = new SolidColorBrush(Color.FromArgb((byte)ALT_ROW_ALPHA, 255, 255, 255));
+            row.Background.Background = BrushCache.Get(Color.FromArgb((byte)ALT_ROW_ALPHA, 255, 255, 255));
         }
         else
         {

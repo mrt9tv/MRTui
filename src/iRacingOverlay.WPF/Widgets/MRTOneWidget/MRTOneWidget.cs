@@ -664,28 +664,31 @@ public class MRTOneWidget : WidgetBase
         }
 
         // Setup blinking timer for fuel warnings (slow blink)
+        // Timer is demand-started in UpdateUI when fuel is low
         _blinkTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(LayoutConstants.FUEL_BLINK_INTERVAL_MS)
         };
         _blinkTimer.Tick += OnBlinkTimerTick;
-        _blinkTimer.Start();
+        // NOT started here — demand-started when fuel warning is active
 
         // Setup radar blinking timer for front/back VeryClose proximity (fast blink)
+        // Timer is demand-started in UpdateUI when proximity is VeryClose/Close
         _radarBlinkTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(LayoutConstants.ARC_FAST_BLINK_INTERVAL_MS)
         };
         _radarBlinkTimer.Tick += OnRadarBlinkTimerTick;
-        _radarBlinkTimer.Start();
+        // NOT started here — demand-started when proximity detected
 
         // Setup pit limiter blinking timer (fast blink) - PHASE 2: Enhancement #4
+        // Timer is demand-started in UpdateUI when pit limiter is active
         _pitLimiterBlinkTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(LayoutConstants.PIT_LIMITER_BLINK_INTERVAL_MS)
         };
         _pitLimiterBlinkTimer.Tick += OnPitLimiterBlinkTimerTick;
-        _pitLimiterBlinkTimer.Start(); // Always running, only acts when limiter active AND feature enabled
+        // NOT started here — demand-started when pit limiter is active
 
         // Setup brake bias hide timer (auto-hides overlay after configurable duration)
         double hideSeconds = AppSettings.Instance.BrakeBiasDisplayDuration;
@@ -948,7 +951,7 @@ public class MRTOneWidget : WidgetBase
 
         // Alternate: White → Orange → White... (MRT theme colors for high visibility)
         Color borderColor = _pitLimiterBlinkState ? Colors.White : _secondaryColor;
-        _gaugeCircle.Stroke = new SolidColorBrush(borderColor);
+        _gaugeCircle.Stroke = BrushCache.Get(borderColor);
     }
 
     private void OnBrakeBiasHideTimerTick(object? sender, EventArgs e)
@@ -1298,7 +1301,7 @@ public class MRTOneWidget : WidgetBase
                 _ => _primaryColor                                          // TEAL - safe range
             };
             
-            _gaugeCircle.Stroke = new SolidColorBrush(borderColor);
+            _gaugeCircle.Stroke = BrushCache.Get(borderColor);
         }
 
         // PHASE 1: Update 4-way radar spotter squares
@@ -1309,6 +1312,26 @@ public class MRTOneWidget : WidgetBase
 
         // PHASE 2: Update visual effects with latest telemetry (for RPM bead animation)
         _visualEffects?.UpdateTelemetryData(data);
+
+        // ── DEMAND-BASED TIMER MANAGEMENT ──
+        // Start/stop blink timers based on actual state to avoid unnecessary CPU work.
+
+        // Fuel blink timer: only needed when fuel is critically low (red foreground)
+        bool needsFuelBlink = (_leftField == TelemetryField.FuelLevel && _leftValueText?.Foreground is SolidColorBrush lb && lb.Color == Colors.Red)
+                           || (_rightField == TelemetryField.FuelLevel && _rightValueText?.Foreground is SolidColorBrush rb && rb.Color == Colors.Red);
+        if (needsFuelBlink && !_blinkTimer.IsEnabled) _blinkTimer.Start();
+        else if (!needsFuelBlink && _blinkTimer.IsEnabled) _blinkTimer.Stop();
+
+        // Radar blink timer: only needed when proximity is Close or VeryClose
+        var (fZone, rZone) = _stateManager.GetCurrentZones();
+        bool needsRadarBlink = fZone >= ProximityZone.Close || rZone >= ProximityZone.Close;
+        if (needsRadarBlink && !_radarBlinkTimer.IsEnabled) _radarBlinkTimer.Start();
+        else if (!needsRadarBlink && _radarBlinkTimer.IsEnabled) _radarBlinkTimer.Stop();
+
+        // Pit limiter blink timer: only needed when pit limiter is active AND feature enabled
+        bool needsPitBlink = _settings.EnablePitLimiterIndicator && _stateManager.IsPitLimiterActive;
+        if (needsPitBlink && !_pitLimiterBlinkTimer.IsEnabled) _pitLimiterBlinkTimer.Start();
+        else if (!needsPitBlink && _pitLimiterBlinkTimer.IsEnabled) _pitLimiterBlinkTimer.Stop();
     }
     
     /// <summary>
@@ -1326,7 +1349,7 @@ public class MRTOneWidget : WidgetBase
         // Special color handling for Gear (R=Red, N=Gray, forward gears=Teal)
         if (field == TelemetryField.Gear && value is int gear)
         {
-            valueText.Foreground = new SolidColorBrush(gear switch
+            valueText.Foreground = BrushCache.Get(gear switch
             {
                 -1 => Colors.Red,           // Reverse
                 0 => Colors.Gray,           // Neutral
@@ -1343,7 +1366,7 @@ public class MRTOneWidget : WidgetBase
                 data.PlayerCarSLShiftRPM, 
                 data.PlayerCarSLLastRPM, 
                 data.PlayerCarSLBlinkRPM);
-            valueText.Foreground = new SolidColorBrush(zone switch
+            valueText.Foreground = BrushCache.Get(zone switch
             {
                 ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // At limiter
                 ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // Optimal shift (Orange)
@@ -1353,7 +1376,7 @@ public class MRTOneWidget : WidgetBase
         }
         else
         {
-            valueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(field, value ?? 0, data, _primaryColor, _secondaryColor));
+            valueText.Foreground = BrushCache.Get(MRTOneDataFormatter.GetValueColor(field, value ?? 0, data, _primaryColor, _secondaryColor));
         }
         
         // Update label if present
@@ -1367,7 +1390,7 @@ public class MRTOneWidget : WidgetBase
             else
             {
                 labelText.Text = MRTOneDataFormatter.GetLabel(field, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
-                labelText.Foreground = new SolidColorBrush(_primaryColor);
+                labelText.Foreground = BrushCache.Get(_primaryColor);
                 labelText.Visibility = Visibility.Visible;
             }
         }
@@ -1384,7 +1407,7 @@ public class MRTOneWidget : WidgetBase
 
         var value = TelemetryDataMapper.GetValue(field.Value, data, _telemetryService) ?? 0;
         valueText.Text = MRTOneDataFormatter.FormatValue(field.Value, value, data, AppSettings.Instance.UseMetricUnits);
-        valueText.Foreground = new SolidColorBrush(MRTOneDataFormatter.GetValueColor(field.Value, value, data, _primaryColor, _secondaryColor));
+        valueText.Foreground = BrushCache.Get(MRTOneDataFormatter.GetValueColor(field.Value, value, data, _primaryColor, _secondaryColor));
 
         // ABS special handling: Fade to background when inactive, bright when active
         // Use StateManager to prevent flicker with cached state comparison
@@ -1427,7 +1450,7 @@ public class MRTOneWidget : WidgetBase
 
                 // Color: Orange when TC > 0 (enabled), Teal when OFF/N/A
                 Color tcColor = tcValue > 0 ? _secondaryColor : _primaryColor;
-                valueText.Foreground = new SolidColorBrush(tcColor);
+                valueText.Foreground = BrushCache.Get(tcColor);
             }
             // Note: If state hasn't changed, keep current opacity (don't reset)
         }

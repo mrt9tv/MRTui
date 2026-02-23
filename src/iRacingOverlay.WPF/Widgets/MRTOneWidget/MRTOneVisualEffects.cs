@@ -243,7 +243,7 @@ public class MRTOneVisualEffects
             ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,
             _ => Color.FromRgb(0, 128, 128) // Teal for safe zone
         };
-        _rpmIndicatorBead.Fill = new SolidColorBrush(beadColor);
+        _rpmIndicatorBead.Fill = BrushCache.Get(beadColor);
     }
 
     /// <summary>
@@ -263,7 +263,7 @@ public class MRTOneVisualEffects
         _secondaryColor = color;
         if (_rpmIndicatorBead != null)
         {
-            _rpmIndicatorBead.Fill = new SolidColorBrush(color);
+            _rpmIndicatorBead.Fill = BrushCache.Get(color);
         }
     }
 

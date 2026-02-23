@@ -71,6 +71,9 @@ public class TurnDisplayWidget : WidgetBase
 
     public override WidgetType WidgetType => WidgetType.TurnDisplay;
 
+    /// <summary>Update at 20Hz (every 3rd tick) — turn names change at corner entry/exit timescales.</summary>
+    protected override int UpdateIntervalTicks => 3;
+
     public TurnDisplayWidget(ITelemetryService telemetryService, WidgetConfig? config = null)
         : base(telemetryService, config)
     {

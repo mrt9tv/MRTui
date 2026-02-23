@@ -143,6 +143,9 @@ public class FuelWidget : WidgetBase
 
     public override WidgetType WidgetType => WidgetType.FuelCalculator;
 
+    /// <summary>Update at 6Hz (every 10th tick) — fuel level decreases gradually.</summary>
+    protected override int UpdateIntervalTicks => 10;
+
     public FuelWidget(ITelemetryService telemetryService, WidgetConfig? config = null)
         : base(telemetryService, config)
     {

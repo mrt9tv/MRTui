@@ -12,6 +12,7 @@ using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.Widgets.ProximityFeedWidget;
 
@@ -150,6 +151,9 @@ public class ProximityFeedWidget : WidgetBase
     #endregion
 
     public override WidgetType WidgetType => WidgetType.ProximityFeed;
+
+    /// <summary>Update at 30Hz (every 2nd tick) — event feed is text-based, doesn't need 60Hz.</summary>
+    protected override int UpdateIntervalTicks => 2;
 
     /// <summary>Current background alpha (0–255) based on BackgroundOpacity.</summary>
     private byte _bgAlpha = 220;
@@ -404,8 +408,8 @@ public class ProximityFeedWidget : WidgetBase
 
         // Show/hide background based on whether there are events
         _backgroundBorder.Background = sorted.Count > 0
-            ? new SolidColorBrush(Color.FromArgb(_bgAlpha, 18, 18, 18))
-            : new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+            ? BrushCache.Get(_bgAlpha, 18, 18, 18)
+            : BrushCache.Get(0, 0, 0, 0);
 
         // Track which event IDs are still active
         var activeIds = new HashSet<long>(sorted.Select(e => e.Id));
@@ -459,7 +463,7 @@ public class ProximityFeedWidget : WidgetBase
     private Border CreateEventRow(NearbyEvent evt)
     {
         var eventColor = GetEventTypeColor(evt);
-        var eventBrush = new SolidColorBrush(eventColor);
+        var eventBrush = BrushCache.Get(eventColor);
 
         // Black flag: special black background with white text
         bool isBlackFlag = evt.EventType == NearbyEventType.BlackFlag;
@@ -470,11 +474,11 @@ public class ProximityFeedWidget : WidgetBase
             Margin = new Thickness(0, 0, 0, ROW_GAP),
             CornerRadius = new CornerRadius(3),
             Background = isBlackFlag
-                ? new SolidColorBrush(Color.FromArgb(220, 10, 10, 10))
-                : new SolidColorBrush(Color.FromArgb(40, eventColor.R, eventColor.G, eventColor.B)),
+                ? BrushCache.Get(220, 10, 10, 10)
+                : BrushCache.Get(Color.FromArgb(40, eventColor.R, eventColor.G, eventColor.B)),
             BorderBrush = isBlackFlag
-                ? new SolidColorBrush(Color.FromArgb(160, 80, 80, 80))
-                : new SolidColorBrush(Color.FromArgb(80, eventColor.R, eventColor.G, eventColor.B)),
+                ? BrushCache.Get(160, 80, 80, 80)
+                : BrushCache.Get(Color.FromArgb(80, eventColor.R, eventColor.G, eventColor.B)),
             BorderThickness = new Thickness(STRIPE_WIDTH, 0, 0, 0),
             Opacity = 0, // start invisible for fade-in
         };
@@ -498,7 +502,7 @@ public class ProximityFeedWidget : WidgetBase
             {
                 Text = evt.IsAhead ? "▲" : "▼",
                 FontSize = 8,
-                Foreground = evt.IsAhead ? new SolidColorBrush(COLOR_INFO) : new SolidColorBrush(COLOR_WARNING),
+                Foreground = evt.IsAhead ? BrushCache.Get(COLOR_INFO) : BrushCache.Get(COLOR_WARNING),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 3, 0),
                 Tag = "arrowText",
@@ -573,8 +577,8 @@ public class ProximityFeedWidget : WidgetBase
         if (isChaos)
         {
             var phase = blinkVisible ? COLOR_CHAOS_ORANGE : COLOR_CHAOS_RED;
-            row.Background = new SolidColorBrush(Color.FromArgb(80, phase.R, phase.G, phase.B));
-            row.BorderBrush = new SolidColorBrush(Color.FromArgb(180, phase.R, phase.G, phase.B));
+            row.Background = BrushCache.Get(Color.FromArgb(80, phase.R, phase.G, phase.B));
+            row.BorderBrush = BrushCache.Get(Color.FromArgb(180, phase.R, phase.G, phase.B));
         }
 
         // Update interval text, direction arrow, and apply text blink
@@ -604,8 +608,8 @@ public class ProximityFeedWidget : WidgetBase
                             bool ahead = evt.IntervalToPlayer > 0;
                             etb.Text = ahead ? "▲" : "▼";
                             etb.Foreground = ahead
-                                ? new SolidColorBrush(COLOR_INFO)
-                                : new SolidColorBrush(COLOR_WARNING);
+                                ? BrushCache.Get(COLOR_INFO)
+                                : BrushCache.Get(COLOR_WARNING);
                         }
                     }
                 }

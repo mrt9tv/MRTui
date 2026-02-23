@@ -206,9 +206,15 @@ public partial class MainWindow : Window
 
     // ── Session auto-detect forwarding ──────────────────────────────────
 
+    private int _sessionCheckCounter;
+
     private void OnTelemetryUpdatedForSession(object? sender, TelemetryData data)
     {
-        Dispatcher.Invoke(() =>
+        // Throttle to ~2Hz (every 30 ticks at 60Hz) — session/pit changes are human-timescale events.
+        // Use non-blocking BeginInvoke so the telemetry thread is never stalled.
+        if (++_sessionCheckCounter % 30 != 0) return;
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             _sessionConfig.CheckSessionChange(data);
             CheckPlayerPitState(data);

@@ -1,6 +1,9 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
@@ -88,14 +91,15 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
-    /// Initialize common window properties for transparent overlay
+    /// Initialize common window properties for transparent overlay.
+    /// Uses DWM composited transparency (GPU-accelerated) instead of
+    /// AllowsTransparency=true which forces software rendering.
     /// </summary>
     private void InitializeWindowProperties()
     {
-        // Transparent overlay settings
+        // Transparent overlay settings — NO AllowsTransparency (forces software rendering)
         WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = System.Windows.Media.Brushes.Transparent;
+        Background = Brushes.Transparent;
         Topmost = true;
         ShowInTaskbar = false;
         ResizeMode = ResizeMode.NoResize;
@@ -104,6 +108,45 @@ public abstract class WidgetBase : Window
         Width = 280;
         Height = 280;
     }
+
+    /// <summary>
+    /// After the Win32 window handle is created, enable per-pixel alpha via DWM.
+    /// This gives us true transparency with GPU-accelerated (hardware) rendering,
+    /// avoiding the massive performance penalty of AllowsTransparency=true.
+    /// </summary>
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        EnableDwmTransparency();
+    }
+
+    private void EnableDwmTransparency()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var hwndSource = HwndSource.FromHwnd(hwnd);
+        if (hwndSource?.CompositionTarget != null)
+            hwndSource.CompositionTarget.BackgroundColor = Colors.Transparent;
+
+        // Extend glass frame into entire client area for per-pixel alpha
+        var margins = new MARGINS { cxLeftWidth = -1 };
+        DwmExtendFrameIntoClientArea(hwnd, ref margins);
+    }
+
+    #region DWM Interop
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MARGINS
+    {
+        public int cxLeftWidth;
+        public int cxRightWidth;
+        public int cyTopHeight;
+        public int cyBottomHeight;
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
+
+    #endregion
 
     #region Screen Centering
 
@@ -261,14 +304,26 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
+    /// How many 60Hz telemetry ticks to skip between UpdateUI calls.
+    /// Override in derived classes to reduce update frequency for slow-changing data.
+    /// 1 = every tick (60 Hz), 2 = every other (30 Hz), 3 = 20 Hz, etc.
+    /// </summary>
+    protected virtual int UpdateIntervalTicks => 1;
+
+    private int _frameCounter;
+
+    /// <summary>
     /// Handle telemetry updates (thread-safe via Dispatcher)
     /// Uses BeginInvoke (async) instead of Invoke (blocking) so the 60Hz telemetry
     /// thread isn't held up waiting for each widget's UI update to complete.
-    /// This ensures radar and other time-critical visuals run at full 60Hz rate.
+    /// Supports per-widget update throttling via UpdateIntervalTicks.
     /// </summary>
     private void OnTelemetryUpdated(object? sender, TelemetryData data)
     {
         _lastTelemetryData = data;
+
+        // Per-widget throttle: skip ticks to reduce update rate for slow-changing widgets
+        if (++_frameCounter % UpdateIntervalTicks != 0) return;
 
         // Queue UI update asynchronously at Render priority (high but below Input)
         // This prevents the telemetry thread from blocking on each widget

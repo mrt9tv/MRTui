@@ -46,9 +46,9 @@ public partial class App : System.Windows.Application
         var telemetryService = _host.Services.GetRequiredService<ITelemetryService>();
         _ = telemetryService.ConnectAsync();
 
-        // Wire fuel calculator to telemetry updates
-        var fuelCalculatorService = _host.Services.GetRequiredService<FuelCalculatorService>();
-        telemetryService.TelemetryUpdated += (_, data) => fuelCalculatorService.Update(data);
+        // NOTE: FuelCalculatorService.Update() is already called inside
+        // IRacingTelemetryService.OnTelemetryUpdate — no need to subscribe again here.
+        // Duplicate subscription was causing double fuel calculation at 60Hz.
 
         // Start monitoring in background
         if (telemetryService is IRacingTelemetryService racingService)

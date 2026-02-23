@@ -171,6 +171,9 @@ public class StandingsWidget : WidgetBase
 
     public override WidgetType WidgetType => WidgetType.Standings;
 
+    /// <summary>Update at 4Hz (every 15th tick) — standings only change on position swaps or lap completions.</summary>
+    protected override int UpdateIntervalTicks => 15;
+
     public StandingsWidget(ITelemetryService telemetryService, WidgetConfig? config = null)
         : base(telemetryService, config)
     {
