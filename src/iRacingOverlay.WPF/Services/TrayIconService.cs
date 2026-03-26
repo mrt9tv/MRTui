@@ -83,18 +83,29 @@ public sealed class TrayIconService : IDisposable
         var visual = new DrawingVisual();
         using (var ctx = visual.RenderOpen())
         {
-            // Dark background
-            ctx.DrawRectangle(new SolidColorBrush(Color.FromRgb(30, 30, 30)),
-                null, new Rect(0, 0, size, size));
+            // Gradient background matching the website icon (#0a0a1a → #1a1a2e → #0d2b2b)
+            var bgBrush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops = new GradientStopCollection
+                {
+                    new GradientStop(Color.FromRgb(0x0a, 0x0a, 0x1a), 0.0),
+                    new GradientStop(Color.FromRgb(0x1a, 0x1a, 0x2e), 0.5),
+                    new GradientStop(Color.FromRgb(0x0d, 0x2b, 0x2b), 1.0),
+                }
+            };
+            // Rounded corners (radius 6) via RoundedRectangleGeometry
+            ctx.DrawRoundedRectangle(bgBrush, null, new Rect(0, 0, size, size), 6, 6);
 
-            // Teal "9"
+            // Teal "9" matching website (#008080)
             var formattedText = new FormattedText(
                 "9",
                 System.Globalization.CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal),
-                22,
-                new SolidColorBrush(Color.FromRgb(0, 188, 212)),
+                20,
+                new SolidColorBrush(Color.FromRgb(0x00, 0x80, 0x80)),
                 96);
 
             double x = (size - formattedText.Width) / 2;
