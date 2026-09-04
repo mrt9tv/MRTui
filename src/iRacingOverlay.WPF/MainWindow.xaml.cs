@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private GlobalHotkey? _toggleVisibilityHotkey;
     private readonly TrayIconService _trayIcon = new();
     private readonly UpdateService _updateService;
+    private readonly IServiceProvider _services;
 
     /// <summary>When true, Close() will actually exit instead of minimizing to tray.</summary>
     private bool _forceClose;
@@ -53,6 +54,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        _services = services;
         _widgetManager = services.GetRequiredService<WidgetManager>();
         _telemetryService = services.GetRequiredService<ITelemetryService>();
         _sessionConfig = services.GetRequiredService<SessionConfigService>();
@@ -110,8 +112,8 @@ public partial class MainWindow : Window
 
         // Initialize tray icon
         _trayIcon.Initialize();
-        _trayIcon.RestoreRequested += (_, _) => Dispatcher.Invoke(RestoreFromTray);
-        _trayIcon.ExitRequested += (_, _) => Dispatcher.Invoke(() => { _forceClose = true; Close(); });
+        _trayIcon.RestoreRequested += (_, _) => Dispatcher.BeginInvoke(RestoreFromTray);
+        _trayIcon.ExitRequested += (_, _) => Dispatcher.BeginInvoke(() => { _forceClose = true; Close(); });
 
         // Show last-used page (persisted between sessions)
         UpdateConnectionStatus(_telemetryService.Status);
@@ -136,6 +138,27 @@ public partial class MainWindow : Window
         _navButtons["About"] = NavAbout;
 
         RegisterGlobalHotkeys();
+        HookSingleInstanceMessage();
+    }
+
+    /// <summary>
+    /// Listen for the broadcast a second launch sends before exiting, and bring
+    /// this window forward instead of letting the user think nothing happened.
+    /// </summary>
+    private void HookSingleInstanceMessage()
+    {
+        var helper = new System.Windows.Interop.WindowInteropHelper(this);
+        var source = System.Windows.Interop.HwndSource.FromHwnd(helper.Handle);
+        source?.AddHook((IntPtr hwnd, int msg, IntPtr w, IntPtr l, ref bool handled) =>
+        {
+            if ((uint)msg == Program.ShowExistingWindowMessage)
+            {
+                _logger.LogInformation("Second instance launched — restoring existing window");
+                RestoreFromTray();
+                handled = true;
+            }
+            return IntPtr.Zero;
+        });
     }
 
     /// <summary>
@@ -268,7 +291,10 @@ public partial class MainWindow : Window
 
     private void OnSessionCategoryChanged(object? sender, SessionCategory category)
     {
-        Dispatcher.Invoke(() =>
+        // Non-blocking: this arrives on the telemetry thread, and the body creates
+        // and destroys windows and writes the layout. A blocking Invoke here stalled
+        // the whole telemetry feed for the duration of that work.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             // Check if a matching profile exists (profile takes priority)
             var matchedProfile = _sessionConfig.CheckProfileMatch();
@@ -297,7 +323,8 @@ public partial class MainWindow : Window
 
     private void OnTelemetryStatusChanged(object? sender, ConnectionStatusEventArgs e)
     {
-        Dispatcher.Invoke(() => UpdateConnectionStatus(e.Status));
+        // BeginInvoke, not Invoke — this fires on the SDK thread.
+        Dispatcher.BeginInvoke(() => UpdateConnectionStatus(e.Status));
     }
 
     private void UpdateConnectionStatus(ConnectionStatus status)
@@ -338,33 +365,78 @@ public partial class MainWindow : Window
 
     // ── Global hotkeys ──────────────────────────────────────────────────
 
+    /// <summary>Format a modifier + key pair for display, e.g. "Ctrl+L".</summary>
+    public static string FormatHotkey(string modifier, string key)
+    {
+        var mod = modifier == "None" ? "" : modifier;
+        return string.IsNullOrEmpty(mod) ? key : $"{mod}+{key}";
+    }
+
     private void UpdateHotkeysDisplay()
     {
         var s = AppSettings.Instance;
-        string Fmt(string m) => m == "None" ? "" : m;
-        string lockHk = string.IsNullOrEmpty(Fmt(s.ToggleLockModifier)) ? s.ToggleLockKey : $"{Fmt(s.ToggleLockModifier)}+{s.ToggleLockKey}";
-        string visHk = string.IsNullOrEmpty(Fmt(s.ToggleVisibilityModifier)) ? s.ToggleVisibilityKey : $"{Fmt(s.ToggleVisibilityModifier)}+{s.ToggleVisibilityKey}";
-        HotkeysText.Text = $"{lockHk} Lock | {visHk} Show/Hide";
+        string lockHk = FormatHotkey(s.ToggleLockModifier, s.ToggleLockKey);
+        string visHk = FormatHotkey(s.ToggleVisibilityModifier, s.ToggleVisibilityKey);
+
+        // Mark a binding Windows refused so the status bar stops advertising a dead key.
+        string lockLabel = LockHotkeyRegistered ? lockHk : $"{lockHk} (unavailable)";
+        string visLabel = VisibilityHotkeyRegistered ? visHk : $"{visHk} (unavailable)";
+
+        HotkeysText.Text = $"{lockLabel} Lock | {visLabel} Show/Hide";
+        HotkeysText.Foreground = (LockHotkeyRegistered && VisibilityHotkeyRegistered)
+            ? (FindResource("MutedText") as SolidColorBrush ?? Brushes.Gray)
+            : (FindResource("OrangePrimary") as SolidColorBrush ?? Brushes.Orange);
     }
 
-    private void RegisterGlobalHotkeys()
+    /// <summary>Which hotkeys failed to register, for display in the status bar and Settings.</summary>
+    public bool LockHotkeyRegistered { get; private set; }
+    public bool VisibilityHotkeyRegistered { get; private set; }
+
+    /// <summary>Raised when hotkey registration state changes, so Settings can refresh.</summary>
+    public event Action? HotkeyStateChanged;
+
+    /// <summary>
+    /// Register both global hotkeys and record whether Windows accepted them.
+    /// Registration failure (another app already owns the combination) used to be
+    /// discarded, leaving the feature silently dead while the UI still advertised it.
+    /// </summary>
+    public void RegisterGlobalHotkeys()
     {
         var s = AppSettings.Instance;
+
+        _toggleLockHotkey?.Dispose();
+        _toggleVisibilityHotkey?.Dispose();
+        LockHotkeyRegistered = false;
+        VisibilityHotkeyRegistered = false;
+
         if (s.HotkeysConflict())
         {
-            MessageBox.Show(
-                "Toggle Lock and Toggle Visibility hotkeys conflict.\nPlease change one in settings.",
-                "Hotkey Conflict", MessageBoxButton.OK, MessageBoxImage.Error);
+            // Shown inline rather than as a modal dialog on startup.
+            _logger.LogWarning("Toggle Lock and Toggle Visibility hotkeys are bound to the same key");
+            UpdateHotkeysDisplay();
+            HotkeyStateChanged?.Invoke();
             return;
         }
 
-        _toggleLockHotkey = new GlobalHotkey(this, hotkeyId: 9001);
-        _toggleLockHotkey.HotkeyPressed += (_, _) => Dispatcher.Invoke(ToggleWidgetLock);
-        _toggleLockHotkey.Register(s.ToggleLockModifier, s.ToggleLockKey);
+        var hotkeyLogger = _services.GetService<ILogger<GlobalHotkey>>();
 
-        _toggleVisibilityHotkey = new GlobalHotkey(this, hotkeyId: 9002);
-        _toggleVisibilityHotkey.HotkeyPressed += (_, _) => Dispatcher.Invoke(ToggleWidgetVisibility);
-        _toggleVisibilityHotkey.Register(s.ToggleVisibilityModifier, s.ToggleVisibilityKey);
+        _toggleLockHotkey = new GlobalHotkey(this, hotkeyId: 9001, hotkeyLogger);
+        _toggleLockHotkey.HotkeyPressed += (_, _) => Dispatcher.BeginInvoke(ToggleWidgetLock);
+        LockHotkeyRegistered = _toggleLockHotkey.Register(s.ToggleLockModifier, s.ToggleLockKey);
+
+        _toggleVisibilityHotkey = new GlobalHotkey(this, hotkeyId: 9002, hotkeyLogger);
+        _toggleVisibilityHotkey.HotkeyPressed += (_, _) => Dispatcher.BeginInvoke(ToggleWidgetVisibility);
+        VisibilityHotkeyRegistered = _toggleVisibilityHotkey.Register(s.ToggleVisibilityModifier, s.ToggleVisibilityKey);
+
+        if (!LockHotkeyRegistered || !VisibilityHotkeyRegistered)
+        {
+            _logger.LogWarning(
+                "Hotkey registration failed (lock: {Lock}, visibility: {Vis}) — another application may already own the combination",
+                LockHotkeyRegistered, VisibilityHotkeyRegistered);
+        }
+
+        UpdateHotkeysDisplay();
+        HotkeyStateChanged?.Invoke();
     }
 
     private void ToggleWidgetLock()
@@ -385,9 +457,16 @@ public partial class MainWindow : Window
         _telemetryService.TelemetryUpdated -= OnTelemetryUpdatedForSession;
         _sessionConfig.SessionCategoryChanged -= OnSessionCategoryChanged;
         _sessionConfig.Save();
+        _updateRateTimer.Stop();
         _toggleLockHotkey?.Dispose();
         _toggleVisibilityHotkey?.Dispose();
+
+        // Snapshot the layout while the widgets still exist, then force both
+        // debounced writers to disk before the process goes away.
         _widgetManager.SaveCurrentLayout();
+        _widgetManager.FlushLayout();
+        AppSettings.Flush();
+
         _widgetManager.RemoveAllWidgets();
         _trayIcon.Dispose();
         (_dashboardPage as IDisposable)?.Dispose();
@@ -444,7 +523,7 @@ public partial class MainWindow : Window
     {
         var s = AppSettings.Instance;
         s.WindowMaximized = WindowState == WindowState.Maximized;
-        s.Save();
+        s.SaveQuiet();
 
         // Minimize to tray when setting is enabled
         if (WindowState == WindowState.Minimized && s.MinimizeToTray)
@@ -478,6 +557,15 @@ public partial class MainWindow : Window
         _widgetsPage?.SyncPanelToActiveWidget();
     }
 
+    /// <summary>
+    /// Record the window geometry for next launch.
+    ///
+    /// Called from LocationChanged and SizeChanged, i.e. on every mouse-move while
+    /// dragging or resizing. It uses SaveQuiet so the write is coalesced onto a
+    /// background thread and no listener is notified — nothing needs to react to the
+    /// config window being moved. Previously this serialised the whole settings
+    /// object and hit the disk synchronously on the UI thread for every pixel.
+    /// </summary>
     private void SaveWindowState()
     {
         if (!IsLoaded) return;
@@ -490,6 +578,6 @@ public partial class MainWindow : Window
             s.WindowTop = Top;
         }
         s.WindowMaximized = WindowState == WindowState.Maximized;
-        s.Save();
+        s.SaveQuiet();
     }
 }

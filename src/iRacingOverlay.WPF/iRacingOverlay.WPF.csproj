@@ -21,12 +21,18 @@
     <AssemblyVersion>0.2.0.0</AssemblyVersion>
     <FileVersion>0.2.0.0</FileVersion>
     <StartupObject>iRacingOverlay.WPF.Program</StartupObject>
+    <!-- Per-monitor v2 DPI awareness for correct overlay placement on mixed-DPI rigs -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
-  <!-- Suppress .pdb files in Release publish -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <DebugType>none</DebugType>
-    <DebugSymbols>false</DebugSymbols>
+    <!--
+      Symbols are embedded rather than stripped: without them every stack trace in
+      the log has no file or line number, which makes a user's crash report
+      unactionable. Embedded keeps it to a single shipped file (no loose .pdb).
+    -->
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
 </Project>

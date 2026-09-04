@@ -18,9 +18,11 @@ public class AppSettings : INotifyPropertyChanged
     private bool _lockWindows = false;
 
     /// <summary>
-    /// Singleton instance
+    /// Singleton instance. Loads from disk on first access — previously this
+    /// returned a fresh default object, so settings.json was written but never
+    /// read back and every user setting reset on restart.
     /// </summary>
-    public static AppSettings Instance => _instance ??= new AppSettings();
+    public static AppSettings Instance => _instance ??= LoadFromDisk() ?? new AppSettings();
     
     /// <summary>
     /// Use metric units (km/h, L, °C) or imperial (mph, gal, °F)
@@ -477,48 +479,97 @@ public class AppSettings : INotifyPropertyChanged
                ToggleLockKey == ToggleVisibilityKey;
     }
     
+    // ── Persistence ─────────────────────────────────────────────────────
+    //
+    // Every write goes through a single debounced writer. Window drags and
+    // slider drags used to serialise the whole settings object and hit the disk
+    // synchronously on the UI thread for every mouse-move event, which is one of
+    // the main sources of UI stalls. Now a burst of requests collapses into one
+    // background write once the burst settles.
+
+    private static readonly object _fileLock = new();
+
+    private static readonly Utils.Debouncer _writer =
+        new(WritePendingToDisk, delayMs: 700);
+
+    private static readonly JsonSerializerOptions _serializerOptions = new()
+    {
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never
+    };
+
     /// <summary>
-    /// Save settings to JSON file
+    /// Persist settings and notify listeners.
+    /// The disk write is deferred and coalesced; the notification is immediate,
+    /// so UI that reacts to a settings change still updates without waiting on I/O.
     /// </summary>
     public void Save()
     {
+        _writer.Trigger();
+        NotifyChanged();
+    }
+
+    /// <summary>
+    /// Persist settings without notifying listeners.
+    /// Use for high-frequency, low-interest state such as window geometry —
+    /// no widget needs to react to the config window being dragged.
+    /// </summary>
+    public void SaveQuiet() => _writer.Trigger();
+
+    /// <summary>
+    /// Write any pending changes immediately. Call on shutdown so nothing queued is lost.
+    /// </summary>
+    public static void Flush() => _writer.Flush();
+
+    private static void WritePendingToDisk()
+    {
+        var settings = _instance;
+        if (settings == null) return;
+
         try
         {
-            // Create directory if it doesn't exist
-            var directory = Path.GetDirectoryName(SettingsFilePath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            string json;
+            lock (_fileLock)
             {
-                Directory.CreateDirectory(directory);
+                // Serialise under the lock: the UI thread may be mutating properties.
+                json = JsonSerializer.Serialize(settings, _serializerOptions);
+                Utils.AtomicFile.WriteAllText(SettingsFilePath, json);
             }
-            
-            // Serialize settings to JSON with indentation
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                DefaultIgnoreCondition = JsonIgnoreCondition.Never
-            };
-            
-            var json = JsonSerializer.Serialize(this, options);
-            File.WriteAllText(SettingsFilePath, json);
-            
-            // Notify listeners after successful save
-            NotifyChanged();
         }
-        catch (IOException ex)
+        catch (Exception ex)
         {
-            // File I/O error (disk full, permissions, locked file)
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings (I/O error): {ex.Message}");
+            Utils.AppLog.Error("Failed to save settings", ex);
+        }
+    }
+
+    /// <summary>
+    /// Read settings from disk, falling back to the backup copy if the primary
+    /// file is missing or corrupt. Returns null when no usable file exists.
+    /// </summary>
+    private static AppSettings? LoadFromDisk()
+    {
+        try
+        {
+            var json = Utils.AtomicFile.ReadAllTextWithFallback(SettingsFilePath);
+            if (string.IsNullOrWhiteSpace(json)) return null;
+
+            var settings = JsonSerializer.Deserialize<AppSettings>(json);
+            if (settings != null)
+            {
+                Utils.AppLog.Info("Settings loaded");
+                return settings;
+            }
         }
         catch (JsonException ex)
         {
-            // JSON serialization error (should not happen with valid model)
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings (JSON error): {ex.Message}");
+            Utils.AppLog.Warn("settings.json is corrupt — starting from defaults", ex);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (Exception ex)
         {
-            // Insufficient permissions to write file
-            System.Diagnostics.Debug.WriteLine($"Failed to save settings (access denied): {ex.Message}");
+            Utils.AppLog.Warn("Could not load settings — starting from defaults", ex);
         }
+
+        return null;
     }
     
     /// <summary>
@@ -530,41 +581,9 @@ public class AppSettings : INotifyPropertyChanged
     }
     
     /// <summary>
-    /// Load settings from JSON file
+    /// Load settings from disk. Accessing <see cref="Instance"/> does this
+    /// automatically on first use; this exists so startup can force it early
+    /// and log the result before any window is created.
     /// </summary>
-    public static AppSettings Load()
-    {
-        try
-        {
-            if (File.Exists(SettingsFilePath))
-            {
-                var json = File.ReadAllText(SettingsFilePath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json);
-                
-                if (settings != null)
-                {
-                    _instance = settings;
-                    return settings;
-                }
-            }
-        }
-        catch (FileNotFoundException ex)
-        {
-            // Settings file doesn't exist yet (first run) - return defaults
-            System.Diagnostics.Debug.WriteLine($"Settings file not found (first run): {ex.Message}");
-        }
-        catch (JsonException ex)
-        {
-            // JSON deserialization error (corrupted settings file) - return defaults
-            System.Diagnostics.Debug.WriteLine($"Failed to load settings (corrupt JSON): {ex.Message}");
-        }
-        catch (IOException ex)
-        {
-            // File I/O error - return defaults
-            System.Diagnostics.Debug.WriteLine($"Failed to load settings (I/O error): {ex.Message}");
-        }
-        
-        // Return default settings if load failed
-        return Instance;
-    }
+    public static AppSettings Load() => Instance;
 }

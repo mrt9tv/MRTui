@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -45,6 +46,14 @@ public abstract class WidgetBase : Window
     /// (separate from connection state)
     /// </summary>
     private bool _userWantsVisible = true;
+
+    /// <summary>
+    /// The user's visibility preference, independent of whether iRacing is connected.
+    /// This — not <see cref="UIElement.IsVisible"/> — is what gets persisted: the window
+    /// is hidden whenever telemetry is disconnected, so saving the live value would
+    /// mark every widget hidden any time the layout was saved outside a session.
+    /// </summary>
+    public bool UserWantsVisible => _userWantsVisible;
 
     /// <summary>
     /// Background-only opacity (0.0–1.0). Affects only the widget background, not text/content.
@@ -118,6 +127,10 @@ public abstract class WidgetBase : Window
     {
         base.OnSourceInitialized(e);
         EnableDwmTransparency();
+
+        // The lock state is applied in the constructor, before the HWND exists,
+        // so the extended style has to be re-applied now that there is a handle.
+        SetClickThrough(_isLocked);
     }
 
     private void EnableDwmTransparency()
@@ -145,6 +158,63 @@ public abstract class WidgetBase : Window
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
+
+    #endregion
+
+    #region Click-through Interop
+
+    private const int GWL_EXSTYLE = -20;
+    private const int WS_EX_TRANSPARENT = 0x00000020;
+    private const int WS_EX_LAYERED = 0x00080000;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLong", SetLastError = true)]
+    private static extern int GetWindowLong32(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLong", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    private static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex) =>
+        IntPtr.Size == 8 ? GetWindowLongPtr64(hWnd, nIndex) : new IntPtr(GetWindowLong32(hWnd, nIndex));
+
+    private static void SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr value)
+    {
+        if (IntPtr.Size == 8) SetWindowLongPtr64(hWnd, nIndex, value);
+        else SetWindowLong32(hWnd, nIndex, value.ToInt32());
+    }
+
+    /// <summary>
+    /// Turn real (Win32) click-through on or off.
+    ///
+    /// <c>IsHitTestVisible = false</c> only stops WPF routing the click to a control
+    /// inside the window — the window itself still claims the pixel, so a locked
+    /// overlay swallowed mouse input meant for iRacing in windowed/borderless mode.
+    /// WS_EX_TRANSPARENT is what actually passes the click through to what is behind.
+    /// </summary>
+    private void SetClickThrough(bool enabled)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return; // Applied again from OnSourceInitialized once the handle exists.
+
+        try
+        {
+            long exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+
+            if (enabled) exStyle |= WS_EX_TRANSPARENT | WS_EX_LAYERED;
+            else exStyle &= ~(long)WS_EX_TRANSPARENT;
+
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(exStyle));
+        }
+        catch (Exception ex)
+        {
+            Utils.AppLog.Warn($"Could not set click-through on {GetType().Name}", ex);
+        }
+    }
 
     #endregion
 
@@ -234,21 +304,20 @@ public abstract class WidgetBase : Window
     public void SetLocked(bool locked)
     {
         _isLocked = locked;
-        
+
         // Save current position when locking
         if (locked)
         {
             Config.X = Left;
             Config.Y = Top;
-            
-            // Enable click-through by making window transparent to hit testing
-            IsHitTestVisible = false;
         }
-        else
-        {
-            // Disable click-through
-            IsHitTestVisible = true;
-        }
+
+        // Two complementary halves of click-through:
+        //  - IsHitTestVisible stops WPF routing clicks to controls inside the window
+        //  - WS_EX_TRANSPARENT stops the window claiming the pixel at all, so the
+        //    click reaches iRacing behind it
+        IsHitTestVisible = !locked;
+        SetClickThrough(locked);
     }
 
     /// <summary>
@@ -313,10 +382,22 @@ public abstract class WidgetBase : Window
     private int _frameCounter;
 
     /// <summary>
-    /// Handle telemetry updates (thread-safe via Dispatcher)
-    /// Uses BeginInvoke (async) instead of Invoke (blocking) so the 60Hz telemetry
-    /// thread isn't held up waiting for each widget's UI update to complete.
-    /// Supports per-widget update throttling via UpdateIntervalTicks.
+    /// 0 = no render queued, 1 = one queued. Guards against the dispatcher queue
+    /// growing without limit when the UI thread falls behind the 60 Hz feed.
+    /// </summary>
+    private int _renderQueued;
+
+    /// <summary>Number of telemetry frames skipped because a render was still pending.</summary>
+    public long DroppedFrames { get; private set; }
+
+    /// <summary>
+    /// Handle telemetry updates (thread-safe via Dispatcher).
+    ///
+    /// Latest-wins: the newest frame is stored and at most ONE render is queued at
+    /// a time. Previously every tick queued its own closure, so a brief UI stall
+    /// built a backlog of hundreds of callbacks that then rendered stale frames —
+    /// a freeze that "unfreezes" into a fast-forward. Dropping intermediate frames
+    /// is always correct here: the widget only ever shows the most recent values.
     /// </summary>
     private void OnTelemetryUpdated(object? sender, TelemetryData data)
     {
@@ -325,20 +406,42 @@ public abstract class WidgetBase : Window
         // Per-widget throttle: skip ticks to reduce update rate for slow-changing widgets
         if (++_frameCounter % UpdateIntervalTicks != 0) return;
 
+        // Already have a render in flight — it will pick up this frame instead.
+        if (Interlocked.CompareExchange(ref _renderQueued, 1, 0) != 0)
+        {
+            DroppedFrames++;
+            return;
+        }
+
         // Queue UI update asynchronously at Render priority (high but below Input)
-        // This prevents the telemetry thread from blocking on each widget
+        // so the telemetry thread never blocks on a widget.
         Dispatcher.BeginInvoke(DispatcherPriority.Render, () =>
         {
-            UpdateUI(data);
+            Interlocked.Exchange(ref _renderQueued, 0);
+
+            var latest = _lastTelemetryData;
+            if (latest == null) return;
+
+            try
+            {
+                UpdateUI(latest);
+            }
+            catch (Exception ex)
+            {
+                // One widget throwing must not take down the render pass for the rest.
+                Utils.AppLog.Error($"{GetType().Name}.UpdateUI failed", ex);
+            }
         });
     }
 
     /// <summary>
-    /// Handle connection status changes
+    /// Handle connection status changes.
+    /// Non-blocking: this fires on the SDK's callback thread, and a blocking
+    /// Invoke here stalls telemetry for every widget whenever the UI thread is busy.
     /// </summary>
     private void OnStatusChanged(object? sender, ConnectionStatusEventArgs e)
     {
-        Dispatcher.Invoke(() =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Normal, () =>
         {
             OnConnectionStatusChanged(e.Status);
         });
@@ -408,7 +511,9 @@ public abstract class WidgetBase : Window
         Config.Width = Width;
         Config.Height = Height;
         Config.Opacity = Opacity;
-        Config.IsVisible = IsVisible;
+        // Persist the user's preference, not the live window state, which is
+        // false whenever iRacing is disconnected.
+        Config.IsVisible = _userWantsVisible;
 
         return Config;
     }

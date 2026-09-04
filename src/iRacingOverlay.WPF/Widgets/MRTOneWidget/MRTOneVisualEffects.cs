@@ -16,7 +16,7 @@ namespace iRacingOverlay.WPF.Widgets.MRTOneWidget;
 /// Encapsulates WPF-specific visual enhancement logic
 /// Extracted from MRTOneWidget for better separation of concerns
 /// </summary>
-public class MRTOneVisualEffects
+public class MRTOneVisualEffects : IDisposable
 {
     private readonly Grid _mainGrid;
     private readonly Ellipse _gaugeCircle;
@@ -74,11 +74,12 @@ public class MRTOneVisualEffects
     #region Glow Effects
 
     /// <summary>
-    /// Apply drop shadow glow to center text and gauge circle
+    /// Apply drop shadow glow to center text and gauge circle.
+    /// Uses BitmapCache to avoid expensive software bitmap re-rendering every frame.
     /// </summary>
     public void ApplyGlowEffects(Color primaryColor)
     {
-        // Glow on center value (gear)
+        // Glow on center value (gear) — cache the rendered bitmap for performance
         _centerValueText.Effect = new DropShadowEffect
         {
             Color = primaryColor,
@@ -86,8 +87,9 @@ public class MRTOneVisualEffects
             ShadowDepth = 0,
             Opacity = 0.8  // GLOW_OPACITY_CENTER
         };
+        _centerValueText.CacheMode = new BitmapCache();
 
-        // Glow on gauge circle border
+        // Glow on gauge circle border — cache the rendered bitmap for performance
         _gaugeCircle.Effect = new DropShadowEffect
         {
             Color = primaryColor,
@@ -95,15 +97,18 @@ public class MRTOneVisualEffects
             ShadowDepth = 0,
             Opacity = 0.6  // GLOW_OPACITY_GAUGE
         };
+        _gaugeCircle.CacheMode = new BitmapCache();
     }
 
     /// <summary>
-    /// Remove glow effects
+    /// Remove glow effects and bitmap caching
     /// </summary>
     public void RemoveGlowEffects()
     {
         _centerValueText.Effect = null;
+        _centerValueText.CacheMode = null;
         _gaugeCircle.Effect = null;
+        _gaugeCircle.CacheMode = null;
     }
 
     #endregion
@@ -144,6 +149,13 @@ public class MRTOneVisualEffects
         // Immediate update to avoid flash
         UpdateRPMBead(null, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Stop the 30 FPS bead animation and release its timer.
+    /// A running DispatcherTimer keeps this object — and the widget's visual tree —
+    /// alive after the widget window has closed.
+    /// </summary>
+    public void Dispose() => RemoveRPMBead();
 
     /// <summary>
     /// Remove RPM bead and stop animation

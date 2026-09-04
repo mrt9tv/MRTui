@@ -18,28 +18,37 @@ public static class WheelLockupDetector
 {
     // ===== DECELERATION TRACKING =====
     
-    private static readonly Queue<DecelSample> _decelHistory = new(capacity: 15);
+    // NOTE: _decelBuffer, _decelBufferStart, _decelBufferCount declared above as circular buffer
     private static float _maxDecelThisStop = 0f;
     private static bool _isHardBraking = false;
     private static bool _wasLocked = false; // Track if wheels were locked in previous frame
     // Reserved for future unlock confirmation logic:
     // private static int _unlockConfirmFrames = 0;
     
-    private class DecelSample
+    private struct DecelSample
     {
-        public float Brake { get; set; }
-        public float Decel { get; set; }  // Positive value for deceleration (LongAccel)
-        public float LatAccel { get; set; } // Lateral acceleration for left/right detection
-        public float Speed { get; set; }
-        public double Time { get; set; }
-        public float Yaw { get; set; }  // Car rotation for understeer detection
-        public float SteeringAngle { get; set; } // Steering input
+        public float Brake;
+        public float Decel;      // Positive value for deceleration (LongAccel)
+        public float LatAccel;   // Lateral acceleration for left/right detection
+        public float Speed;
+        public double Time;
+        public float Yaw;        // Car rotation for understeer detection
+        public float SteeringAngle; // Steering input
     }
+    
+    // ===== REUSABLE STATE OBJECTS (avoid per-frame heap allocation) =====
+    [ThreadStatic] private static WheelLockupState? _reusableState;
+    [ThreadStatic] private static WheelLockupState? _reusablePressureState;
+    
+    // Circular buffer to replace Queue + LINQ (zero-allocation)
+    private static readonly DecelSample[] _decelBuffer = new DecelSample[15];
+    private static int _decelBufferStart = 0;
+    private static int _decelBufferCount = 0;
     
     // ===== DETECTION THRESHOLDS (Configurable) =====
     
-    /// <summary>Enable diagnostic logging to console (for debugging)</summary>
-    public static bool EnableDiagnostics { get; set; } = true;
+    /// <summary>Enable diagnostic logging to console (for debugging). WARNING: Very expensive — disable in release!</summary>
+    public static bool EnableDiagnostics { get; set; } = false;
     
     /// <summary>Minimum vehicle speed (m/s) - 8 m/s = 29 km/h (BALANCED AGGRESSIVE)</summary>
     public static float MinSpeed { get; set; } = 8.0f;
@@ -102,7 +111,8 @@ public static class WheelLockupDetector
     /// </summary>
     private static WheelLockupState DetectPressureImbalance(TelemetryData data)
     {
-        var state = new WheelLockupState();
+        var state = _reusablePressureState ??= new WheelLockupState();
+        state.Reset();
         
         // Early exit: Only check at speed during ANY braking (even light trail braking)
         // CRITICAL FIX: Lowered from 50% to 15% brake to catch trail braking into corners!
@@ -204,7 +214,8 @@ public static class WheelLockupDetector
     /// </summary>
     public static WheelLockupState DetectLockup(TelemetryData data)
     {
-        var state = new WheelLockupState();
+        var state = _reusableState ??= new WheelLockupState();
+        state.Reset();
         
         // ===== BRAKE PRESSURE DETECTION (Priority #0 - Most Accurate) =====
         // Check brake pressure FIRST before deceleration analysis
@@ -231,7 +242,8 @@ public static class WheelLockupDetector
             // Reset tracking when not braking at all
             if (data.Brake < 0.05f)
             {
-                _decelHistory.Clear();
+                _decelBufferCount = 0;
+                _decelBufferStart = 0;
                 _maxDecelThisStop = 0f;
                 _isHardBraking = false;
                 _wasLocked = false;
@@ -253,7 +265,7 @@ public static class WheelLockupDetector
         float decel = -data.LongAccel;
         float latAccel = data.LatAccel; // Lateral G-force (positive = right turn)
         
-        // Add current sample to history
+        // Add current sample to circular buffer (zero allocation)
         var sample = new DecelSample
         {
             Brake = data.Brake,
@@ -265,12 +277,18 @@ public static class WheelLockupDetector
             SteeringAngle = data.SteeringWheelAngle
         };
         
-        _decelHistory.Enqueue(sample);
-        
-        // Keep only recent history (15 samples @ 60Hz = 250ms)
-        while (_decelHistory.Count > 15)
+        // Write into circular buffer
+        int writeIdx = (_decelBufferStart + _decelBufferCount) % _decelBuffer.Length;
+        if (_decelBufferCount < _decelBuffer.Length)
         {
-            _decelHistory.Dequeue();
+            _decelBuffer[writeIdx] = sample;
+            _decelBufferCount++;
+        }
+        else
+        {
+            // Buffer full — overwrite oldest
+            _decelBuffer[_decelBufferStart] = sample;
+            _decelBufferStart = (_decelBufferStart + 1) % _decelBuffer.Length;
         }
         
         // Track maximum deceleration achieved during this braking event
@@ -290,13 +308,13 @@ public static class WheelLockupDetector
         }
         
         // Need at least 2 samples for comparison (33ms of history - MAXIMUM SPEED)
-        if (_decelHistory.Count < 2)
+        if (_decelBufferCount < 2)
         {
             return state;
         }
         
-        // Performance: Work with queue directly instead of converting to array
-        int count = _decelHistory.Count;
+        // Performance: Work with circular buffer directly instead of converting to array
+        int count = _decelBufferCount;
         
         // ===== UNLOCK DETECTION (PRIORITY #0 - Check FIRST!) =====
         // Only check unlock if wheels were previously locked
@@ -304,11 +322,14 @@ public static class WheelLockupDetector
         // CRITICAL: Check unlock regardless of _isHardBraking state (user might have reduced brake)
         if (_wasLocked && count >= 2)
         {
-            // Performance: Get last 2 samples directly
-            var recentSamples = _decelHistory.Skip(count - 2).Take(2).ToArray();
-            float avgBrake = (recentSamples[0].Brake + recentSamples[1].Brake) * 0.5f;
-            float avgDecel = (recentSamples[0].Decel + recentSamples[1].Decel) * 0.5f;
-            float avgLatAccel = Math.Abs((recentSamples[0].LatAccel + recentSamples[1].LatAccel) * 0.5f);
+            // Performance: Get last 2 samples directly from circular buffer (zero allocation)
+            int idx1 = (_decelBufferStart + count - 2) % _decelBuffer.Length;
+            int idx2 = (_decelBufferStart + count - 1) % _decelBuffer.Length;
+            ref var s0 = ref _decelBuffer[idx1];
+            ref var s1 = ref _decelBuffer[idx2];
+            float avgBrake = (s0.Brake + s1.Brake) * 0.5f;
+            float avgDecel = (s0.Decel + s1.Decel) * 0.5f;
+            float avgLatAccel = Math.Abs((s0.LatAccel + s1.LatAccel) * 0.5f);
             
             // FRICTION CIRCLE COMPENSATION: Adjust expected decel for cornering
             float maxStraightLineDecel = 18.0f;
@@ -350,15 +371,17 @@ public static class WheelLockupDetector
         // Performance: Compare newest vs oldest sample (33ms window - MAXIMUM SPEED)
         if (count >= 2)
         {
-            var allSamples = _decelHistory.ToArray();
+            // Performance: Access circular buffer directly (zero allocation)
+            int oldIdx = _decelBufferStart;
+            int newIdx = (_decelBufferStart + count - 1) % _decelBuffer.Length;
             
             // Old sample (first in history)
-            float oldAvgBrake = allSamples[0].Brake;
-            float oldAvgDecel = allSamples[0].Decel;
+            float oldAvgBrake = _decelBuffer[oldIdx].Brake;
+            float oldAvgDecel = _decelBuffer[oldIdx].Decel;
             
             // New sample (last in history - instant response)
-            float newAvgBrake = allSamples[count-1].Brake;
-            float newAvgDecel = allSamples[count-1].Decel;
+            float newAvgBrake = _decelBuffer[newIdx].Brake;
+            float newAvgDecel = _decelBuffer[newIdx].Decel;
             
             float brakeIncrease = newAvgBrake - oldAvgBrake;
             float decelRatio = oldAvgDecel > 0.1f ? newAvgDecel / oldAvgDecel : 1.0f;
@@ -550,7 +573,8 @@ public static class WheelLockupDetector
     /// </summary>
     public static void Reset()
     {
-        _decelHistory.Clear();
+        _decelBufferCount = 0;
+        _decelBufferStart = 0;
         _maxDecelThisStop = 0f;
         _isHardBraking = false;
         
@@ -590,6 +614,26 @@ public class WheelLockupState
     // Detection metadata
     public LockupDetectionMethod DetectionMethod { get; set; }
     public LockupConfidence Confidence { get; set; }
+    
+    /// <summary>Reset all fields to defaults for reuse (avoid heap allocation)</summary>
+    public void Reset()
+    {
+        LeftFrontLocked = false;
+        RightFrontLocked = false;
+        LeftRearLocked = false;
+        RightRearLocked = false;
+        FrontAxleLockup = false;
+        RearAxleLockup = false;
+        AnyWheelLocked = false;
+        LeftFrontLockAttempted = false;
+        RightFrontLockAttempted = false;
+        LeftRearLockAttempted = false;
+        RightRearLockAttempted = false;
+        ABSActive = false;
+        ABSPreventingLockup = false;
+        DetectionMethod = LockupDetectionMethod.None;
+        Confidence = LockupConfidence.None;
+    }
 }
 
 /// <summary>

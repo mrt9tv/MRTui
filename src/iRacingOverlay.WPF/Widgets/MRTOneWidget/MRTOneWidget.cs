@@ -2412,12 +2412,26 @@ public class MRTOneWidget : WidgetBase
 
     protected override void OnClosed(EventArgs e)
     {
-        // Clean up timers
-        _blinkTimer?.Stop();
-        _radarBlinkTimer?.Stop();
-        _pitLimiterBlinkTimer?.Stop();
+        // Stop AND detach every timer. A running DispatcherTimer is rooted by the
+        // dispatcher, so leaving one alive kept this closed window and its whole
+        // visual tree reachable — a leak per show/hide cycle. _brakeBiasHideTimer
+        // was previously missed entirely.
+        StopAndDetach(_blinkTimer, OnBlinkTimerTick);
+        StopAndDetach(_radarBlinkTimer, OnRadarBlinkTimerTick);
+        StopAndDetach(_pitLimiterBlinkTimer, OnPitLimiterBlinkTimerTick);
+        StopAndDetach(_brakeBiasHideTimer, OnBrakeBiasHideTimerTick);
+        _brakeBiasHideTimer = null;
+
+        _visualEffects?.Dispose();
 
         AppSettings.Instance.SettingsChanged -= OnSettingsChanged;
         base.OnClosed(e);
+    }
+
+    private static void StopAndDetach(DispatcherTimer? timer, EventHandler handler)
+    {
+        if (timer == null) return;
+        timer.Stop();
+        timer.Tick -= handler;
     }
 }

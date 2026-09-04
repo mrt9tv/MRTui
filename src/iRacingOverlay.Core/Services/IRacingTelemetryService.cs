@@ -269,13 +269,13 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private int _paceCarIdx = -1; // CarIdx of the pace/safety car (-1 if none)
     private readonly object _driverDataLock = new(); // Thread safety for async session callbacks
     
-    // ── Pre-allocated buffers for zero-alloc enum array casting (Phase 3 perf optimization) ──
-    private readonly int[] _trackSurfaceBuffer = new int[64];
-    private readonly int[] _sessionFlagsBuffer = new int[64];
-    private readonly int[] _paceFlagsBuffer = new int[64];
-    private readonly int[] _surfaceMaterialBuffer = new int[64];
-    private readonly bool[] _recentIncidentBuffer = new bool[64];
-    private readonly int[] _recentIncidentDeltaBuffer = new int[64];
+    // ── Per-frame CarIdx buffers (rotating pool) ──────────────────────────
+    // A single shared set of scratch buffers was being handed to widgets while
+    // the next tick overwrote it underneath them. The pool gives each tick its
+    // own frame, so a frame still being rendered is never the frame being written,
+    // while staying allocation-free on the 60 Hz path.
+    private readonly CarIdxFramePool _carIdxPool = new();
+    private CarIdxFrame _frame = null!; // assigned at the top of every OnTelemetryUpdate
     
     // ── Versioned dictionary snapshots — only re-copy when source data changes ──
     private int _driverDataVersion = 0;         // Incremented when any dict changes
@@ -306,6 +306,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private int _prevLap = 0;
     private float _prevLapDistPct = 0f;
 
+    /// <summary>Most recent SDK error, carried on the next StatusChanged event.</summary>
+    private Exception? _lastError;
+
     public ConnectionStatus Status
     {
         get => _status;
@@ -315,7 +318,11 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             {
                 _status = value;
                 _logger.LogInformation("Connection status changed to: {Status}", value);
-                StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(value));
+
+                // Single raise point. Callers set Status and let this fire the event —
+                // raising it again at the call site double-delivered every transition.
+                var error = value == ConnectionStatus.Error ? _lastError : null;
+                StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(value, error: error));
             }
         }
     }
@@ -378,8 +385,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create telemetry client");
-            Status = ConnectionStatus.Error;
-            StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(ConnectionStatus.Error, error: ex));
+            _lastError = ex;
+            Status = ConnectionStatus.Error; // setter raises StatusChanged with the error attached
             throw;
         }
     }
@@ -413,25 +420,28 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     ProcessTypedSessionInfo(session);
                     await Task.CompletedTask;
                 },
-                onConnectStateChanged: async state => 
+                onConnectStateChanged: async state =>
                 {
                     _logger.LogInformation("Connection state changed: {State}", state);
+
+                    // The Status setter raises StatusChanged. Raising it again here
+                    // delivered every connect/disconnect twice, so each widget ran its
+                    // show/hide handler twice per transition.
                     Status = state == ConnectState.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
-                    StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(Status));
-                    
+
                     // Parse session info on connect (YAML fallback for track data)
                     if (state == ConnectState.Connected)
                     {
                         TryParseSessionInfo();
                     }
-                    
+
                     await Task.CompletedTask;
                 },
                 onError: async ex =>
                 {
                     _logger.LogError(ex, "iRacing SDK error: {Message}", ex.Message);
+                    _lastError = ex;
                     Status = ConnectionStatus.Error;
-                    StatusChanged?.Invoke(this, new ConnectionStatusEventArgs(ConnectionStatus.Error, error: ex));
                     await Task.CompletedTask;
                 },
                 cancellationToken: cancellationToken
@@ -457,6 +467,25 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     /// Optimization: Only parse YAML when iRacing SDK increments SessionInfoUpdate property.
     /// Result: 99%+ cache hits (parsing only happens on session change or initial connect).
     /// </summary>
+    // ── Cached reflection handles for the SDK's session-info members ──────
+    // These were resolved on every call, i.e. on every telemetry tick.
+    private System.Reflection.PropertyInfo? _sessionInfoUpdateProp;
+    private System.Reflection.MethodInfo? _getSessionInfoYamlMethod;
+    private Type? _resolvedClientType;
+
+    private void ResolveSessionInfoMembers()
+    {
+        var clientType = _client?.GetType();
+        if (clientType == null || ReferenceEquals(clientType, _resolvedClientType)) return;
+
+        _resolvedClientType = clientType;
+        _sessionInfoUpdateProp = clientType.GetProperty("SessionInfoUpdate");
+        _getSessionInfoYamlMethod = clientType.GetMethod("GetRawTelemetrySessionInfoYaml");
+
+        if (_getSessionInfoYamlMethod == null)
+            _logger.LogWarning("Could not find GetRawTelemetrySessionInfoYaml method on telemetry client");
+    }
+
     private void TryParseSessionInfo()
     {
         try
@@ -467,11 +496,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 return;
             }
             
-            // Get SessionInfo update version via reflection (SDK increments this when SessionInfo changes)
-            var clientType = _client.GetType();
-            var sessionInfoUpdateProp = clientType.GetProperty("SessionInfoUpdate");
-            int currentSessionInfoVersion = sessionInfoUpdateProp != null 
-                ? (int)(sessionInfoUpdateProp.GetValue(_client) ?? -1) 
+            // Get SessionInfo update version via reflection (SDK increments this when SessionInfo changes).
+            // Member lookups are resolved once and cached — this runs on every telemetry tick.
+            ResolveSessionInfoMembers();
+
+            int currentSessionInfoVersion = _sessionInfoUpdateProp != null
+                ? (int)(_sessionInfoUpdateProp.GetValue(_client) ?? -1)
                 : -1;
             
             // Skip parsing if SessionInfo unchanged (99%+ of calls after initial connection)
@@ -482,11 +512,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             }
             
             // Cache miss - parse SessionInfo YAML (only on session change or first connect)
-            var getSessionInfoMethod = clientType.GetMethod("GetRawTelemetrySessionInfoYaml");
-            
-            if (getSessionInfoMethod != null)
+            if (_getSessionInfoYamlMethod != null)
             {
-                var sessionInfo = getSessionInfoMethod.Invoke(_client, null) as string;
+                var sessionInfo = _getSessionInfoYamlMethod.Invoke(_client, null) as string;
                 if (!string.IsNullOrEmpty(sessionInfo))
                 {
                     _logger.LogDebug("SessionInfo YAML parsing triggered (Version: {Version})", currentSessionInfoVersion);
@@ -498,10 +526,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     _logger.LogDebug("SessionInfo YAML is empty (may not be available yet)");
                 }
             }
-            else
-            {
-                _logger.LogWarning("Could not find GetRawTelemetrySessionInfoYaml method on telemetry client");
-            }
+            // A missing YAML accessor is reported once from ResolveSessionInfoMembers,
+            // not on every tick.
         }
         catch (Exception ex)
         {
@@ -559,7 +585,13 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             
             // ── Pre-compute reusable snapshots (zero-alloc when unchanged) ──
             RefreshDriverDataSnapshots();       // Only re-copies dicts when _driverDataVersion changed
-            CopyRecentIncidentsToBuffers();     // Copies into pre-allocated bool[64] + int[64]
+
+            // Take this tick's frame from the rotating pool and copy every per-car
+            // array into it before anything reads them. Widgets render asynchronously,
+            // so they must never see the SDK's arrays or shared scratch directly.
+            _frame = _carIdxPool.Next();
+            FillCarIdxFrame(sdkData, _frame);
+            CopyRecentIncidentsToBuffers();     // Fills _frame.RecentIncident / RecentIncidentDelta
 
             // Convert SDK TelemetryData to our Models.TelemetryData
             var data = new Models.TelemetryData
@@ -738,8 +770,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarIdxToSafetyRating = _snapshotSafetyRating,
                 CarIdxToLicenseClass = _snapshotLicenseClass,
                 CarIdxToIncidentCount = _snapshotIncidentCount,
-                CarIdxRecentIncident = _recentIncidentBuffer,
-                CarIdxRecentIncidentDelta = _recentIncidentDeltaBuffer,
+                CarIdxRecentIncident = _frame.RecentIncident,
+                CarIdxRecentIncidentDelta = _frame.RecentIncidentDelta,
                 CarIdxToCarModel = _snapshotCarModel,
                 CarIdxToCountryCode = _snapshotCountryCode,
 
@@ -758,35 +790,38 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 CarDistBehind = sdkData.CarDistBehind.GetValueOrDefault(),
                 
                 // Multi-Car Position Arrays (CarIdx[64])
-                CarIdxLapDistPct = sdkData.CarIdxLapDistPct,
-                CarIdxOnPitRoad = sdkData.CarIdxOnPitRoad,
-                CarIdxTrackSurface = CastEnumArrayToBuffer(sdkData.CarIdxTrackSurface, _trackSurfaceBuffer),
-                CarIdxClass = sdkData.CarIdxClass,
-                CarIdxLap = sdkData.CarIdxLap,
-                CarIdxPosition = sdkData.CarIdxPosition,
-                CarIdxClassPosition = sdkData.CarIdxClassPosition,
-                CarIdxGear = sdkData.CarIdxGear,
-                CarIdxRPM = sdkData.CarIdxRPM,
-                CarIdxEstTime = sdkData.CarIdxEstTime,
-                CarIdxF2Time = sdkData.CarIdxF2Time,
-                CarIdxLastLapTime = sdkData.CarIdxLastLapTime,
-                CarIdxBestLapTime = sdkData.CarIdxBestLapTime,
-                CarIdxSessionFlags = CastEnumArrayToBuffer(sdkData.CarIdxSessionFlags, _sessionFlagsBuffer),
+                // All copied into this tick's pooled frame — never handed out by
+                // reference from the SDK or from shared scratch, both of which are
+                // overwritten before an async widget render gets to read them.
+                CarIdxLapDistPct = _frame.LapDistPct,
+                CarIdxOnPitRoad = _frame.OnPitRoad,
+                CarIdxTrackSurface = _frame.TrackSurface,
+                CarIdxClass = _frame.Class,
+                CarIdxLap = _frame.Lap,
+                CarIdxPosition = _frame.Position,
+                CarIdxClassPosition = _frame.ClassPosition,
+                CarIdxGear = _frame.Gear,
+                CarIdxRPM = _frame.RPM,
+                CarIdxEstTime = _frame.EstTime,
+                CarIdxF2Time = _frame.F2Time,
+                CarIdxLastLapTime = _frame.LastLapTime,
+                CarIdxBestLapTime = _frame.BestLapTime,
+                CarIdxSessionFlags = _frame.SessionFlags,
 
                 // Additional CarIdx arrays (complete SDK coverage)
-                CarIdxBestLapNum = sdkData.CarIdxBestLapNum,
-                CarIdxLapCompleted = sdkData.CarIdxLapCompleted,
-                CarIdxFastRepairsUsed = sdkData.CarIdxFastRepairsUsed,
-                CarIdxP2P_Count = sdkData.CarIdxP2P_Count,
-                CarIdxP2P_Status = sdkData.CarIdxP2P_Status,
-                CarIdxPaceFlags = CastEnumArrayToBuffer(sdkData.CarIdxPaceFlags, _paceFlagsBuffer),
-                CarIdxPaceLine = sdkData.CarIdxPaceLine,
-                CarIdxPaceRow = sdkData.CarIdxPaceRow,
-                CarIdxQualTireCompound = sdkData.CarIdxQualTireCompound,
-                CarIdxQualTireCompoundLocked = sdkData.CarIdxQualTireCompoundLocked,
-                CarIdxSteer = sdkData.CarIdxSteer,
-                CarIdxTireCompound = sdkData.CarIdxTireCompound,
-                CarIdxTrackSurfaceMaterial = CastEnumArrayToBuffer(sdkData.CarIdxTrackSurfaceMaterial, _surfaceMaterialBuffer),
+                CarIdxBestLapNum = _frame.BestLapNum,
+                CarIdxLapCompleted = _frame.LapCompleted,
+                CarIdxFastRepairsUsed = _frame.FastRepairsUsed,
+                CarIdxP2P_Count = _frame.P2PCount,
+                CarIdxP2P_Status = _frame.P2PStatus,
+                CarIdxPaceFlags = _frame.PaceFlags,
+                CarIdxPaceLine = _frame.PaceLine,
+                CarIdxPaceRow = _frame.PaceRow,
+                CarIdxQualTireCompound = _frame.QualTireCompound,
+                CarIdxQualTireCompoundLocked = _frame.QualTireCompoundLocked,
+                CarIdxSteer = _frame.Steer,
+                CarIdxTireCompound = _frame.TireCompound,
+                CarIdxTrackSurfaceMaterial = _frame.TrackSurfaceMaterial,
 
                 // Player Orientation
                 Yaw = sdkData.Yaw.GetValueOrDefault(),
@@ -961,29 +996,54 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         }
     }
 
-    /// <summary>Copy enum array into pre-allocated int[] buffer (zero-allocation).</summary>
-    private static int[] CastEnumArrayToBuffer<T>(T[]? source, int[] buffer) where T : struct, Enum
+    /// <summary>
+    /// Copy every per-car array from the SDK snapshot into this tick's frame.
+    ///
+    /// ~29 arrays of 64 elements is a few microseconds of memcpy per tick — a trivial
+    /// price for removing an entire class of cross-thread tearing, since the SDK
+    /// reuses its arrays and widgets read them after an async dispatch.
+    /// </summary>
+    private static void FillCarIdxFrame(SVappsLAB.iRacingTelemetrySDK.TelemetryData sdkData, CarIdxFrame f)
     {
-        if (source == null)
-        {
-            Array.Clear(buffer);
-            return buffer;
-        }
-        int len = Math.Min(source.Length, buffer.Length);
-        for (int i = 0; i < len; i++)
-            buffer[i] = Convert.ToInt32(source[i]);
-        // Clear remaining slots
-        for (int i = len; i < buffer.Length; i++)
-            buffer[i] = 0;
-        return buffer;
+        CarIdxFrame.Copy(sdkData.CarIdxLapDistPct, f.LapDistPct);
+        CarIdxFrame.Copy(sdkData.CarIdxOnPitRoad, f.OnPitRoad);
+        CarIdxFrame.Copy(sdkData.CarIdxClass, f.Class);
+        CarIdxFrame.Copy(sdkData.CarIdxLap, f.Lap);
+        CarIdxFrame.Copy(sdkData.CarIdxPosition, f.Position);
+        CarIdxFrame.Copy(sdkData.CarIdxClassPosition, f.ClassPosition);
+        CarIdxFrame.Copy(sdkData.CarIdxGear, f.Gear);
+        CarIdxFrame.Copy(sdkData.CarIdxRPM, f.RPM);
+        CarIdxFrame.Copy(sdkData.CarIdxEstTime, f.EstTime);
+        CarIdxFrame.Copy(sdkData.CarIdxF2Time, f.F2Time);
+        CarIdxFrame.Copy(sdkData.CarIdxLastLapTime, f.LastLapTime);
+        CarIdxFrame.Copy(sdkData.CarIdxBestLapTime, f.BestLapTime);
+        CarIdxFrame.Copy(sdkData.CarIdxBestLapNum, f.BestLapNum);
+        CarIdxFrame.Copy(sdkData.CarIdxLapCompleted, f.LapCompleted);
+        CarIdxFrame.Copy(sdkData.CarIdxFastRepairsUsed, f.FastRepairsUsed);
+        CarIdxFrame.Copy(sdkData.CarIdxP2P_Count, f.P2PCount);
+        CarIdxFrame.Copy(sdkData.CarIdxP2P_Status, f.P2PStatus);
+        CarIdxFrame.Copy(sdkData.CarIdxPaceLine, f.PaceLine);
+        CarIdxFrame.Copy(sdkData.CarIdxPaceRow, f.PaceRow);
+        CarIdxFrame.Copy(sdkData.CarIdxQualTireCompound, f.QualTireCompound);
+        CarIdxFrame.Copy(sdkData.CarIdxQualTireCompoundLocked, f.QualTireCompoundLocked);
+        CarIdxFrame.Copy(sdkData.CarIdxSteer, f.Steer);
+        CarIdxFrame.Copy(sdkData.CarIdxTireCompound, f.TireCompound);
+
+        // Enum-typed arrays are widened to int for storage
+        CarIdxFrame.CopyEnum(sdkData.CarIdxTrackSurface, f.TrackSurface);
+        CarIdxFrame.CopyEnum(sdkData.CarIdxSessionFlags, f.SessionFlags);
+        CarIdxFrame.CopyEnum(sdkData.CarIdxPaceFlags, f.PaceFlags);
+        CarIdxFrame.CopyEnum(sdkData.CarIdxTrackSurfaceMaterial, f.TrackSurfaceMaterial);
     }
 
     /// <summary>Copy recent incident flags and deltas into pre-allocated buffers, clearing stale entries.</summary>
     private void CopyRecentIncidentsToBuffers()
     {
         var now = DateTime.UtcNow;
-        Array.Clear(_recentIncidentBuffer);
-        Array.Clear(_recentIncidentDeltaBuffer);
+        var recentIncident = _frame.RecentIncident;
+        var recentIncidentDelta = _frame.RecentIncidentDelta;
+        Array.Clear(recentIncident);
+        Array.Clear(recentIncidentDelta);
         lock (_driverDataLock)
         {
             for (int i = 0; i < 64; i++)
@@ -997,8 +1057,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     }
                     else
                     {
-                        _recentIncidentBuffer[i] = true;
-                        _recentIncidentDeltaBuffer[i] = _carIdxRecentIncidentDelta[i];
+                        recentIncident[i] = true;
+                        recentIncidentDelta[i] = _carIdxRecentIncidentDelta[i];
                     }
                 }
             }

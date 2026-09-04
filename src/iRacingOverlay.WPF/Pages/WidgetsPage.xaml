@@ -34,20 +34,17 @@
                         <Button x:Name="BtnWidgetTurnDisplay" Content="Turn Display"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
-                                Visibility="Collapsed"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetFuel" Content="Fuel Calculator"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
-                                Visibility="Collapsed"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetRelative" Content="Relative"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
-                                Visibility="Collapsed"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetProximityFeed" Content="Prox Feed"
                                 Style="{StaticResource MRT.Button.Secondary}"
@@ -57,25 +54,35 @@
                         <Button x:Name="BtnWidgetStandings" Content="Standings"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
-                                Visibility="Collapsed"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                     </StackPanel>
                     
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,6">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,4">
                         <Button x:Name="BtnToggleWidget"
                                 Content="Show"
+                                ToolTip="Show or hide this widget. Settings are kept."
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Click="BtnToggleWidget_Click"
                                 Width="56" Height="26" Margin="0,0,4,0"
                                 FontSize="11" Padding="3,2"/>
                         <Button x:Name="BtnLockWidgets"
                                 Content="Lock"
+                                ToolTip="Lock all widgets in place and let clicks pass through to iRacing."
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Click="BtnLockWidgets_Click"
                                 Width="56" Height="26"
                                 FontSize="11" Padding="3,2"/>
                     </StackPanel>
+
+                    <Button x:Name="BtnRemoveWidget"
+                            Content="Remove"
+                            ToolTip="Delete this widget and discard its saved settings."
+                            Style="{StaticResource MRT.Button.Secondary}"
+                            Click="BtnRemoveWidget_Click"
+                            HorizontalAlignment="Left"
+                            Width="116" Height="24" Margin="0,0,0,6"
+                            FontSize="10" Padding="3,1"/>
                     
                     <TextBlock x:Name="WidgetStatusText"
                                Text="Select a widget."

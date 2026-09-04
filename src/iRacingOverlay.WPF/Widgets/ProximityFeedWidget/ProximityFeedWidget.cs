@@ -359,65 +359,99 @@ public class ProximityFeedWidget : WidgetBase
         SyncFeedVisuals();
     }
 
+    // Reusable collections to avoid per-frame heap allocations
+    private readonly List<NearbyEvent> _sortedBuffer = new(16);
+    private readonly List<long> _removeBuffer = new(16);
+    private readonly HashSet<long> _activeIdBuffer = new(16);
+    // Per-car dedup: track best event per CarIdx to avoid GroupBy/LINQ
+    private readonly Dictionary<int, NearbyEvent> _dedupBuffer = new(16);
+    // Track previous sorted order to skip redundant Children.Clear()/re-add
+    private readonly List<long> _prevSortedIds = new(16);
+
     private void SyncFeedVisuals()
     {
         _blinkFrame++;
         var events = _detector.ActiveEvents;
 
-        // Apply per-type toggle filters
-        var filtered = events.AsEnumerable();
-        if (!ShowOvertakingAlert)
-            filtered = filtered.Where(e => e.EventType != NearbyEventType.OvertakingImminent);
-        if (!ShowStartSequence)
-            filtered = filtered.Where(e => e.EventType != NearbyEventType.StartSequence);
-        if (!ShowCheckeredFlag)
-            filtered = filtered.Where(e => e.EventType != NearbyEventType.CheckeredFlag);
-        if (!ShowPaceFlags)
-            filtered = filtered.Where(e => e.EventType != NearbyEventType.SafetyCar
-                && e.EventType != NearbyEventType.PaceEndOfLine
-                && e.EventType != NearbyEventType.PaceFreePass
-                && e.EventType != NearbyEventType.PaceWaveAround);
+        // ── FILTER + DEDUP without LINQ (zero allocation) ────
+        _sortedBuffer.Clear();
+        _dedupBuffer.Clear();
 
-        // During formation/parade laps and race start grace: suppress stopped/slow noise
-        // (all cars are slow during formation). Other events like collisions still show.
-        if (_isFormationPhase)
-            filtered = filtered.Where(e => e.EventType != NearbyEventType.Stopped
-                && e.EventType != NearbyEventType.SlowCar);
+        for (int i = 0; i < events.Count; i++)
+        {
+            var e = events[i];
 
-        // ── PER-CAR DEDUP: show at most ONE event per driver ────
-        // Group by CarIdx (session-level events use CarIdx=-1, keep all of those).
-        // For each driver, keep only the highest-severity / newest event.
-        var deduped = filtered
-            .GroupBy(e => e.CarIdx)
-            .SelectMany(g =>
+            // Apply per-type toggle filters (inlined)
+            if (!ShowOvertakingAlert && e.EventType == NearbyEventType.OvertakingImminent) continue;
+            if (!ShowStartSequence && e.EventType == NearbyEventType.StartSequence) continue;
+            if (!ShowCheckeredFlag && e.EventType == NearbyEventType.CheckeredFlag) continue;
+            if (!ShowPaceFlags && (e.EventType == NearbyEventType.SafetyCar
+                || e.EventType == NearbyEventType.PaceEndOfLine
+                || e.EventType == NearbyEventType.PaceFreePass
+                || e.EventType == NearbyEventType.PaceWaveAround)) continue;
+            if (_isFormationPhase && (e.EventType == NearbyEventType.Stopped
+                || e.EventType == NearbyEventType.SlowCar)) continue;
+
+            // Per-car dedup: session-level events (CarIdx < 0) go straight through
+            if (e.CarIdx < 0)
             {
-                if (g.Key < 0) return g; // session-level events — keep all
-                return g.OrderByDescending(e => e.Severity)
-                         .ThenByDescending(e => e.CreatedAt)
-                         .Take(1);
-            });
+                _sortedBuffer.Add(e);
+            }
+            else
+            {
+                // Keep highest severity / newest per driver
+                if (_dedupBuffer.TryGetValue(e.CarIdx, out var existing))
+                {
+                    if (e.Severity > existing.Severity ||
+                        (e.Severity == existing.Severity && e.CreatedAt > existing.CreatedAt))
+                    {
+                        _dedupBuffer[e.CarIdx] = e;
+                    }
+                }
+                else
+                {
+                    _dedupBuffer[e.CarIdx] = e;
+                }
+            }
+        }
 
-        // Sort: severity desc, then newest first
-        var sorted = deduped
-            .OrderByDescending(e => e.Severity)
-            .ThenByDescending(e => e.CreatedAt)
-            .Take(MaxVisibleEvents)
-            .ToList();
+        // Add deduped per-car events
+        foreach (var kvp in _dedupBuffer)
+            _sortedBuffer.Add(kvp.Value);
 
-        if (GrowUpward) sorted.Reverse();
+        // Sort: severity desc, then newest first (in-place, no allocation)
+        _sortedBuffer.Sort((a, b) =>
+        {
+            int cmp = b.Severity.CompareTo(a.Severity);
+            return cmp != 0 ? cmp : b.CreatedAt.CompareTo(a.CreatedAt);
+        });
+
+        // Trim to max visible
+        if (_sortedBuffer.Count > MaxVisibleEvents)
+            _sortedBuffer.RemoveRange(MaxVisibleEvents, _sortedBuffer.Count - MaxVisibleEvents);
+
+        if (GrowUpward) _sortedBuffer.Reverse();
 
         // Show/hide background based on whether there are events
-        _backgroundBorder.Background = sorted.Count > 0
+        _backgroundBorder.Background = _sortedBuffer.Count > 0
             ? BrushCache.Get(_bgAlpha, 18, 18, 18)
             : BrushCache.Get(0, 0, 0, 0);
 
-        // Track which event IDs are still active
-        var activeIds = new HashSet<long>(sorted.Select(e => e.Id));
+        // Track which event IDs are still active (reuse buffer)
+        _activeIdBuffer.Clear();
+        for (int i = 0; i < _sortedBuffer.Count; i++)
+            _activeIdBuffer.Add(_sortedBuffer[i].Id);
 
         // Remove rows for expired events (with fade-out)
-        var toRemove = _eventRows.Keys.Where(id => !activeIds.Contains(id)).ToList();
-        foreach (var id in toRemove)
+        _removeBuffer.Clear();
+        foreach (var id in _eventRows.Keys)
         {
+            if (!_activeIdBuffer.Contains(id))
+                _removeBuffer.Add(id);
+        }
+        for (int i = 0; i < _removeBuffer.Count; i++)
+        {
+            var id = _removeBuffer[i];
             if (_eventRows.TryGetValue(id, out var row))
             {
                 FadeOutAndRemove(row);
@@ -426,29 +460,55 @@ public class ProximityFeedWidget : WidgetBase
             }
         }
 
-        // Rebuild stack in sorted order
-        _feedStack.Children.Clear();
-        foreach (var evt in sorted)
+        // Check if sorted order changed — skip Children rebuild if identical
+        bool orderChanged = _sortedBuffer.Count != _prevSortedIds.Count;
+        if (!orderChanged)
         {
-            if (_eventRows.TryGetValue(evt.Id, out var existing))
+            for (int i = 0; i < _sortedBuffer.Count; i++)
             {
-                // Update existing row (interval may have changed)
-                UpdateRowContent(existing, evt);
-                _feedStack.Children.Add(existing);
+                if (_sortedBuffer[i].Id != _prevSortedIds[i])
+                {
+                    orderChanged = true;
+                    break;
+                }
             }
-            else
+        }
+
+        if (orderChanged)
+        {
+            // Rebuild stack in sorted order (only when order actually changes)
+            _feedStack.Children.Clear();
+            _prevSortedIds.Clear();
+            foreach (var evt in _sortedBuffer)
             {
-                // Create new row with fade-in
-                var row = CreateEventRow(evt);
-                _eventRows[evt.Id] = row;
-                _knownEventIds.Add(evt.Id);
-                _feedStack.Children.Add(row);
-                FadeIn(row);
+                _prevSortedIds.Add(evt.Id);
+                if (_eventRows.TryGetValue(evt.Id, out var existing))
+                {
+                    UpdateRowContent(existing, evt);
+                    _feedStack.Children.Add(existing);
+                }
+                else
+                {
+                    var row = CreateEventRow(evt);
+                    _eventRows[evt.Id] = row;
+                    _knownEventIds.Add(evt.Id);
+                    _feedStack.Children.Add(row);
+                    FadeIn(row);
+                }
+            }
+        }
+        else
+        {
+            // Order unchanged — just update content without layout invalidation
+            foreach (var evt in _sortedBuffer)
+            {
+                if (_eventRows.TryGetValue(evt.Id, out var existing))
+                    UpdateRowContent(existing, evt);
             }
         }
 
         // Resize widget height dynamically
-        int visibleCount = Math.Max(1, sorted.Count);
+        int visibleCount = Math.Max(1, _sortedBuffer.Count);
         double feedHeight = (ROW_HEIGHT + ROW_GAP) * visibleCount + PADDING * 2;
         double handleSpace = _dragHandle.Visibility == Visibility.Visible ? 16 : 0;
         double targetHeight = feedHeight + handleSpace;

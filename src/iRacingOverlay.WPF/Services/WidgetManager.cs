@@ -201,6 +201,31 @@ public class WidgetManager
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "MRT-UI", "layout.json");
 
+    /// <summary>Schema version this build writes and understands.</summary>
+    public const int CurrentLayoutVersion = 1;
+
+    /// <summary>
+    /// Bring a loaded layout up to <see cref="CurrentLayoutVersion"/>.
+    /// The Version field has always been written but never read; this is the hook
+    /// to add migrations to before the first breaking change, not after.
+    /// Returns false if the layout is from a newer build and cannot be used.
+    /// </summary>
+    private bool MigrateLayout(LayoutConfig layout)
+    {
+        if (layout.Version > CurrentLayoutVersion)
+        {
+            _logger.LogWarning(
+                "layout.json is version {Found}, this build understands {Known} — ignoring it so a newer build's layout is not overwritten",
+                layout.Version, CurrentLayoutVersion);
+            return false;
+        }
+
+        // Migrations run in order, each bumping Version, e.g.:
+        //   if (layout.Version == 1) { ...transform...; layout.Version = 2; }
+
+        return true;
+    }
+
     public LayoutConfig GetCurrentLayout()
     {
         var layout = new LayoutConfig
@@ -233,20 +258,54 @@ public class WidgetManager
         }
     }
 
+    private static readonly JsonSerializerOptions _layoutJsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
+    /// <summary>
+    /// Coalesces layout writes. Slider drags used to serialise every active widget
+    /// and hit the disk on each value change; now a drag produces one write.
+    /// </summary>
+    private Utils.Debouncer? _layoutWriter;
+
+    /// <summary>
+    /// Request a layout save. The write is deferred and coalesced, and always
+    /// snapshots widget state on the UI thread before handing it to the writer.
+    /// </summary>
     public void SaveCurrentLayout()
     {
+        _layoutWriter ??= new Utils.Debouncer(WritePendingLayout, delayMs: 700);
+
+        // Snapshot now, on the caller's (UI) thread — WidgetBase.GetConfiguration
+        // reads Left/Top/Width/Height, which are UI-thread-affine.
         try
         {
-            var layout = GetCurrentLayout();
-            var directory = Path.GetDirectoryName(LayoutFilePath);
-            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            _pendingLayout = GetCurrentLayout();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to snapshot layout");
+            return;
+        }
 
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-            };
-            File.WriteAllText(LayoutFilePath, JsonSerializer.Serialize(layout, options));
+        _layoutWriter.Trigger();
+    }
+
+    private LayoutConfig? _pendingLayout;
+
+    private void WritePendingLayout()
+    {
+        var layout = _pendingLayout;
+        if (layout == null) return;
+
+        try
+        {
+            Utils.AtomicFile.WriteAllText(
+                LayoutFilePath,
+                JsonSerializer.Serialize(layout, _layoutJsonOptions));
         }
         catch (Exception ex)
         {
@@ -254,20 +313,20 @@ public class WidgetManager
         }
     }
 
+    /// <summary>Write any pending layout immediately. Call on shutdown.</summary>
+    public void FlushLayout() => _layoutWriter?.Flush();
+
     public bool LoadSavedLayout()
     {
         try
         {
-            if (!File.Exists(LayoutFilePath)) return false;
+            var json = Utils.AtomicFile.ReadAllTextWithFallback(LayoutFilePath);
+            if (string.IsNullOrWhiteSpace(json)) return false;
 
-            var json = File.ReadAllText(LayoutFilePath);
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-            };
-            var layout = JsonSerializer.Deserialize<LayoutConfig>(json, options);
+            var layout = JsonSerializer.Deserialize<LayoutConfig>(json, _layoutJsonOptions);
             if (layout == null) return false;
+
+            if (!MigrateLayout(layout)) return false;
 
             LoadLayout(layout);
             return true;

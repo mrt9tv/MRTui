@@ -111,7 +111,12 @@ public class ProximityCalculator
         double sessionTime = data.SessionTime;
         if (sessionTime == _cachedSessionTime && _cachedNearbyCars != null)
         {
-            return _cachedNearbyCars.Take(maxCars).ToList();
+            // Return cached list directly — callers should not modify
+            // If maxCars is less than cached, return a view (callers only iterate)
+            if (maxCars >= _cachedNearbyCars.Count)
+                return _cachedNearbyCars;
+            // Rare path: need fewer cars than cached — still cheaper than re-scanning
+            return _cachedNearbyCars.GetRange(0, Math.Min(maxCars, _cachedNearbyCars.Count));
         }
 
         var nearbyCars = new List<ProximityInfo>();
@@ -213,36 +218,54 @@ public class ProximityCalculator
         _cachedSessionTime = sessionTime;
         _cachedNearbyCars = nearbyCars;
 
-        // Return top N cars
-        return nearbyCars.Take(maxCars).ToList();
+        // Return top N cars (avoid ToList allocation when possible)
+        if (nearbyCars.Count > maxCars)
+            return nearbyCars.GetRange(0, maxCars);
+        return nearbyCars;
     }
     
     /// <summary>
-    /// Get closest car ahead of player
+    /// Get closest car ahead of player (zero-allocation on cache hit)
     /// </summary>
     public ProximityInfo? GetClosestCarAhead(TelemetryData data, bool sameClassOnly = false)
     {
         var nearbyCars = GetNearbyCars(data, maxCars: 10, sameClassOnly);
         
-        // Filter for cars ahead (RelativeDistance > 0 means car is ahead in meters)
-        var carsAhead = nearbyCars.Where(c => c.RelativeDistance > 0).ToList();
-        
-        // Return closest car ahead (already sorted by absolute distance)
-        return carsAhead.FirstOrDefault();
+        // Find closest car ahead without LINQ
+        ProximityInfo? closest = null;
+        float closestDist = float.MaxValue;
+        for (int i = 0; i < nearbyCars.Count; i++)
+        {
+            var c = nearbyCars[i];
+            if (c.RelativeDistance > 0 && c.AbsoluteDistance < closestDist)
+            {
+                closest = c;
+                closestDist = c.AbsoluteDistance;
+            }
+        }
+        return closest;
     }
     
     /// <summary>
-    /// Get closest car behind player
+    /// Get closest car behind player (zero-allocation on cache hit)
     /// </summary>
     public ProximityInfo? GetClosestCarBehind(TelemetryData data, bool sameClassOnly = false)
     {
         var nearbyCars = GetNearbyCars(data, maxCars: 10, sameClassOnly);
         
-        // Filter for cars behind (RelativeDistance < 0 means car is behind in meters)
-        var carsBehind = nearbyCars.Where(c => c.RelativeDistance < 0).ToList();
-        
-        // Return closest car behind (already sorted by absolute distance)
-        return carsBehind.FirstOrDefault();
+        // Find closest car behind without LINQ
+        ProximityInfo? closest = null;
+        float closestDist = float.MaxValue;
+        for (int i = 0; i < nearbyCars.Count; i++)
+        {
+            var c = nearbyCars[i];
+            if (c.RelativeDistance < 0 && c.AbsoluteDistance < closestDist)
+            {
+                closest = c;
+                closestDist = c.AbsoluteDistance;
+            }
+        }
+        return closest;
     }
     
     /// <summary>
@@ -257,18 +280,27 @@ public class ProximityCalculator
     /// <summary>
     /// Get proximity zone AND distance for front radar (closest car ahead).
     /// Distance is in meters; returns float.MaxValue if no car detected.
+    /// Zero-allocation: scans cached list directly instead of LINQ.
     /// </summary>
     public (ProximityZone Zone, float Distance) GetFrontZoneWithDistance(TelemetryData data)
     {
         var nearbyCars = GetNearbyCars(data, maxCars: 10, sameClassOnly: false);
         
-        var carAhead = nearbyCars
-            .Where(c => c.RelativeDistance > 0)
-            .OrderBy(c => c.AbsoluteDistance)
-            .FirstOrDefault();
+        // Find closest car ahead without LINQ (no allocation)
+        ProximityInfo? closest = null;
+        float closestDist = float.MaxValue;
+        for (int i = 0; i < nearbyCars.Count; i++)
+        {
+            var c = nearbyCars[i];
+            if (c.RelativeDistance > 0 && c.AbsoluteDistance < closestDist)
+            {
+                closest = c;
+                closestDist = c.AbsoluteDistance;
+            }
+        }
         
-        return carAhead != null
-            ? (carAhead.Zone, carAhead.AbsoluteDistance)
+        return closest != null
+            ? (closest.Zone, closest.AbsoluteDistance)
             : (ProximityZone.Clear, float.MaxValue);
     }
     
@@ -284,18 +316,27 @@ public class ProximityCalculator
     /// <summary>
     /// Get proximity zone AND distance for rear radar (closest car behind).
     /// Distance is in meters; returns float.MaxValue if no car detected.
+    /// Zero-allocation: scans cached list directly instead of LINQ.
     /// </summary>
     public (ProximityZone Zone, float Distance) GetRearZoneWithDistance(TelemetryData data)
     {
         var nearbyCars = GetNearbyCars(data, maxCars: 10, sameClassOnly: false);
         
-        var carBehind = nearbyCars
-            .Where(c => c.RelativeDistance < 0)
-            .OrderBy(c => c.AbsoluteDistance)
-            .FirstOrDefault();
+        // Find closest car behind without LINQ (no allocation)
+        ProximityInfo? closest = null;
+        float closestDist = float.MaxValue;
+        for (int i = 0; i < nearbyCars.Count; i++)
+        {
+            var c = nearbyCars[i];
+            if (c.RelativeDistance < 0 && c.AbsoluteDistance < closestDist)
+            {
+                closest = c;
+                closestDist = c.AbsoluteDistance;
+            }
+        }
         
-        return carBehind != null
-            ? (carBehind.Zone, carBehind.AbsoluteDistance)
+        return closest != null
+            ? (closest.Zone, closest.AbsoluteDistance)
             : (ProximityZone.Clear, float.MaxValue);
     }
 }

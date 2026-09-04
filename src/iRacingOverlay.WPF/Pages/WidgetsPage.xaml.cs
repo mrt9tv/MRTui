@@ -45,11 +45,40 @@ public partial class WidgetsPage : UserControl
         _widgetManager = widgetManager;
         _telemetryService = telemetryService;
 
+        ApplySupportedWidgetVisibility();
         PopulateFieldCombos();
         HighlightActiveMenuButton();
         SyncPanelToActiveWidget();
 
         _suppressControlEvents = false;
+    }
+
+    /// <summary>
+    /// Show only the widgets this build actually supports.
+    ///
+    /// Visibility used to be hardcoded per button in XAML, in parallel with
+    /// WidgetManager.SupportedWidgetTypes and a #if DEBUG list on the Dashboard —
+    /// three sources of truth that had already drifted apart. Deriving it here
+    /// means adding a widget to SupportedWidgetTypes is the only change needed.
+    /// </summary>
+    private void ApplySupportedWidgetVisibility()
+    {
+        WidgetType? firstSupported = null;
+
+        foreach (var kvp in _widgetButtonMap)
+        {
+            if (FindName(kvp.Key) is not Button btn) continue;
+
+            bool supported = WidgetManager.SupportedWidgetTypes.Contains(kvp.Value);
+            btn.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
+
+            if (supported) firstSupported ??= kvp.Value;
+        }
+
+        // Never leave an unsupported widget selected — its settings panel would
+        // be showing controls for something the user cannot enable.
+        if (!WidgetManager.SupportedWidgetTypes.Contains(_selectedWidgetType) && firstSupported.HasValue)
+            _selectedWidgetType = firstSupported.Value;
     }
 
     /// <summary>Expose fuel alert settings for MainWindow to read.</summary>
@@ -85,23 +114,66 @@ public partial class WidgetsPage : UserControl
 
     // ── Show / Hide / Lock ──────────────────────────────────────────
 
+    /// <summary>
+    /// Show or hide the selected widget.
+    ///
+    /// This used to call RemoveWidget, which closed the window, dropped it from the
+    /// active set and then rewrote layout.json — erasing that widget's position,
+    /// size, opacity and field selections. Pressing "Show" afterwards built a fresh
+    /// widget with defaults, so the button labelled "Hide" silently destroyed the
+    /// user's configuration. Hiding now only flips the visibility preference;
+    /// destruction lives behind the explicit Remove button.
+    /// </summary>
     private void BtnToggleWidget_Click(object sender, RoutedEventArgs e)
     {
-        if (_widgetManager.HasWidgetType(_selectedWidgetType))
-        {
-            var widgets = _widgetManager.GetWidgetsByType(_selectedWidgetType).ToList();
-            foreach (var w in widgets)
-                _widgetManager.RemoveWidget(w.WidgetId);
-            BtnToggleWidget.Content = "Show";
-            WidgetStatusText.Text = $"{_selectedWidgetType.GetDisplayName()} closed.";
-        }
-        else
+        var name = _selectedWidgetType.GetDisplayName();
+
+        if (!_widgetManager.HasWidgetType(_selectedWidgetType))
         {
             _widgetManager.CreateWidget(_selectedWidgetType);
-            BtnToggleWidget.Content = "Hide";
-            WidgetStatusText.Text = $"{_selectedWidgetType.GetDisplayName()} active.";
+            WidgetStatusText.Text = $"{name} shown.";
             SyncPanelToActiveWidget();
+            return;
         }
+
+        bool nowVisible = !IsSelectedWidgetVisible();
+        foreach (var w in _widgetManager.GetWidgetsByType(_selectedWidgetType))
+            w.SetUserVisibility(nowVisible);
+
+        _widgetManager.SaveCurrentLayout();
+        WidgetStatusText.Text = nowVisible ? $"{name} shown." : $"{name} hidden — settings kept.";
+        UpdateToggleButtonLabel();
+    }
+
+    /// <summary>Remove the selected widget entirely, discarding its saved settings.</summary>
+    private void BtnRemoveWidget_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_widgetManager.HasWidgetType(_selectedWidgetType)) return;
+
+        var name = _selectedWidgetType.GetDisplayName();
+        var confirm = MessageBox.Show(
+            $"Remove {name}?\n\nIts position, size and settings will be discarded. " +
+            "To keep them, use Hide instead.",
+            "Remove widget", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+
+        if (confirm != MessageBoxResult.OK) return;
+
+        foreach (var w in _widgetManager.GetWidgetsByType(_selectedWidgetType).ToList())
+            _widgetManager.RemoveWidget(w.WidgetId);
+
+        WidgetStatusText.Text = $"{name} removed.";
+        SyncPanelToActiveWidget();
+    }
+
+    /// <summary>Whether the selected widget type is currently set to be visible by the user.</summary>
+    private bool IsSelectedWidgetVisible() =>
+        _widgetManager.GetWidgetsByType(_selectedWidgetType).Any(w => w.UserWantsVisible);
+
+    private void UpdateToggleButtonLabel()
+    {
+        bool exists = _widgetManager.HasWidgetType(_selectedWidgetType);
+        BtnToggleWidget.Content = exists && IsSelectedWidgetVisible() ? "Hide" : "Show";
+        BtnRemoveWidget.IsEnabled = exists;
     }
 
     private void BtnLockWidgets_Click(object sender, RoutedEventArgs e)
@@ -117,8 +189,7 @@ public partial class WidgetsPage : UserControl
 
     public void SyncPanelToActiveWidget()
     {
-        bool widgetExists = _widgetManager.HasWidgetType(_selectedWidgetType);
-        BtnToggleWidget.Content = widgetExists ? "Hide" : "Show";
+        UpdateToggleButtonLabel();
 
         MRTOnePanel.Visibility = _selectedWidgetType == WidgetType.MRTOne ? Visibility.Visible : Visibility.Collapsed;
         MRTOneRightPanel.Visibility = _selectedWidgetType == WidgetType.MRTOne ? Visibility.Visible : Visibility.Collapsed;
