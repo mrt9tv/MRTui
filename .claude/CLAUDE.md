@@ -15,7 +15,7 @@ This is a sophisticated real-time telemetry overlay system for iRacing, built wi
 ### iRacing SDK Quick Reference
 
 **Package**: `SVappsLAB.iRacingTelemetrySDK` v0.9.8.3
-**Documentation**: See [docs/SDK_MASTER_REFERENCE.md](../docs/SDK_MASTER_REFERENCE.md) for complete details
+**Documentation**: See [AI_USAGE.md](../src/iRacingOverlay.Core/docs/SVappsLAB.iRacingTelemetrySDK/AI_USAGE.md) — the SDK's own usage guide, covering the source generator, channel subscription and anti-patterns.
 
 #### Adding New Telemetry Variables
 
@@ -80,8 +80,10 @@ private void OnTelemetryUpdated(object? sender, TelemetryData data)
 
 #### Variable Discovery
 
-- **Find all variables**: Check [docs/iRacing_SDK_Variables_Reference.md](../docs/iRacing_SDK_Variables_Reference.md) (400+ variables documented)
-- **Currently using**: 72 variables (see `IRacingTelemetryService.cs` RequiredTelemetryVars attribute)
+- **Find all variables**: The `TelemetryVar` enum in the SDK's `EnumsAndFlags` assembly is the full list (404 values). It is a *superset* — it includes iRacing's disk-logging (.ibt) channels, which are never published to live shared memory.
+- **Check what is actually live**: `Documents/MRT-UI/available_variables.txt` lists the channels a real session published (323 in the January 2026 capture). Regenerate it with `client.GetTelemetryVariables()`. **Always check this before designing around a channel** — wheel speeds (`LFspeed`…), GPS (`Lat`/`Lon`/`Alt`), ride heights, shock traces and hot tire pressures are all enum-only and unreachable live.
+- **Car-dependent channels**: `dc*` (driver controls) and per-corner `dp*` (pit service) are live but only exist on cars that have that control. Treat a missing value as "not available on this car", not as zero.
+- **Currently using**: 158 variables (see `IRacingTelemetryService.cs` RequiredTelemetryVars attribute)
 - **Test with IBT files**: Record telemetry in iRacing (Ctrl+D) for offline testing
 
 #### Common Variable Categories
