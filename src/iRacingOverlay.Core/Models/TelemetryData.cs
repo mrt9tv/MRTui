@@ -1071,10 +1071,18 @@ public class TelemetryData
     /// <summary>Battery voltage.</summary>
     public float Voltage { get; set; }
 
-    /// <summary>The sim's own shift indicator, 0-1.</summary>
+    /// <summary>
+    /// Shift indicator fill, 0-1. Display only — iRacing marks this channel
+    /// DEPRECATED in favour of DriverCarSLBlinkRPM, which is what
+    /// <see cref="Services.ShiftPointService"/> uses. Do not build shift logic on it.
+    /// </summary>
     public float ShiftIndicatorPct { get; set; }
 
-    /// <summary>Share of peak power the engine is currently making, 0-1.</summary>
+    /// <summary>
+    /// Friction torque applied to the gears while shifting or grinding, 0-1.
+    /// Despite the name this is a gearbox property, not a reading of engine power
+    /// output. Paired with ShiftGrindRPM it could drive missed-shift detection.
+    /// </summary>
     public float ShiftPowerPct { get; set; }
 
     // ── Force feedback ────────────────────────────────────────────────
@@ -1213,6 +1221,36 @@ public class TelemetryData
 
     /// <summary>True on the frame an adjustment changed.</summary>
     public bool AdjustmentChanged { get; set; }
+
+    // ── Shift points (computed once per tick by ShiftPointService) ────
+
+    /// <summary>Which RPM colour band the engine is in right now.</summary>
+    public ShiftZone ShiftZone { get; set; }
+
+    /// <summary>The car's optimal shift RPM.</summary>
+    public float ShiftOptimalRPM { get; set; }
+
+    /// <summary>Lower edge of the "shift now" window.</summary>
+    public float ShiftWindowStartRPM { get; set; }
+
+    /// <summary>Upper edge of the "shift now" window.</summary>
+    public float ShiftWindowEndRPM { get; set; }
+
+    /// <summary>Redline used for scaling the RPM ring.</summary>
+    public float ShiftRedlineRPM { get; set; }
+
+    /// <summary>
+    /// True when the shift points come from iRacing's own values rather than the
+    /// learned fallback. Useful for suppressing a shift light that has not
+    /// calibrated yet.
+    /// </summary>
+    public bool ShiftPointsAreAuthoritative { get; set; }
+
+    /// <summary>Number of forward gears, or 0 when unknown.</summary>
+    public int ForwardGears { get; set; }
+
+    /// <summary>Engine idle RPM, from session info.</summary>
+    public float IdleRPM { get; set; }
 
     // ===== SHARED DERIVED STATE =====
     //

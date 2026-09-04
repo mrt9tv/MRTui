@@ -167,7 +167,9 @@ public enum TelemetryField
 
     // Engine
     BatteryVoltage,      // Battery voltage
-    ShiftIndicator,      // The sim's own shift indicator (0-100%)
+    ShiftIndicator,      // Shift indicator fill (deprecated by iRacing — display only)
+    OptimalShiftRPM,     // The car's optimal shift RPM
+    Redline,             // Engine redline
 
     // None (default)
     None

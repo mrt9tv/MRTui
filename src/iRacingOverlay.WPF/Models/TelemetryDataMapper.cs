@@ -180,6 +180,8 @@ public static class TelemetryDataMapper
 
             TelemetryField.BatteryVoltage => data.Voltage,
             TelemetryField.ShiftIndicator => data.ShiftIndicatorPct * 100f,
+            TelemetryField.OptimalShiftRPM => data.ShiftOptimalRPM,
+            TelemetryField.Redline => data.ShiftRedlineRPM,
             
             // None
             TelemetryField.None => null,

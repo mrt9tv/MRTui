@@ -170,7 +170,11 @@ public static class TelemetryFieldProvider
 
         // ── Engine ──────────────────────────────────────────────────────
         new(TelemetryField.BatteryVoltage, "Voltage", "Engine", "Battery voltage — warns before the engine cuts", true),
-        new(TelemetryField.ShiftIndicator, "Shift Indicator", "Engine", "The sim's own shift indicator, 0-100%"),
+        new(TelemetryField.ShiftIndicator, "Shift Indicator", "Engine", "Shift indicator fill. Display only — iRacing deprecated this channel; the shift lights use the car's shift-point RPMs instead", true),
+
+        // ── Shift points ────────────────────────────────────────────────
+        new(TelemetryField.OptimalShiftRPM, "Optimal Shift", "Engine", "The car's optimal shift RPM, from its own shift-light data"),
+        new(TelemetryField.Redline, "Redline", "Engine", "Engine redline (DriverCarRedLine)", true),
     };
 
     /// <summary>

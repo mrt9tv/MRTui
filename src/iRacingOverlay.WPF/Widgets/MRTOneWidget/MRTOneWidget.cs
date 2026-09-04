@@ -1209,16 +1209,10 @@ public class MRTOneWidget : WidgetBase
 
     protected override void UpdateUI(TelemetryData data)
     {
-        // Update shift point calculator with current data (including SDK redline if available)
-        ShiftPointCalculator.UpdateTracking(data.RPM, data.Throttle, data.Gear, data.EngineRedlineRPM);
-
-        _currentRpmZone = ShiftPointCalculator.GetRPMZone(
-            data.RPM,
-            data.Gear,
-            data.PlayerCarSLFirstRPM,
-            data.PlayerCarSLShiftRPM,
-            data.PlayerCarSLLastRPM,
-            data.PlayerCarSLBlinkRPM);
+        // The shift zone was resolved once on the telemetry thread from the car's own
+        // shift points — no per-widget recalculation, and no static learner being
+        // advanced as a side effect of rendering.
+        _currentRpmZone = ShiftPointCalculator.GetZone(data);
 
         // Update TOP section (SecondaryField - typically Speed or RPM)
         if (_dataBinding.SecondaryField.HasValue)

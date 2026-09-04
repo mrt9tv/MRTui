@@ -339,6 +339,10 @@ public static class MRTOneDataFormatter
             TelemetryField.ShiftIndicator when value is float sh =>
                 $"{sh:F0}%",
 
+            // Shift geometry — whole RPM, no decimals
+            TelemetryField.OptimalShiftRPM or TelemetryField.Redline when value is float shiftRpm =>
+                shiftRpm > 0 ? shiftRpm.ToString("F0", CultureInfo.InvariantCulture) : "-",
+
             // Default fallback
             _ => value?.ToString() ?? "-"
         };
@@ -524,6 +528,8 @@ public static class MRTOneDataFormatter
             TelemetryField.DeltaToOptimal => "Δ OPT",
             TelemetryField.BatteryVoltage => "VOLTS",
             TelemetryField.ShiftIndicator => "SHIFT",
+            TelemetryField.OptimalShiftRPM => "SHIFT @",
+            TelemetryField.Redline => "REDLINE",
 
             _ => field.ToString().ToUpper()
         };

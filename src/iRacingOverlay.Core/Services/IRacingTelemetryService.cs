@@ -253,8 +253,13 @@ namespace iRacingOverlay.Core.Services;
     // ── Engine health ─────────────────────────────────────────────────
     TelemetryVar.EngineWarnings,        // int   - Flags: water/oil/fuel pressure, stall, limiters
     TelemetryVar.Voltage,               // float - Battery voltage
-    TelemetryVar.ShiftIndicatorPct,     // float - The sim's own shift indicator
-    TelemetryVar.ShiftPowerPct,         // float - Share of peak power being made
+    // Both of these are kept for display only — neither drives the shift lights.
+    // ShiftIndicatorPct is marked DEPRECATED by iRacing in favour of
+    // DriverCarSLBlinkRPM, which is the family ShiftPointService already uses.
+    // ShiftPowerPct, despite the name, is shift/grind friction torque — a property
+    // of the gearbox during a shift, not a reading of engine power output.
+    TelemetryVar.ShiftIndicatorPct,     // float - Shift indicator fill (deprecated by iRacing)
+    TelemetryVar.ShiftPowerPct,         // float - Gear friction torque while shifting/grinding
 
     // ── Force feedback: clipping costs the driver front-axle feel ─────
     TelemetryVar.SteeringWheelPctTorque,    // float - Current torque as share of max
@@ -330,6 +335,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private readonly StandingsCalculator _standingsCalculator = new();
     private readonly WheelLockupDetector _wheelLockupDetector = new();
     private readonly CarAdjustmentTracker _adjustmentTracker = new();
+
+    /// <summary>Resolves the optimal shift point and RPM colour bands.</summary>
+    private readonly ShiftPointService _shiftPointService = new();
+
+    /// <summary>Exposed so widgets and settings can read the shift geometry.</summary>
+    public ShiftPointService ShiftPoints => _shiftPointService;
+
+    // Car profile from session info
+    private float _carRedline;
+    private float _carIdleRpm;
+    private int _carForwardGears;
 
     /// <summary>Shared wheel-lockup detector, exposed so thresholds stay tunable.</summary>
     public WheelLockupDetector WheelLockup => _wheelLockupDetector;
@@ -705,7 +721,12 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 RPM = sdkData.RPM.GetValueOrDefault(),
                 // SDK exposes DriverCarSLBlinkRPM (shift light) - consider using for more accurate shift point
                 // For now, leave at 0 and let ShiftPointCalculator learn it
-                EngineRedlineRPM = 0, // Will be populated if SDK provides it
+                // From session info (DriverCarRedLine). This was hardcoded to 0 with a
+                // "will be populated if the SDK provides it" note — the SDK does provide
+                // it, so every consumer fell through to the learned estimate instead.
+                EngineRedlineRPM = _carRedline,
+                IdleRPM = _carIdleRpm,
+                ForwardGears = _carForwardGears,
                 
                 // PHASE 1: Professional shift light telemetry (car-specific, instant accuracy)
                 PlayerCarSLFirstRPM = sdkData.PlayerCarSLFirstRPM.GetValueOrDefault(),
@@ -1218,6 +1239,18 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
 
         try
         {
+            // Shift points and RPM colour band. Computed here so every widget renders
+            // the same zone from the same numbers, rather than each calling a static
+            // calculator with its own arguments.
+            _shiftPointService.Update(data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Shift point calculation failed");
+        }
+
+        try
+        {
             // Which in-car control the driver most recently touched. Also advanced
             // exactly once per tick, on the telemetry thread.
             data.AdjustmentChanged = _adjustmentTracker.Update(data);
@@ -1392,6 +1425,25 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         try
         {
             if (session?.DriverInfo?.Drivers == null) return;
+
+            // ── Car shift profile ─────────────────────────────────────
+            // Authoritative, car-specific, and available the moment the driver is in
+            // the car — before a single rev. The app previously ignored these and
+            // learned the redline from observed RPM instead, which meant the shift
+            // lights and the RPM ring were miscalibrated until the driver had been to
+            // the limiter, and stayed wrong after switching cars.
+            var di = session.DriverInfo;
+            _shiftPointService.ApplyCarProfile(
+                redline: di.DriverCarRedLine,
+                firstRpm: di.DriverCarSLFirstRPM,
+                shiftRpm: di.DriverCarSLShiftRPM,
+                lastRpm: di.DriverCarSLLastRPM,
+                blinkRpm: di.DriverCarSLBlinkRPM,
+                forwardGears: di.DriverCarGearNumForward);
+
+            _carRedline = di.DriverCarRedLine;
+            _carIdleRpm = di.DriverCarIdleRPM;
+            _carForwardGears = di.DriverCarGearNumForward;
 
             int driverCarIdx = session.DriverInfo.DriverCarIdx;
 

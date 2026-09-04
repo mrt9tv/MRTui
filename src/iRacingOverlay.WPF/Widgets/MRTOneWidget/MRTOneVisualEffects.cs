@@ -186,20 +186,11 @@ public class MRTOneVisualEffects : IDisposable
             return;
 
         var rpm = _lastTelemetryData.RPM;
-        var zone = ShiftPointCalculator.GetRPMZone(
-            rpm,
-            _lastTelemetryData.Gear,
-            _lastTelemetryData.PlayerCarSLFirstRPM,
-            _lastTelemetryData.PlayerCarSLShiftRPM,
-            _lastTelemetryData.PlayerCarSLLastRPM,
-            _lastTelemetryData.PlayerCarSLBlinkRPM);
 
-        // Get redline (prefer telemetry, fallback to estimate)
-        double redline = _lastTelemetryData.EngineRedlineRPM > 0
-            ? _lastTelemetryData.EngineRedlineRPM
-            : ShiftPointCalculator.GetEstimatedRedline();
-
-        if (redline < 3000) redline = 8000; // Safety fallback
+        // Same zone and same redline the rest of the widget uses — both resolved once
+        // per tick from the car's own values rather than recomputed here.
+        var zone = ShiftPointCalculator.GetZone(_lastTelemetryData);
+        double redline = ShiftPointCalculator.GetRedline(_lastTelemetryData);
 
         // Hide if no valid RPM
         if (rpm <= 0 || redline <= 0)
