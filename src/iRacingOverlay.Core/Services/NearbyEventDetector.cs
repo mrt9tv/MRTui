@@ -208,6 +208,15 @@ public sealed class NearbyEventDetector
     // ── Active event list ───────────────────────────────────────────
     private readonly List<NearbyEvent> _activeEvents = new(MAX_ACTIVE_EVENTS * 2);
     private long _nextEventId = 1;
+
+    /// <summary>
+    /// Player-car and session alerts (weather, engine, connection, FFB, tire sets).
+    /// Routed through this feed rather than given their own widgets.
+    /// </summary>
+    private readonly SessionAlertDetector _sessionAlerts = new();
+
+    /// <summary>Whether session alerts are emitted into the feed.</summary>
+    public bool EnableSessionAlerts { get; set; } = true;
     private DateTime _lastUpdateTime = DateTime.UtcNow;
 
     /// <summary>Read-only snapshot of currently active (non-expired) events.</summary>
@@ -242,6 +251,7 @@ public sealed class NearbyEventDetector
             _recentDangerEvents[i]?.Clear();
         _cooldowns.Clear();
         _activeEvents.Clear();
+        _sessionAlerts.Reset();
         _nextEventId = 1;
         _lastUpdateTime = DateTime.UtcNow;
         _prevSessionState = 0;
@@ -273,6 +283,12 @@ public sealed class NearbyEventDetector
 
         // Expire old events
         _activeEvents.RemoveAll(e => e.IsExpired);
+
+        // Session alerts (weather, engine, connection, FFB, tire sets) describe the
+        // player's own car, so they run before the relative-table guard below —
+        // they are still relevant alone on track or in an empty practice session.
+        if (EnableSessionAlerts)
+            _sessionAlerts.Update(data, _activeEvents, ref _nextEventId);
 
         if (relativeEntries == null || relativeEntries.Count == 0) return;
         if (data.CarIdxTrackSurface == null || data.CarIdxLapDistPct == null) return;

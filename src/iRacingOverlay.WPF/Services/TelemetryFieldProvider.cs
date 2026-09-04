@@ -137,6 +137,40 @@ public static class TelemetryFieldProvider
         new(TelemetryField.RelativeGapBehind, "Gap Behind", "Relative", "Time gap to next car behind (seconds)"),
         new(TelemetryField.RelativeDistAhead, "Dist Ahead", "Relative", "Distance to next car ahead (meters)"),
         new(TelemetryField.RelativeDistBehind, "Dist Behind", "Relative", "Distance to next car behind (meters)"),
+
+        // ── Weather ─────────────────────────────────────────────────────
+        // Only meaningful in sessions with the rain system enabled.
+        new(TelemetryField.TrackWetness, "Track Wetness", "Weather", "Surface wetness, Dry through Flooded"),
+        new(TelemetryField.Precipitation, "Rain Rate", "Weather", "Live precipitation rate", true),
+        new(TelemetryField.TimeOfDay, "Time of Day", "Weather", "In-sim clock — useful for dusk in endurance races"),
+
+        // ── Force feedback ──────────────────────────────────────────────
+        new(TelemetryField.FfbTorquePct, "FFB Load", "Force Feedback", "Wheel torque as a share of maximum — 100% is clipping"),
+        new(TelemetryField.FfbMaxForce, "FFB Max (Nm)", "Force Feedback", "Configured wheel maximum force", true),
+
+        // ── Sim performance & network ───────────────────────────────────
+        new(TelemetryField.SimFrameRate, "Sim FPS", "System", "The simulator's frame rate, not the overlay's"),
+        new(TelemetryField.ConnectionQuality, "Connection", "System", "Network quality — low values explain warping cars"),
+        new(TelemetryField.ConnectionLatency, "Latency", "System", "Network latency in milliseconds", true),
+
+        // ── Tire strategy ───────────────────────────────────────────────
+        new(TelemetryField.TireSetsLeft, "Tyre Sets", "Tires", "Tyre sets remaining against the session limit"),
+        new(TelemetryField.TireCompound, "Compound", "Tires", "Compound currently fitted", true),
+        new(TelemetryField.ColdPressureLF, "Cold Press LF", "Tires", "Left front cold pressure", true),
+        new(TelemetryField.ColdPressureRF, "Cold Press RF", "Tires", "Right front cold pressure", true),
+        new(TelemetryField.ColdPressureLR, "Cold Press LR", "Tires", "Left rear cold pressure", true),
+        new(TelemetryField.ColdPressureRR, "Cold Press RR", "Tires", "Right rear cold pressure", true),
+
+        // ── Incidents & penalties ───────────────────────────────────────
+        new(TelemetryField.TeamIncidents, "Team Incidents", "Session", "Shared team incident count — the number that matters in endurance"),
+        new(TelemetryField.WeightPenalty, "Ballast", "Session", "Success ballast currently carried", true),
+
+        // ── Timing ──────────────────────────────────────────────────────
+        new(TelemetryField.DeltaToOptimal, "Delta to Optimal", "Timing", "Delta to the theoretical best from your own best sectors"),
+
+        // ── Engine ──────────────────────────────────────────────────────
+        new(TelemetryField.BatteryVoltage, "Voltage", "Engine", "Battery voltage — warns before the engine cuts", true),
+        new(TelemetryField.ShiftIndicator, "Shift Indicator", "Engine", "The sim's own shift indicator, 0-100%"),
     };
 
     /// <summary>

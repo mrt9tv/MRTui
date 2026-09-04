@@ -56,6 +56,11 @@
                                 Height="28" FontSize="11" Margin="0,0,0,2"
                                 HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
+                        <Button x:Name="BtnWidgetPitConfirm" Content="Pit Confirm"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Height="28" FontSize="11" Margin="0,0,0,2"
+                                HorizontalContentAlignment="Left" Padding="8,2"
+                                Click="WidgetMenuButton_Click"/>
                     </StackPanel>
                     
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,4">
@@ -383,6 +388,39 @@
                 </StackPanel>
                 
                 <!-- ═══════ STANDINGS ═══════ -->
+                <!-- ═══════ PIT CONFIRM ═══════ -->
+                <StackPanel x:Name="PitConfirmPanel" Visibility="Collapsed">
+                    <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
+                        <StackPanel>
+                            <TextBlock Text="PIT CONFIRM" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
+                            <TextBlock Text="Appears on pit approach and shows what service is actually armed. Warns when nothing is selected, the pits are closed, or the fuel armed is short of what the fuel calculator says you need."
+                                       FontSize="10" Foreground="{StaticResource MutedText}"
+                                       Margin="0,0,0,8" TextWrapping="Wrap"/>
+                            <CheckBox x:Name="ChkPitConfirmGarage" Content="Also show in garage"
+                                      Style="{StaticResource MRT.ToggleButton}"
+                                      Margin="0,0,8,4"
+                                      ToolTip="Check service before leaving the box"
+                                      Checked="PitConfirmToggle_Changed" Unchecked="PitConfirmToggle_Changed"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="OPACITY" Style="{StaticResource MRT.Text.Label}"/>
+                                <TextBlock x:Name="TxtPitConfirmOpacity" Grid.Column="1" Text="100%" FontSize="11"
+                                           Foreground="{StaticResource TealPrimary}"/>
+                            </Grid>
+                            <Slider x:Name="SliderPitConfirmOpacity" Style="{StaticResource MRT.Slider}"
+                                    Minimum="30" Maximum="100" Value="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                    ValueChanged="PitConfirmOpacity_ValueChanged"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
                 <StackPanel x:Name="StandingsPanel" Visibility="Collapsed">
                     <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
                         <StackPanel>

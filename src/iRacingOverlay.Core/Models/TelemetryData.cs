@@ -579,9 +579,11 @@ public class TelemetryData
     public float FogLevel { get; set; }
     
     /// <summary>
-    /// Track surface wetness level enum
-    /// 0 = Dry, 1 = MostlyDry, 2 = VeryLightlyWet, 3 = LightlyWet, 
-    /// 4 = ModeratelyWet, 5 = VeryWet, 6 = ExtremelyWet
+    /// Track surface wetness. See <see cref="TrackWetnessLevel"/>:
+    /// 0 = Unknown, 1 = Dry, 2 = MostlyDry, 3 = VeryLightlyWet, 4 = LightlyWet,
+    /// 5 = ModeratelyWet, 6 = VeryWet, 7 = ExtremelyWet.
+    /// (The previous comment here was off by one — it started the scale at Dry = 0.)
+    /// Only meaningful in sessions with the rain system enabled.
     /// </summary>
     public int TrackWetness { get; set; }
     
@@ -992,6 +994,182 @@ public class TelemetryData
     /// Car index of the pace/safety car (-1 if none). Set from YAML DriverInfo.
     /// </summary>
     public int PaceCarIdx { get; set; } = -1;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TELEMETRY CAPABILITY AUDIT — newly subscribed channels
+    // ═══════════════════════════════════════════════════════════════════
+
+    // ── Session context ───────────────────────────────────────────────
+
+    /// <summary>Player car is on track (not in the garage, not watching a replay).</summary>
+    public bool IsOnTrack { get; set; }
+
+    /// <summary>Player is in the garage.</summary>
+    public bool IsInGarage { get; set; }
+
+    /// <summary>The garage screen is being displayed.</summary>
+    public bool IsGarageVisible { get; set; }
+
+    /// <summary>A replay is currently playing.</summary>
+    public bool IsReplayPlaying { get; set; }
+
+    /// <summary>Player's own track surface (iRacing TrackSurface enum).</summary>
+    public int PlayerTrackSurface { get; set; }
+
+    /// <summary>
+    /// True when overlays should be showing: on track, not in the garage, not in a replay.
+    /// </summary>
+    public bool IsDriving => IsOnTrack && !IsInGarage && !IsGarageVisible && !IsReplayPlaying;
+
+    // ── Pit service (what is armed for the next stop) ─────────────────
+
+    /// <summary>Fuel fill is armed for the next pit stop.</summary>
+    public bool PitSvFuelArmed { get; set; }
+
+    /// <summary>Fuel amount armed, in kilograms.</summary>
+    public float PitSvFuelAddKg { get; set; }
+
+    /// <summary>All-four tire change is armed.</summary>
+    public bool PitSvTiresArmed { get; set; }
+
+    /// <summary>Fast repair is armed.</summary>
+    public bool PitSvFastRepairArmed { get; set; }
+
+    /// <summary>Pit lane is currently open.</summary>
+    public bool PitsOpen { get; set; }
+
+    /// <summary>Fast repairs still available in this session.</summary>
+    public int FastRepairAvailable { get; set; }
+
+    /// <summary>
+    /// Litres still needed to reach the finish, from the fuel calculator.
+    /// Propagated onto the frame so the pit confirmation can cross-check it against
+    /// the fuel actually armed — the app computed this but never compared the two.
+    /// </summary>
+    public float FuelNeededToFinishL { get; set; }
+
+    // ── Weather ───────────────────────────────────────────────────────
+
+    // TrackWetness and WeatherDeclaredWet are declared with the other weather
+    // fields above. They existed as placeholders but were never populated — the
+    // channels were not subscribed, so both always read zero.
+
+    /// <summary>Live precipitation rate.</summary>
+    public float Precipitation { get; set; }
+
+    /// <summary>Sun elevation in radians — negative is below the horizon.</summary>
+    public float SolarAltitude { get; set; }
+
+    /// <summary>In-sim time of day, in seconds since midnight.</summary>
+    public float SessionTimeOfDay { get; set; }
+
+    // ── Engine health ─────────────────────────────────────────────────
+
+    /// <summary>Engine warning flags (see <see cref="EngineWarningFlags"/>).</summary>
+    public int EngineWarnings { get; set; }
+
+    /// <summary>Battery voltage.</summary>
+    public float Voltage { get; set; }
+
+    /// <summary>The sim's own shift indicator, 0-1.</summary>
+    public float ShiftIndicatorPct { get; set; }
+
+    /// <summary>Share of peak power the engine is currently making, 0-1.</summary>
+    public float ShiftPowerPct { get; set; }
+
+    // ── Force feedback ────────────────────────────────────────────────
+
+    /// <summary>Current wheel torque as a share of the configured maximum (0-1, &gt;=1 is clipping).</summary>
+    public float SteeringWheelPctTorque { get; set; }
+
+    /// <summary>Configured wheel maximum force, in Nm.</summary>
+    public float SteeringWheelMaxForceNm { get; set; }
+
+    /// <summary>Peak force seen this session, in Nm.</summary>
+    public float SteeringWheelPeakForceNm { get; set; }
+
+    /// <summary>Wheel limiter engagement.</summary>
+    public float SteeringWheelLimiter { get; set; }
+
+    // ── Sim performance and network ───────────────────────────────────
+
+    /// <summary>The SIMULATOR's frame rate — not the overlay's.</summary>
+    public float SimFrameRate { get; set; }
+
+    /// <summary>GPU utilisation reported by the sim.</summary>
+    public float GpuUsage { get; set; }
+
+    /// <summary>Foreground CPU utilisation reported by the sim.</summary>
+    public float CpuUsageFG { get; set; }
+
+    /// <summary>Connection quality, 0-1. Below ~0.9 explains warping cars.</summary>
+    public float ChanQuality { get; set; }
+
+    /// <summary>Connection latency, in seconds.</summary>
+    public float ChanLatency { get; set; }
+
+    /// <summary>Average connection latency, in seconds.</summary>
+    public float ChanAvgLatency { get; set; }
+
+    // ── Tire strategy ─────────────────────────────────────────────────
+
+    /// <summary>Tire sets still available.</summary>
+    public int TireSetsAvailable { get; set; }
+
+    /// <summary>Tire sets used so far.</summary>
+    public int TireSetsUsed { get; set; }
+
+    /// <summary>Dry tire set limit for this series (0 = unlimited).</summary>
+    public int DryTireSetLimit { get; set; }
+
+    /// <summary>Compound currently fitted.</summary>
+    public int PlayerTireCompound { get; set; }
+
+    /// <summary>Cold pressures per corner. Hot pressures are disk-logging-only.</summary>
+    public float LFcoldPressure { get; set; }
+    public float RFcoldPressure { get; set; }
+    public float LRcoldPressure { get; set; }
+    public float RRcoldPressure { get; set; }
+
+    // ── Incidents and penalties ───────────────────────────────────────
+
+    /// <summary>Shared team incident count — the number that matters in endurance racing.</summary>
+    public int TeamIncidentCount { get; set; }
+
+    /// <summary>This driver's own incident count.</summary>
+    public int DriverIncidentCount { get; set; }
+
+    /// <summary>Success ballast currently carried.</summary>
+    public float WeightPenalty { get; set; }
+
+    /// <summary>Fast repairs consumed by the player.</summary>
+    public int FastRepairsUsed { get; set; }
+
+    // ── Delta validity ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether <see cref="LapDeltaToBestLap"/> is meaningful. iRacing clears this on
+    /// out-laps, in-laps and before a reference exists — the app previously displayed
+    /// the number regardless.
+    /// </summary>
+    public bool LapDeltaToBestLapOK { get; set; }
+
+    /// <summary>Whether the session-best delta is meaningful.</summary>
+    public bool LapDeltaToSessionBestLapOK { get; set; }
+
+    /// <summary>Delta to the theoretical best lap from your own best sectors.</summary>
+    public float LapDeltaToOptimalLap { get; set; }
+
+    /// <summary>Whether the optimal-lap delta is meaningful.</summary>
+    public bool LapDeltaToOptimalLapOK { get; set; }
+
+    // ── Endurance ─────────────────────────────────────────────────────
+
+    /// <summary>Number of drivers who have taken a stint in this car.</summary>
+    public int DriversSoFar { get; set; }
+
+    /// <summary>Driver-change lap status.</summary>
+    public int DriverChangeLapStatus { get; set; }
 
     // ===== SHARED DERIVED STATE =====
     //

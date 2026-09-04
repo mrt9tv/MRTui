@@ -34,7 +34,14 @@ public enum WidgetType
     /// <summary>
     /// Standings — full-field leaderboard sorted by position with toggleable columns.
     /// </summary>
-    Standings
+    Standings,
+
+    /// <summary>
+    /// Pit Confirm — shows what pit service is actually armed as you approach the box,
+    /// and warns when nothing is selected or the fuel armed disagrees with what the
+    /// fuel calculator says you need.
+    /// </summary>
+    PitConfirm
 }
 
 /// <summary>
@@ -50,6 +57,7 @@ public static class WidgetTypeExtensions
         WidgetType.Relative => "Relative",
         WidgetType.ProximityFeed => "Proximity Feed",
         WidgetType.Standings => "Standings",
+        WidgetType.PitConfirm => "Pit Confirm",
         _ => type.ToString()
     };
 }

@@ -260,6 +260,19 @@ public class AppSettings : INotifyPropertyChanged
     public string LastNavPage { get; set; } = "Dashboard";
 
     /// <summary>
+    /// Hide overlays whenever the player is not actually driving — in the garage,
+    /// on the garage screen, or watching a replay. Previously overlays showed
+    /// whenever telemetry was connected, so they covered all three.
+    /// </summary>
+    public bool HideOutsideCar { get; set; } = true;
+
+    /// <summary>Show the pit service confirmation panel on pit approach.</summary>
+    public bool ShowPitConfirmation { get; set; } = true;
+
+    /// <summary>Emit weather, engine, connection and strategy alerts into the proximity feed.</summary>
+    public bool ShowSessionAlerts { get; set; } = true;
+
+    /// <summary>
     /// Which "More options" disclosures the user has opened, keyed by expander name.
     /// Persisted so a user who wants the advanced controls does not have to reopen
     /// them every time they come back to the page.

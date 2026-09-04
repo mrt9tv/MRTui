@@ -156,6 +156,29 @@ public enum NearbyEventType
 
     /// <summary>Player is stopped/slow and a fast car is closing from behind.</summary>
     IncomingFast,
+
+    // ── Session alerts (telemetry capability audit) ────────────────────
+    // These are not about a nearby car, so they carry CarIdx = -1 and are
+    // treated as session-level events. Routing them through the existing feed
+    // means no new widget: the driver already watches this strip.
+
+    /// <summary>Track wetness changed, or rain started/stopped.</summary>
+    WeatherChange,
+
+    /// <summary>Session officially declared wet — wet tires become legal.</summary>
+    DeclaredWet,
+
+    /// <summary>Engine fault: oil or water temperature, oil or fuel pressure, stall.</summary>
+    EngineWarning,
+
+    /// <summary>Network connection quality has degraded — expect warping cars.</summary>
+    PoorConnection,
+
+    /// <summary>Force feedback is clipping — front-axle detail is being lost.</summary>
+    FfbClipping,
+
+    /// <summary>Tire sets are running low against the session limit.</summary>
+    LowTireSets,
 }
 
 /// <summary>

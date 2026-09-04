@@ -192,10 +192,16 @@ public static class MRTOneDataFormatter
             TelemetryField.CurrentLapTime when value is float time => FormatLapTime(time),
             
             // Delta times (with +/- sign, max 3 decimals)
-            TelemetryField.DeltaToBestLap when value is float delta => 
+            TelemetryField.DeltaToBestLap when value is float delta =>
                 delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
-            TelemetryField.DeltaToSessionBest when value is float delta => 
+            TelemetryField.DeltaToSessionBest when value is float delta =>
                 delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
+
+            // Reached when the mapper returned null because iRacing marked the delta
+            // invalid. The caller substitutes 0 for null, so without this the widget
+            // would confidently display "+0.000" on an out-lap — worse than the
+            // original bug of showing a stale number.
+            TelemetryField.DeltaToBestLap or TelemetryField.DeltaToSessionBest => "-",
             
             // Track position percentage
             TelemetryField.LapDistPct when value is float pct => $"{(pct * 100):F1}%",
@@ -282,6 +288,56 @@ public static class MRTOneDataFormatter
                 dist > 0 ? $"{(int)dist}m" : "-",
             TelemetryField.RelativeDistBehind when value is float dist =>
                 dist > 0 ? $"{(int)dist}m" : "-",
+
+            // ── Telemetry capability audit: newly available fields ────
+
+            // Wetness reads 0 (Unknown) in sessions without the rain system —
+            // show a dash rather than implying the track is dry.
+            TelemetryField.TrackWetness when value is int wet =>
+                wet > 0 ? TelemetryStatus.WetnessLabel(wet) : "-",
+
+            TelemetryField.Precipitation when value is float rain =>
+                rain > 0.001f ? $"{rain * 100:F0}%" : "-",
+
+            TelemetryField.TimeOfDay when value is float tod =>
+                $"{(int)(tod / 3600) % 24:D2}:{(int)(tod / 60) % 60:D2}",
+
+            // FFB: at or above 100% the wheel is clipping and detail is lost.
+            TelemetryField.FfbTorquePct when value is float ffb =>
+                $"{ffb:F0}%",
+            TelemetryField.FfbMaxForce when value is float nm =>
+                nm > 0 ? $"{nm:F1}Nm" : "-",
+
+            TelemetryField.SimFrameRate when value is float fps =>
+                fps > 0 ? $"{fps:F0}" : "-",
+            TelemetryField.ConnectionQuality when value is float q =>
+                q > 0 ? $"{q:F0}%" : "-",
+            TelemetryField.ConnectionLatency when value is float ms =>
+                ms > 0 ? $"{ms:F0}ms" : "-",
+
+            TelemetryField.TireSetsLeft when value is int sets =>
+                sets >= 0 ? sets.ToString() : "-",
+            TelemetryField.TireCompound when value is int comp =>
+                comp switch { 0 => "PRI", 1 => "ALT", _ => comp.ToString() },
+
+            TelemetryField.ColdPressureLF or TelemetryField.ColdPressureRF
+                or TelemetryField.ColdPressureLR or TelemetryField.ColdPressureRR
+                when value is float kpa =>
+                kpa > 0 ? (useMetricUnits ? $"{kpa:F0}kPa" : $"{kpa * 0.145038f:F1}psi") : "-",
+
+            TelemetryField.TeamIncidents when value is int inc => $"{inc}x",
+            TelemetryField.WeightPenalty when value is float kg =>
+                kg > 0.1f ? $"{kg:F0}kg" : "-",
+
+            // Null here means the sim marked the delta invalid (out-lap, in-lap,
+            // no reference set) — the app used to show the number regardless.
+            TelemetryField.DeltaToOptimal =>
+                value is float d ? (d >= 0 ? $"+{d:F2}" : $"{d:F2}") : "-",
+
+            TelemetryField.BatteryVoltage when value is float v =>
+                v > 0.1f ? $"{v:F1}V" : "-",
+            TelemetryField.ShiftIndicator when value is float sh =>
+                $"{sh:F0}%",
 
             // Default fallback
             _ => value?.ToString() ?? "-"
@@ -448,6 +504,27 @@ public static class MRTOneDataFormatter
             TelemetryField.RelativeDistAhead => "DIST ▲",
             TelemetryField.RelativeDistBehind => "DIST ▼",
 
+            // Telemetry capability audit fields
+            TelemetryField.TrackWetness => "TRACK",
+            TelemetryField.Precipitation => "RAIN",
+            TelemetryField.TimeOfDay => "TIME",
+            TelemetryField.FfbTorquePct => "FFB",
+            TelemetryField.FfbMaxForce => "FFB MAX",
+            TelemetryField.SimFrameRate => "SIM FPS",
+            TelemetryField.ConnectionQuality => "CONN",
+            TelemetryField.ConnectionLatency => "PING",
+            TelemetryField.TireSetsLeft => "SETS",
+            TelemetryField.TireCompound => "TYRE",
+            TelemetryField.ColdPressureLF => "LF COLD",
+            TelemetryField.ColdPressureRF => "RF COLD",
+            TelemetryField.ColdPressureLR => "LR COLD",
+            TelemetryField.ColdPressureRR => "RR COLD",
+            TelemetryField.TeamIncidents => "TEAM INC",
+            TelemetryField.WeightPenalty => "BALLAST",
+            TelemetryField.DeltaToOptimal => "Δ OPT",
+            TelemetryField.BatteryVoltage => "VOLTS",
+            TelemetryField.ShiftIndicator => "SHIFT",
+
             _ => field.ToString().ToUpper()
         };
     }
@@ -473,6 +550,41 @@ public static class MRTOneDataFormatter
         Models.FuelAlertSettings? fuelAlertSettings = null,
         float avgFuelPerLap = 0f)
     {
+        // ── Telemetry capability audit: colour the new fields by meaning ──
+        // These are gauges where the number alone does not say whether it is good.
+
+        // FFB: clipping means the wheel is saturated and front-axle detail is lost.
+        if (field == TelemetryField.FfbTorquePct && value is float ffbPct)
+        {
+            return ffbPct >= 99f ? Colors.Red
+                 : ffbPct >= 85f ? Colors.Yellow
+                 : primaryColor;
+        }
+
+        // Wetness: blue once the surface is wet enough to compromise dry tires.
+        if (field == TelemetryField.TrackWetness && value is int wetness)
+        {
+            return wetness <= (int)TrackWetnessLevel.Unknown ? Colors.Gray
+                 : TelemetryStatus.IsWet(wetness) ? Color.FromRgb(90, 170, 255)
+                 : primaryColor;
+        }
+
+        // Connection: below the threshold, expect warping cars.
+        if (field == TelemetryField.ConnectionQuality && value is float quality)
+        {
+            return quality <= 0f ? Colors.Gray
+                 : quality < TelemetryStatus.PoorConnectionQuality * 100f ? Colors.Orange
+                 : primaryColor;
+        }
+
+        // Tire sets: running out mid-race ends a strategy.
+        if (field == TelemetryField.TireSetsLeft && value is int sets)
+        {
+            return sets <= 0 ? Colors.Red
+                 : sets == 1 ? Colors.Yellow
+                 : primaryColor;
+        }
+
         // Handle ABS (int value: 0 or 1)
         if (field == TelemetryField.ABSActive && value is int absValue)
         {

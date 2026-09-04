@@ -55,6 +55,27 @@
                 </StackPanel>
             </Border>
             
+            <!-- OVERLAY BEHAVIOUR -->
+            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <StackPanel>
+                    <TextBlock Text="OVERLAY BEHAVIOUR" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
+                    <TextBlock Text="Uses session context from iRacing to keep overlays out of the way."
+                               FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                    <WrapPanel>
+                        <CheckBox x:Name="ChkHideOutsideCar" Content="Hide outside the car"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,6"
+                                  ToolTip="Hide widgets in the garage, on the garage screen, and during replays"
+                                  Checked="OverlayBehaviour_Changed" Unchecked="OverlayBehaviour_Changed"/>
+                        <CheckBox x:Name="ChkSessionAlerts" Content="Session alerts"
+                                  Style="{StaticResource MRT.ToggleButton}"
+                                  Margin="0,0,10,6"
+                                  ToolTip="Show weather, engine, connection, FFB and tyre-set alerts in the Proximity Feed"
+                                  Checked="OverlayBehaviour_Changed" Unchecked="OverlayBehaviour_Changed"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
             <!-- AUTO-HIDE IN PITS -->
             <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
                 <StackPanel>

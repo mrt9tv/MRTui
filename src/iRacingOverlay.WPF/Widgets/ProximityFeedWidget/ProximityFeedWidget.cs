@@ -81,6 +81,14 @@ public class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_INCOMING_FAST = Color.FromRgb(255, 160, 0);   // orange — approaching warning
     private static readonly Color COLOR_INCIDENT = Color.FromRgb(255, 40, 0);        // red-orange — escalated incident
 
+    // Session alerts (own car / conditions) — deliberately distinct from the
+    // car-event palette above so they read as a different class of information.
+    private static readonly Color COLOR_RAIN = Color.FromRgb(90, 170, 255);          // blue — weather
+    private static readonly Color COLOR_ENGINE = Color.FromRgb(255, 80, 40);         // red-orange — mechanical
+    private static readonly Color COLOR_NETWORK = Color.FromRgb(190, 140, 255);      // violet — connection
+    private static readonly Color COLOR_FFB = Color.FromRgb(140, 200, 210);          // muted cyan — advisory
+    private static readonly Color COLOR_TYRES = Color.FromRgb(255, 190, 90);         // amber — strategy
+
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
 
@@ -336,6 +344,7 @@ public class ProximityFeedWidget : WidgetBase
         // Sync adjustable detection range to detector
         _detector.DetectionAheadSeconds = DetectionAheadSeconds;
         _detector.DetectionBehindSeconds = DetectionBehindSeconds;
+        _detector.EnableSessionAlerts = AppSettings.Instance.ShowSessionAlerts;
 
         // Track formation phase: suppress Stopped/SlowCar during parade laps
         // and during the race start grace period (detector handles the timer).
@@ -786,6 +795,15 @@ public class ProximityFeedWidget : WidgetBase
         NearbyEventType.PaceFreePass => COLOR_PACE_FLAG,
         NearbyEventType.PaceWaveAround => COLOR_PACE_FLAG,
         NearbyEventType.IncomingFast => COLOR_INCOMING_FAST,
+
+        // Session alerts about the player's own car and conditions
+        NearbyEventType.WeatherChange => COLOR_RAIN,
+        NearbyEventType.DeclaredWet => COLOR_RAIN,
+        NearbyEventType.EngineWarning => COLOR_ENGINE,
+        NearbyEventType.PoorConnection => COLOR_NETWORK,
+        NearbyEventType.FfbClipping => COLOR_FFB,
+        NearbyEventType.LowTireSets => COLOR_TYRES,
+
         _ => GetSeverityColor(evt.Severity),
     };
     }
@@ -811,5 +829,10 @@ public class ProximityFeedWidget : WidgetBase
             or NearbyEventType.StartSequence
             or NearbyEventType.BlueFlagged
             or NearbyEventType.SafetyCar
-            or NearbyEventType.IncomingFast;
+            or NearbyEventType.IncomingFast
+            // Declared-wet changes what tires are legal, and an engine fault ends
+            // races — both worth blinking. Weather trend, connection, FFB and tire
+            // sets are advisory and stay static.
+            or NearbyEventType.DeclaredWet
+            or NearbyEventType.EngineWarning;
 }

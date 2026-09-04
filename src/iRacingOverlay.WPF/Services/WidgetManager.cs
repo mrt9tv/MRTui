@@ -28,7 +28,7 @@ public class WidgetManager
 #if DEBUG
         new(Enum.GetValues<WidgetType>());
 #else
-        new() { WidgetType.MRTOne, WidgetType.ProximityFeed };
+        new() { WidgetType.MRTOne, WidgetType.ProximityFeed, WidgetType.PitConfirm };
 #endif
 
     public event EventHandler<WidgetBase>? WidgetCreated;
@@ -61,6 +61,9 @@ public class WidgetManager
 
         _widgetFactories[WidgetType.Standings] = (service, config) =>
             new Widgets.StandingsWidget.StandingsWidget(service, config);
+
+        _widgetFactories[WidgetType.PitConfirm] = (service, config) =>
+            new Widgets.PitConfirmWidget.PitConfirmWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)

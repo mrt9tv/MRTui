@@ -131,7 +131,44 @@ public enum TelemetryField
     RelativeGapBehind,   // Time gap to nearest car behind (seconds)
     RelativeDistAhead,   // Distance to nearest car ahead (meters)
     RelativeDistBehind,  // Distance to nearest car behind (meters)
-    
+
+    // ── Telemetry capability audit: newly available data ──────────────
+    // Exposed as selectable fields so every existing widget picker gets them
+    // without any new UI.
+
+    // Weather
+    TrackWetness,        // Dry → Flooded, from the sim's 8-step wetness scale
+    Precipitation,       // Live rain rate
+    TimeOfDay,           // In-sim clock
+
+    // Force feedback
+    FfbTorquePct,        // Wheel torque as a share of maximum (clipping at 100%)
+    FfbMaxForce,         // Configured wheel maximum force (Nm)
+
+    // Sim performance and network
+    SimFrameRate,        // The SIMULATOR's frame rate, not the overlay's
+    ConnectionQuality,   // Network quality (0-100%)
+    ConnectionLatency,   // Network latency (ms)
+
+    // Tire strategy
+    TireSetsLeft,        // Tire sets remaining
+    TireCompound,        // Compound currently fitted
+    ColdPressureLF,      // Cold pressures — hot pressures are disk-logging-only
+    ColdPressureRF,
+    ColdPressureLR,
+    ColdPressureRR,
+
+    // Incidents and penalties
+    TeamIncidents,       // Shared team incident count (endurance)
+    WeightPenalty,       // Success ballast carried
+
+    // Timing
+    DeltaToOptimal,      // Delta to the theoretical best from your own best sectors
+
+    // Engine
+    BatteryVoltage,      // Battery voltage
+    ShiftIndicator,      // The sim's own shift indicator (0-100%)
+
     // None (default)
     None
 }

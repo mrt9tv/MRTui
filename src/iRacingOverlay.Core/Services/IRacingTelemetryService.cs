@@ -219,7 +219,82 @@ namespace iRacingOverlay.Core.Services;
     TelemetryVar.CarIdxQualTireCompoundLocked,  // bool[64]  - Qual tire compound locked per car
     TelemetryVar.CarIdxSteer,                   // float[64] - Steering angle per car (radians)
     TelemetryVar.CarIdxTireCompound,            // int[64]   - Current tire compound per car
-    TelemetryVar.CarIdxTrackSurfaceMaterial      // int[64]   - Track surface material per car (enum)
+    TelemetryVar.CarIdxTrackSurfaceMaterial,     // int[64]   - Track surface material per car (enum)
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TELEMETRY CAPABILITY AUDIT — channels added after verifying each one
+    // appears in a real session capture. The TelemetryVar enum is a superset
+    // that also covers iRacing's disk-logging (.ibt) channels; those never
+    // reach live shared memory. See Documents/MRT-UI/available_variables.txt.
+    // ═══════════════════════════════════════════════════════════════════
+
+    // ── Session context: where is the player actually? ────────────────
+    TelemetryVar.IsOnTrack,             // bool - Player car is on track (not garage/replay)
+    TelemetryVar.IsInGarage,            // bool - Player is in the garage
+    TelemetryVar.IsGarageVisible,       // bool - Garage screen is showing
+    TelemetryVar.IsReplayPlaying,       // bool - A replay is playing
+    TelemetryVar.PlayerTrackSurface,    // int  - Player's surface (enum: off-track, pit stall, ...)
+
+    // ── Pit service: what is actually armed for the next stop ─────────
+    TelemetryVar.dpFuelFill,            // float - Fuel fill armed (0/1)
+    TelemetryVar.dpFuelAddKg,           // float - Fuel amount armed (kg)
+    TelemetryVar.dpTireChange,          // float - All-four tire change armed (0/1)
+    TelemetryVar.dpFastRepair,          // float - Fast repair armed (0/1)
+    TelemetryVar.PitsOpen,              // bool  - Pit lane is open
+    TelemetryVar.FastRepairAvailable,   // int   - Fast repairs remaining
+
+    // ── Weather: the app was previously blind to rain ─────────────────
+    TelemetryVar.TrackWetness,          // int   - 8-step wetness enum (Dry → ExtremelyWet)
+    TelemetryVar.Precipitation,         // float - Live precipitation rate
+    TelemetryVar.WeatherDeclaredWet,    // bool  - Session officially declared wet
+    TelemetryVar.SolarAltitude,         // float - Sun elevation (sun-in-eyes, dusk)
+    TelemetryVar.SessionTimeOfDay,      // float - In-sim clock
+
+    // ── Engine health ─────────────────────────────────────────────────
+    TelemetryVar.EngineWarnings,        // int   - Flags: water/oil/fuel pressure, stall, limiters
+    TelemetryVar.Voltage,               // float - Battery voltage
+    TelemetryVar.ShiftIndicatorPct,     // float - The sim's own shift indicator
+    TelemetryVar.ShiftPowerPct,         // float - Share of peak power being made
+
+    // ── Force feedback: clipping costs the driver front-axle feel ─────
+    TelemetryVar.SteeringWheelPctTorque,    // float - Current torque as share of max
+    TelemetryVar.SteeringWheelMaxForceNm,   // float - Configured wheel max force
+    TelemetryVar.SteeringWheelPeakForceNm,  // float - Peak force seen
+    TelemetryVar.SteeringWheelLimiter,      // float - Limiter engagement
+
+    // ── Sim performance and network quality ───────────────────────────
+    TelemetryVar.FrameRate,             // float - The SIM's frame rate, not ours
+    TelemetryVar.GpuUsage,              // float - GPU load
+    TelemetryVar.CpuUsageFG,            // float - Foreground CPU load
+    TelemetryVar.ChanQuality,           // float - Connection quality (0-1)
+    TelemetryVar.ChanLatency,           // float - Connection latency
+    TelemetryVar.ChanAvgLatency,        // float - Average latency
+
+    // ── Tire strategy ─────────────────────────────────────────────────
+    TelemetryVar.TireSetsAvailable,        // int - Sets remaining
+    TelemetryVar.TireSetsUsed,             // int - Sets used
+    TelemetryVar.PlayerCarDryTireSetLimit, // int - Dry set cap for the series
+    TelemetryVar.PlayerTireCompound,       // int - Compound currently fitted
+    TelemetryVar.LFcoldPressure,           // float - Cold pressures (hot ones are .ibt-only)
+    TelemetryVar.RFcoldPressure,
+    TelemetryVar.LRcoldPressure,
+    TelemetryVar.RRcoldPressure,
+
+    // ── Incidents and penalties ───────────────────────────────────────
+    TelemetryVar.PlayerCarTeamIncidentCount,   // int - Shared team budget (endurance)
+    TelemetryVar.PlayerCarDriverIncidentCount, // int - This driver's own count
+    TelemetryVar.PlayerCarWeightPenalty,       // float - Success ballast
+    TelemetryVar.PlayerFastRepairsUsed,        // int - Fast repairs consumed
+
+    // ── Delta validity: the sim marks its own deltas meaningless ──────
+    TelemetryVar.LapDeltaToBestLap_OK,          // bool  - Is the best-lap delta usable?
+    TelemetryVar.LapDeltaToSessionBestLap_OK,   // bool  - Is the session-best delta usable?
+    TelemetryVar.LapDeltaToOptimalLap,          // float - Delta to theoretical best
+    TelemetryVar.LapDeltaToOptimalLap_OK,       // bool  - Is the optimal delta usable?
+
+    // ── Endurance / driver swaps ──────────────────────────────────────
+    TelemetryVar.DCDriversSoFar,        // int - Drivers who have taken a stint
+    TelemetryVar.DCLapStatus            // int - Driver change lap status
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -859,6 +934,76 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 PitSvFlags = (int)sdkData.PitSvFlags.GetValueOrDefault(),
                 PitSvFuel = sdkData.PitSvFuel.GetValueOrDefault(),
                 PlayerCarPitSvStatus = (int)sdkData.PlayerCarPitSvStatus.GetValueOrDefault(),
+
+                // ===== TELEMETRY CAPABILITY AUDIT — newly subscribed channels =====
+
+                // Session context — lets overlays hide in the garage and during replays
+                IsOnTrack = sdkData.IsOnTrack.GetValueOrDefault(),
+                IsInGarage = sdkData.IsInGarage.GetValueOrDefault(),
+                IsGarageVisible = sdkData.IsGarageVisible.GetValueOrDefault(),
+                IsReplayPlaying = sdkData.IsReplayPlaying.GetValueOrDefault(),
+                PlayerTrackSurface = (int)sdkData.PlayerTrackSurface.GetValueOrDefault(),
+
+                // Pit service — what is actually armed for the next stop
+                PitSvFuelArmed = sdkData.dpFuelFill.GetValueOrDefault() > 0.5f,
+                PitSvFuelAddKg = sdkData.dpFuelAddKg.GetValueOrDefault(),
+                PitSvTiresArmed = sdkData.dpTireChange.GetValueOrDefault() > 0.5f,
+                PitSvFastRepairArmed = sdkData.dpFastRepair.GetValueOrDefault() > 0.5f,
+                PitsOpen = sdkData.PitsOpen.GetValueOrDefault(),
+                FastRepairAvailable = sdkData.FastRepairAvailable.GetValueOrDefault(),
+
+                // Weather
+                TrackWetness = (int)sdkData.TrackWetness.GetValueOrDefault(),
+                Precipitation = sdkData.Precipitation.GetValueOrDefault(),
+                WeatherDeclaredWet = sdkData.WeatherDeclaredWet.GetValueOrDefault(),
+                SolarAltitude = sdkData.SolarAltitude.GetValueOrDefault(),
+                SessionTimeOfDay = sdkData.SessionTimeOfDay.GetValueOrDefault(),
+
+                // Engine health
+                EngineWarnings = (int)sdkData.EngineWarnings.GetValueOrDefault(),
+                Voltage = sdkData.Voltage.GetValueOrDefault(),
+                ShiftIndicatorPct = sdkData.ShiftIndicatorPct.GetValueOrDefault(),
+                ShiftPowerPct = sdkData.ShiftPowerPct.GetValueOrDefault(),
+
+                // Force feedback
+                SteeringWheelPctTorque = sdkData.SteeringWheelPctTorque.GetValueOrDefault(),
+                SteeringWheelMaxForceNm = sdkData.SteeringWheelMaxForceNm.GetValueOrDefault(),
+                SteeringWheelPeakForceNm = sdkData.SteeringWheelPeakForceNm.GetValueOrDefault(),
+                SteeringWheelLimiter = sdkData.SteeringWheelLimiter.GetValueOrDefault(),
+
+                // Sim performance and network quality
+                SimFrameRate = sdkData.FrameRate.GetValueOrDefault(),
+                GpuUsage = sdkData.GpuUsage.GetValueOrDefault(),
+                CpuUsageFG = sdkData.CpuUsageFG.GetValueOrDefault(),
+                ChanQuality = sdkData.ChanQuality.GetValueOrDefault(),
+                ChanLatency = sdkData.ChanLatency.GetValueOrDefault(),
+                ChanAvgLatency = sdkData.ChanAvgLatency.GetValueOrDefault(),
+
+                // Tire strategy (cold pressures only — hot ones are .ibt-only)
+                TireSetsAvailable = sdkData.TireSetsAvailable.GetValueOrDefault(),
+                TireSetsUsed = sdkData.TireSetsUsed.GetValueOrDefault(),
+                DryTireSetLimit = sdkData.PlayerCarDryTireSetLimit.GetValueOrDefault(),
+                PlayerTireCompound = sdkData.PlayerTireCompound.GetValueOrDefault(),
+                LFcoldPressure = sdkData.LFcoldPressure.GetValueOrDefault(),
+                RFcoldPressure = sdkData.RFcoldPressure.GetValueOrDefault(),
+                LRcoldPressure = sdkData.LRcoldPressure.GetValueOrDefault(),
+                RRcoldPressure = sdkData.RRcoldPressure.GetValueOrDefault(),
+
+                // Incidents and penalties
+                TeamIncidentCount = sdkData.PlayerCarTeamIncidentCount.GetValueOrDefault(),
+                DriverIncidentCount = sdkData.PlayerCarDriverIncidentCount.GetValueOrDefault(),
+                WeightPenalty = sdkData.PlayerCarWeightPenalty.GetValueOrDefault(),
+                FastRepairsUsed = sdkData.PlayerFastRepairsUsed.GetValueOrDefault(),
+
+                // Delta validity — the sim tells us when its own deltas are meaningless
+                LapDeltaToBestLapOK = sdkData.LapDeltaToBestLap_OK.GetValueOrDefault(),
+                LapDeltaToSessionBestLapOK = sdkData.LapDeltaToSessionBestLap_OK.GetValueOrDefault(),
+                LapDeltaToOptimalLap = sdkData.LapDeltaToOptimalLap.GetValueOrDefault(),
+                LapDeltaToOptimalLapOK = sdkData.LapDeltaToOptimalLap_OK.GetValueOrDefault(),
+
+                // Endurance
+                DriversSoFar = sdkData.DCDriversSoFar.GetValueOrDefault(),
+                DriverChangeLapStatus = sdkData.DCLapStatus.GetValueOrDefault(),
             };
 
             // ===== DIRTY FIELD TRACKING (Task 6) =====
@@ -907,6 +1052,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             // so downstream widgets (Relative, etc.) can use them without accessing FuelData directly
             data.EstimatedTotalRaceLaps = _fuelCalculatorService.CurrentData.EstimatedTotalRaceLaps;
             data.SessionLapsRemainEx = _fuelCalculatorService.CurrentData.EstimatedLapsFromTime;
+            data.FuelNeededToFinishL = _fuelCalculatorService.CurrentData.FuelNeededToFinish;
 
             // ===== SHARED DERIVED STATE (AR-1) =====
             // Computed once, here, on the telemetry thread. Widgets read these off

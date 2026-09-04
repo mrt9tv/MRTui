@@ -84,8 +84,13 @@ public static class TelemetryDataMapper
             TelemetryField.LastLapTime => data.LapLastLapTime,
             TelemetryField.BestLapTime => data.LapBestLapTime,
             TelemetryField.CurrentLapTime => data.CurrentLapTime,
-            TelemetryField.DeltaToSessionBest => data.DeltaToSessionBest,
-            TelemetryField.DeltaToBestLap => data.DeltaToBestLap,
+            // iRacing clears the _OK flags on out-laps, in-laps and before a
+            // reference lap exists. The app used to display the delta regardless,
+            // showing a number the sim itself considers meaningless.
+            TelemetryField.DeltaToSessionBest =>
+                data.LapDeltaToSessionBestLapOK ? data.DeltaToSessionBest : (object?)null,
+            TelemetryField.DeltaToBestLap =>
+                data.LapDeltaToBestLapOK ? data.DeltaToBestLap : (object?)null,
             TelemetryField.LapDistPct => data.LapDistPct,
             
             // Session
@@ -146,6 +151,35 @@ public static class TelemetryDataMapper
             TelemetryField.RelativeGapBehind => data.GapBehind,
             TelemetryField.RelativeDistAhead => data.CarDistAhead,
             TelemetryField.RelativeDistBehind => data.CarDistBehind,
+
+            // ── Telemetry capability audit: newly subscribed channels ──
+            TelemetryField.TrackWetness => data.TrackWetness,
+            TelemetryField.Precipitation => data.Precipitation,
+            TelemetryField.TimeOfDay => data.SessionTimeOfDay,
+
+            TelemetryField.FfbTorquePct => data.SteeringWheelPctTorque * 100f,
+            TelemetryField.FfbMaxForce => data.SteeringWheelMaxForceNm,
+
+            TelemetryField.SimFrameRate => data.SimFrameRate,
+            TelemetryField.ConnectionQuality => data.ChanQuality * 100f,
+            TelemetryField.ConnectionLatency => data.ChanLatency * 1000f, // seconds → ms
+
+            TelemetryField.TireSetsLeft => data.TireSetsAvailable,
+            TelemetryField.TireCompound => data.PlayerTireCompound,
+            TelemetryField.ColdPressureLF => data.LFcoldPressure,
+            TelemetryField.ColdPressureRF => data.RFcoldPressure,
+            TelemetryField.ColdPressureLR => data.LRcoldPressure,
+            TelemetryField.ColdPressureRR => data.RRcoldPressure,
+
+            TelemetryField.TeamIncidents => data.TeamIncidentCount,
+            TelemetryField.WeightPenalty => data.WeightPenalty,
+
+            // Only meaningful when the sim says so — it clears the flag on out-laps,
+            // in-laps and before a reference lap exists.
+            TelemetryField.DeltaToOptimal => data.LapDeltaToOptimalLapOK ? data.LapDeltaToOptimalLap : (object?)null,
+
+            TelemetryField.BatteryVoltage => data.Voltage,
+            TelemetryField.ShiftIndicator => data.ShiftIndicatorPct * 100f,
             
             // None
             TelemetryField.None => null,

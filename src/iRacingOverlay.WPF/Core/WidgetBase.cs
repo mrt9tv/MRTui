@@ -496,6 +496,7 @@ public abstract class WidgetBase : Window
 
             try
             {
+                UpdateContextVisibility(latest);
                 UpdateUI(latest);
             }
             catch (Exception ex)
@@ -540,12 +541,23 @@ public abstract class WidgetBase : Window
     }
 
     /// <summary>
-    /// Update widget visibility based on connection state
-    /// Only show widget if user wants it visible AND telemetry is connected
+    /// Whether the sim context currently allows overlays. Updated from telemetry.
+    /// Starts true so widgets behave as before until the first frame arrives.
+    /// </summary>
+    private bool _contextAllowsOverlay = true;
+
+    /// <summary>
+    /// Update widget visibility from user preference, connection state and sim context.
+    ///
+    /// Connection alone used to be the whole test, so overlays sat on top of the garage
+    /// screen, over replays, and while spectating another car. IsOnTrack / IsInGarage /
+    /// IsGarageVisible / IsReplayPlaying answer that directly.
     /// </summary>
     private void UpdateVisibilityBasedOnConnection(ConnectionStatus status)
     {
-        bool shouldBeVisible = _userWantsVisible && status == ConnectionStatus.Connected;
+        bool shouldBeVisible = _userWantsVisible
+                               && status == ConnectionStatus.Connected
+                               && _contextAllowsOverlay;
 
         if (shouldBeVisible && !IsVisible)
         {
@@ -555,6 +567,27 @@ public abstract class WidgetBase : Window
         {
             Hide();
         }
+    }
+
+    /// <summary>
+    /// Re-evaluate whether the sim context allows overlays, from the latest frame.
+    /// Called on the UI thread from the render pass.
+    /// </summary>
+    private void UpdateContextVisibility(TelemetryData data)
+    {
+        if (!Models.AppSettings.Instance.HideOutsideCar) return;
+
+        // IsOnTrack is false in menus and before the player has taken the car out,
+        // so treat "no context signal at all" as permission to show — otherwise a
+        // session that never sets it would leave every widget hidden.
+        bool anyContextSignal = data.IsOnTrack || data.IsInGarage
+                                || data.IsGarageVisible || data.IsReplayPlaying;
+
+        bool allowed = !anyContextSignal || data.IsDriving;
+        if (allowed == _contextAllowsOverlay) return;
+
+        _contextAllowsOverlay = allowed;
+        UpdateVisibilityBasedOnConnection(_telemetryService.Status);
     }
 
     /// <summary>

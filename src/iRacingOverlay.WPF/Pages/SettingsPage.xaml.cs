@@ -44,6 +44,8 @@ public partial class SettingsPage : UserControl
         ChkMinimizeToTray.IsChecked = s.MinimizeToTray;
         ChkCloseToTray.IsChecked = s.CloseToTray;
         ChkMetricUnits.IsChecked = s.UseMetricUnits;
+        ChkHideOutsideCar.IsChecked = s.HideOutsideCar;
+        ChkSessionAlerts.IsChecked = s.ShowSessionAlerts;
 
         // Auto-hide in pits
         ChkAutoHideInPits.IsChecked = s.AutoHideInPitsEnabled;
@@ -195,6 +197,15 @@ public partial class SettingsPage : UserControl
         s.CloseToTray = ChkCloseToTray.IsChecked == true;
         s.Save();
         SettingsChanged?.Invoke();
+    }
+
+    private void OverlayBehaviour_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var s = AppSettings.Instance;
+        s.HideOutsideCar = ChkHideOutsideCar.IsChecked == true;
+        s.ShowSessionAlerts = ChkSessionAlerts.IsChecked == true;
+        s.Save();
     }
 
     private void Units_Changed(object sender, RoutedEventArgs e)

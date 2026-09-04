@@ -13,6 +13,7 @@ using TurnDisplay = iRacingOverlay.WPF.Widgets.TurnDisplayWidget.TurnDisplayWidg
 using RelativeW = iRacingOverlay.WPF.Widgets.RelativeWidget.RelativeWidget;
 using StandingsW = iRacingOverlay.WPF.Widgets.StandingsWidget.StandingsWidget;
 using ProxFeedW = iRacingOverlay.WPF.Widgets.ProximityFeedWidget.ProximityFeedWidget;
+using PitConfirmW = iRacingOverlay.WPF.Widgets.PitConfirmWidget.PitConfirmWidget;
 
 namespace iRacingOverlay.WPF.Pages;
 
@@ -37,6 +38,7 @@ public partial class WidgetsPage : UserControl
         { "BtnWidgetRelative", WidgetType.Relative },
         { "BtnWidgetProximityFeed", WidgetType.ProximityFeed },
         { "BtnWidgetStandings", WidgetType.Standings },
+        { "BtnWidgetPitConfirm", WidgetType.PitConfirm },
     };
 
     public WidgetsPage(WidgetManager widgetManager, ITelemetryService telemetryService)
@@ -260,6 +262,7 @@ public partial class WidgetsPage : UserControl
         ProximityFeedPanel.Visibility = _selectedWidgetType == WidgetType.ProximityFeed ? Visibility.Visible : Visibility.Collapsed;
         ProximityFeedRightPanel.Visibility = _selectedWidgetType == WidgetType.ProximityFeed ? Visibility.Visible : Visibility.Collapsed;
         StandingsPanel.Visibility = _selectedWidgetType == WidgetType.Standings ? Visibility.Visible : Visibility.Collapsed;
+        PitConfirmPanel.Visibility = _selectedWidgetType == WidgetType.PitConfirm ? Visibility.Visible : Visibility.Collapsed;
 
         if (_selectedWidgetType == WidgetType.MRTOne) SyncPanelToMRTOne();
         else if (_selectedWidgetType == WidgetType.TurnDisplay) SyncPanelToTurnDisplay();
@@ -267,6 +270,50 @@ public partial class WidgetsPage : UserControl
         else if (_selectedWidgetType == WidgetType.Relative) SyncPanelToRelative();
         else if (_selectedWidgetType == WidgetType.Standings) SyncPanelToStandings();
         else if (_selectedWidgetType == WidgetType.ProximityFeed) SyncPanelToProximityFeed();
+        else if (_selectedWidgetType == WidgetType.PitConfirm) SyncPanelToPitConfirm();
+    }
+
+    // ── Pit Confirm ─────────────────────────────────────────────────
+
+    private PitConfirmW? GetActivePitConfirmWidget()
+    {
+        if (!_widgetManager.HasWidgetType(WidgetType.PitConfirm)) return null;
+        return _widgetManager.GetWidgetsByType(WidgetType.PitConfirm).FirstOrDefault() as PitConfirmW;
+    }
+
+    private void SyncPanelToPitConfirm()
+    {
+        var widget = GetActivePitConfirmWidget();
+        if (widget == null) return;
+
+        _suppressControlEvents = true;
+        try
+        {
+            ChkPitConfirmGarage.IsChecked = widget.ShowInGarage;
+            SliderPitConfirmOpacity.Value = widget.Opacity * 100;
+            TxtPitConfirmOpacity.Text = $"{(int)(widget.Opacity * 100)}%";
+        }
+        finally { _suppressControlEvents = false; }
+    }
+
+    private void PitConfirmToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressControlEvents) return;
+        var widget = GetActivePitConfirmWidget();
+        if (widget == null) return;
+
+        widget.ShowInGarage = ChkPitConfirmGarage.IsChecked == true;
+        widget.SaveSettings();
+        _widgetManager.SaveCurrentLayout();
+    }
+
+    private void PitConfirmOpacity_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_suppressControlEvents || TxtPitConfirmOpacity == null) return;
+        int pct = (int)e.NewValue;
+        TxtPitConfirmOpacity.Text = $"{pct}%";
+        var widget = GetActivePitConfirmWidget();
+        if (widget != null) widget.Opacity = pct / 100.0;
     }
 
     // ── MRT One sync ────────────────────────────────────────────────
