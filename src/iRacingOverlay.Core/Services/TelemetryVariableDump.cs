@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 
 namespace iRacingOverlay.Core.Services;
@@ -29,20 +28,14 @@ public static class TelemetryVariableDump
         "MRT-UI", "available_variables.txt");
 
     /// <summary>
-    /// Ask the SDK client for its variable list and write it out.
-    /// Uses reflection so this compiles against any SDK version — the method is
-    /// not on the interface the app codes against.
+    /// Write the SDK's variable list out. Since SDK 2.x <c>GetTelemetryVariables()</c>
+    /// is on the client interface, so this no longer needs reflection to reach it.
     /// </summary>
     /// <returns>Number of variables written, or -1 on failure.</returns>
-    public static int Write(object telemetryClient)
+    public static int Write(IEnumerable variables)
     {
         try
         {
-            var method = telemetryClient.GetType().GetMethod("GetTelemetryVariables");
-            if (method == null) return -1;
-
-            if (method.Invoke(telemetryClient, null) is not IEnumerable variables) return -1;
-
             var rows = variables.Cast<object>().Select(Describe)
                                 .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
                                 .ToList();

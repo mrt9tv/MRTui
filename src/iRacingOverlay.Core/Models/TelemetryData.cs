@@ -1035,6 +1035,24 @@ public class TelemetryData
     /// <summary>Fast repair is armed.</summary>
     public bool PitSvFastRepairArmed { get; set; }
 
+    /// <summary>The car has an automatic fuel-fill system.</summary>
+    public bool PitSvFuelAutoFillEnabled { get; set; }
+
+    /// <summary>Auto-fill will fuel the car at the next stop — "not armed" is then fine.</summary>
+    public bool PitSvFuelAutoFillActive { get; set; }
+
+    /// <summary>Grille tape armed for the stop (0 = none).</summary>
+    public float PitSvQTape { get; set; }
+
+    /// <summary>Weight jacker adjustment armed, left.</summary>
+    public float PitSvWeightJackerLeft { get; set; }
+
+    /// <summary>Weight jacker adjustment armed, right.</summary>
+    public float PitSvWeightJackerRight { get; set; }
+
+    /// <summary>Battery charge to add at the stop, kWh (hybrid/electric only).</summary>
+    public float PitSvChargeAddKWh { get; set; }
+
     /// <summary>Pit lane is currently open.</summary>
     public bool PitsOpen { get; set; }
 
@@ -1203,6 +1221,38 @@ public class TelemetryData
 
     /// <summary>Weight jacker (oval cars).</summary>
     public float WeightJackerRight { get; set; }
+
+    // ── SDK 2.x additions (car-dependent; zero where the car lacks the control) ──
+
+    /// <summary>Fine brake-bias trim, on cars that split coarse and fine.</summary>
+    public float BrakeBiasFine { get; set; }
+
+    /// <summary>Peak brake bias setting.</summary>
+    public float PeakBrakeBias { get; set; }
+
+    /// <summary>Secondary traction-control channel (multi-channel TC cars).</summary>
+    public float TractionControl2 { get; set; }
+
+    /// <summary>Tertiary traction-control channel.</summary>
+    public float TractionControl3 { get; set; }
+
+    /// <summary>Quaternary traction-control channel.</summary>
+    public float TractionControl4 { get; set; }
+
+    /// <summary>Driver's DRS switch state.</summary>
+    public bool DrsToggle { get; set; }
+
+    /// <summary>DRS state as reported by the car.</summary>
+    public int DrsStatus { get; set; }
+
+    /// <summary>DRS activations remaining in the session.</summary>
+    public int DrsCount { get; set; }
+
+    /// <summary>ERS battery charge, 0-1.</summary>
+    public float ErsBatteryPct { get; set; }
+
+    /// <summary>ERS battery energy, joules.</summary>
+    public float ErsBatteryJoules { get; set; }
 
     /// <summary>Power steering assist enabled.</summary>
     public bool PowerSteeringEnabled { get; set; }

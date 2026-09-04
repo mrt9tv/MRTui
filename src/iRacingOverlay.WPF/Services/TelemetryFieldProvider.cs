@@ -175,6 +175,11 @@ public static class TelemetryFieldProvider
         // ── Shift points ────────────────────────────────────────────────
         new(TelemetryField.OptimalShiftRPM, "Optimal Shift", "Engine", "The car's optimal shift RPM, from its own shift-light data"),
         new(TelemetryField.Redline, "Redline", "Engine", "Engine redline (DriverCarRedLine)", true),
+
+        // ── Hybrid / DRS (car-dependent; reads 0 or OFF on other cars) ──────
+        new(TelemetryField.DrsStatus, "DRS", "Engine", "DRS state as the car reports it", true),
+        new(TelemetryField.DrsCount, "DRS Left", "Engine", "DRS activations remaining this session", true),
+        new(TelemetryField.ErsBattery, "ERS Battery", "Engine", "Hybrid battery charge", true),
     };
 
     /// <summary>

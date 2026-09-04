@@ -164,6 +164,15 @@ public partial class PitConfirmWidget : WidgetBase
     {
         if (!data.PitSvFuelArmed)
         {
+            // On cars with an auto-fill crew, "not armed" is the normal state and
+            // the tank still gets filled. Say so rather than muting it.
+            if (data.PitSvFuelAutoFillActive)
+            {
+                UiUpdate.SetText(_fuelRow, "FUEL    auto-fill");
+                UiUpdate.SetForeground(_fuelRow, BrushCache.Get(COLOR_OK));
+                return;
+            }
+
             UiUpdate.SetText(_fuelRow, "FUEL    not armed");
             UiUpdate.SetForeground(_fuelRow, BrushCache.Get(COLOR_MUTED));
             return;
@@ -196,7 +205,14 @@ public partial class PitConfirmWidget : WidgetBase
             extras = $"Fast repair armed ({data.FastRepairAvailable} left)";
         else if (data.PitRepairLeft > 0.1f)
             extras = $"Repairs {data.PitRepairLeft:F0}s";
-        else if (data.TireSetsAvailable > 0)
+        else if (data.PitSvChargeAddKWh > 0.01f)
+            extras = $"Charge +{data.PitSvChargeAddKWh:F1} kWh";
+        else if (data.PitSvQTape > 0.5f)
+            extras = $"Grille tape {data.PitSvQTape:F0}";
+        else if (Math.Abs(data.PitSvWeightJackerLeft) > 0.01f || Math.Abs(data.PitSvWeightJackerRight) > 0.01f)
+            extras = $"Jacker L {data.PitSvWeightJackerLeft:+0.0;-0.0}  R {data.PitSvWeightJackerRight:+0.0;-0.0}";
+        // 255 is iRacing's "unlimited" sentinel, per the channel description.
+        else if (data.TireSetsAvailable > 0 && data.TireSetsAvailable != 255)
             extras = $"{data.TireSetsAvailable} tyre sets left";
 
         UiUpdate.SetText(_extraRow, extras);
@@ -221,7 +237,13 @@ public partial class PitConfirmWidget : WidgetBase
         if (!data.PitsOpen)
             return ("PITS CLOSED", COLOR_ALARM, true);
 
-        bool nothingArmed = !data.PitSvFuelArmed && !data.PitSvTiresArmed && !data.PitSvFastRepairArmed;
+        // Auto-fill counts as fuel being handled; without this the "nothing armed"
+        // and "need fuel" alarms fired on every stop in cars whose crew fills
+        // automatically, which is exactly the kind of false alarm that gets a
+        // warning widget switched off.
+        bool fuelHandled = data.PitSvFuelArmed || data.PitSvFuelAutoFillActive;
+
+        bool nothingArmed = !fuelHandled && !data.PitSvTiresArmed && !data.PitSvFastRepairArmed;
         if (nothingArmed)
             return ("NOTHING ARMED", COLOR_ALARM, true);
 
@@ -235,7 +257,7 @@ public partial class PitConfirmWidget : WidgetBase
             if (shortfall > FUEL_MISMATCH_TOLERANCE_L)
                 return ($"SHORT {shortfall:F1} L", COLOR_ALARM, true);
         }
-        else if (needed > FUEL_MISMATCH_TOLERANCE_L && !data.PitSvFuelArmed)
+        else if (needed > FUEL_MISMATCH_TOLERANCE_L && !fuelHandled)
         {
             return ($"NEED {needed:F1} L", COLOR_ALARM, true);
         }

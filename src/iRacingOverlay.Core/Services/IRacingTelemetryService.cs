@@ -314,7 +314,29 @@ namespace iRacingOverlay.Core.Services;
     TelemetryVar.dcAntiRollRear,            // float - Rear anti-roll bar
     TelemetryVar.dcWeightJackerRight,       // float - Weight jacker (ovals)
     TelemetryVar.dcPowerSteering,           // float - Power steering assist
-    TelemetryVar.dcLaunchRPM                // float - Launch control RPM
+    TelemetryVar.dcLaunchRPM,               // float - Launch control RPM
+
+    // ===== SDK 2.x additions (arrived in 1.2.0) =====
+    // Each of these has a consumer already in the app: the adjustment overlay
+    // shows whichever control just changed, Pit Confirm lists armed service,
+    // and the field pickers expose DRS/ERS to every widget. Car-dependent —
+    // zero on cars without the control, which all three consumers tolerate.
+    TelemetryVar.dcBrakeBiasFine,           // float - Fine brake bias trim
+    TelemetryVar.dcPeakBrakeBias,           // float - Peak brake bias
+    TelemetryVar.dcTractionControl2,        // float - Secondary TC channel
+    TelemetryVar.dcTractionControl3,        // float - Tertiary TC channel
+    TelemetryVar.dcTractionControl4,        // float - Quaternary TC channel
+    TelemetryVar.dcDRSToggle,               // bool  - DRS switch
+    TelemetryVar.DRS_Status,                // int   - DRS state (car reports)
+    TelemetryVar.DRS_Count,                 // int   - DRS activations remaining
+    TelemetryVar.EnergyERSBatteryPct,       // float - ERS battery charge 0-1
+    TelemetryVar.EnergyERSBattery,          // float - ERS battery energy (J)
+    TelemetryVar.dpQTape,                   // float - Grille tape armed for the stop
+    TelemetryVar.dpWeightJackerLeft,        // float - Weight jacker (L) armed
+    TelemetryVar.dpWeightJackerRight,       // float - Weight jacker (R) armed
+    TelemetryVar.dpChargeAddKWh,            // float - Charge to add at the stop
+    TelemetryVar.dpFuelAutoFillEnabled,     // bool  - Auto-fill system present
+    TelemetryVar.dpFuelAutoFillActive       // bool  - Auto-fill will fuel next stop
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -377,7 +399,6 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _sessionType = "";
     private float _trackLength = 0f;
     private float _trackPitSpeedLimit = 0f; // Pit speed limit in m/s (parsed from "55.98 kph" format)
-    private bool _sessionInfoParsed = false;
     private Dictionary<int, string> _carIdxToCarNumber = new(); // CarIdx -> Car Number mapping (for pit exit display)
     private Dictionary<int, string> _carIdxToDriverName = new(); // CarIdx -> Driver Name mapping (for competitor intelligence)
     private Dictionary<int, int> _carIdxToIRating = new(); // CarIdx -> iRating mapping
@@ -402,6 +423,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     
     // ── Versioned dictionary snapshots — only re-copy when source data changes ──
     private int _driverDataVersion = 0;         // Incremented when any dict changes
+    /// <summary>Hash of the last driver roster processed; gates snapshot refresh and logging.</summary>
+    private int _lastRosterSignature;
     private int _lastCopiedDriverDataVersion = -1;
     private Dictionary<int, string>? _snapshotCarNumber;
     private Dictionary<int, string>? _snapshotDriverName;
@@ -415,7 +438,6 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     // Tier 2: SessionInfo version tracking - Only parse when SDK increments SessionInfoUpdate
     // Note: Weather data (TrackTemp, AirTemp, WeatherType) comes from SDK real-time telemetry (60Hz),
     //       NOT from YAML SessionInfo. YAML parsing is for static session metadata only.
-    private int _lastSessionInfoVersion = -1; // iRacing SDK increments this when SessionInfo changes
     
     // ===== DIRTY FIELD TRACKING (Task 6 Optimization) =====
     // Track previous values of high-frequency fields to populate ChangedFields HashSet
@@ -450,7 +472,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         }
     }
 
-    public bool IsConnected => _client?.IsConnected() ?? false;
+    public bool IsConnected => _client?.IsConnected ?? false;
 
     public double UpdateRate => _updateRate;
 
@@ -491,16 +513,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
 
         try
         {
-            // Create the TelemetryClient using the auto-generated TelemetryData struct
+            // Create the TelemetryClient using the auto-generated TelemetryData struct.
+            // Callbacks are attached in MonitorAsync via TelemetryHandlers.
             _client = TelemetryClient<SVappsLAB.iRacingTelemetrySDK.TelemetryData>.Create(_logger);
-
-            // Subscribe to SDK events using extension method (v1.0.0-beta.1 compatibility)
-            // Note: We're not awaiting SubscribeToAllStreams here - it will be started by Monitor()
-            // For now, we'll continue using the old event pattern and migrate to channels later
-            
-            // Note: v1.0.0-beta.1 uses channels, but we can still use Monitor() method
-            // The old event subscriptions no longer exist, so we'll need to migrate to channels
-            // For now, just create the client and we'll handle events in Monitor()
             _logger.LogInformation("iRacing telemetry client created successfully");
             
             return Task.CompletedTask;
@@ -526,24 +541,48 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         }
 
         _logger.LogInformation("Starting telemetry monitoring...");
-        
-        try
+
+        // SDK 2.x: one Monitor(handlers, ct) owns the read loop and the callback
+        // lifetime. Two things changed from 1.x that shape this method:
+        //
+        //  - Cancellation makes Monitor RETURN, not throw. Shutdown is the normal
+        //    path, so cleanup lives after the await, not in a catch.
+        //  - An exception thrown from a handler FAULTS Monitor. Each handler below
+        //    catches its own failures so a single bad frame or YAML document cannot
+        //    take the whole feed down. OnError carries only SDK-side failures.
+        //
+        // Delivery is the SDK default: a 60-item drop-oldest channel consumed on
+        // its own task. If we ever fall a full second behind, the SDK discards the
+        // stalest samples — which is the same latest-wins policy WidgetBase applies
+        // one layer up, so nothing here needs to compensate.
+        var handlers = new TelemetryHandlers<SVappsLAB.iRacingTelemetrySDK.TelemetryData>
         {
-            // v1.0.0-beta.1: Start Monitor() in background and use SubscribeToAllStreams to consume channels
-            var monitorTask = _client.Monitor(cancellationToken);
-            
-            var subscribeTask = _client.SubscribeToAllStreams(
-                onTelemetryUpdate: async data => 
-                {
-                    OnTelemetryUpdate(null, data);
-                    await Task.CompletedTask;
-                },
-                onSessionInfoUpdate: async session =>
-                {
-                    ProcessTypedSessionInfo(session);
-                    await Task.CompletedTask;
-                },
-                onConnectStateChanged: async state =>
+            OnTelemetryUpdate = data =>
+            {
+                OnTelemetryUpdate(null, data); // has its own try/catch
+                return Task.CompletedTask;
+            },
+
+            OnSessionInfoUpdate = session =>
+            {
+                try { ProcessTypedSessionInfo(session); }
+                catch (Exception ex) { _logger.LogError(ex, "Typed session info handler failed"); }
+                return Task.CompletedTask;
+            },
+
+            // Raw YAML pushed by the SDK. Replaces the 1.x reflection path that
+            // polled a SessionInfoUpdate counter and called a now-removed
+            // GetRawTelemetrySessionInfoYaml() every tick.
+            OnRawSessionInfoUpdate = yaml =>
+            {
+                try { OnRawSessionInfo(yaml); }
+                catch (Exception ex) { _logger.LogError(ex, "Raw session info handler failed"); }
+                return Task.CompletedTask;
+            },
+
+            OnConnectStateChanged = state =>
+            {
+                try
                 {
                     _logger.LogInformation("Connection state changed: {State}", state);
 
@@ -552,42 +591,41 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     // show/hide handler twice per transition.
                     Status = state == ConnectState.Connected ? ConnectionStatus.Connected : ConnectionStatus.Disconnected;
 
-                    // Parse session info on connect (YAML fallback for track data)
-                    if (state == ConnectState.Connected)
+                    if (state == ConnectState.Connected && _client != null)
                     {
-                        TryParseSessionInfo();
-
                         // Record which channels this session actually publishes, with
                         // iRacing's own descriptions. The enum is a superset that also
                         // covers .ibt-only channels, so this file is the authority for
                         // what can be built on.
-                        if (_client != null)
-                        {
-                            int count = TelemetryVariableDump.Write(_client);
-                            if (count > 0)
-                                _logger.LogInformation("Wrote {Count} live telemetry variables to {Path}",
-                                    count, TelemetryVariableDump.FilePath);
-                        }
+                        int count = TelemetryVariableDump.Write(_client.GetTelemetryVariables());
+                        if (count > 0)
+                            _logger.LogInformation("Wrote {Count} live telemetry variables to {Path}",
+                                count, TelemetryVariableDump.FilePath);
                     }
+                    else if (state == ConnectState.Disconnected)
+                    {
+                        // Next session may be a different car; forget the YAML we
+                        // matched against so the first document parses again.
+                        _lastSessionYamlHash = 0;
+                    }
+                }
+                catch (Exception ex) { _logger.LogError(ex, "Connect state handler failed"); }
+                return Task.CompletedTask;
+            },
 
-                    await Task.CompletedTask;
-                },
-                onError: async ex =>
-                {
-                    _logger.LogError(ex, "iRacing SDK error: {Message}", ex.Message);
-                    _lastError = ex;
-                    Status = ConnectionStatus.Error;
-                    await Task.CompletedTask;
-                },
-                cancellationToken: cancellationToken
-            );
-            
-            // Wait for either Monitor or Subscribe to complete
-            await Task.WhenAny(monitorTask, subscribeTask);
-        }
-        catch (OperationCanceledException)
+            OnError = ex =>
+            {
+                _logger.LogError(ex, "iRacing SDK error: {Message}", ex.Message);
+                _lastError = ex;
+                Status = ConnectionStatus.Error;
+                return Task.CompletedTask;
+            },
+        };
+
+        try
         {
-            _logger.LogInformation("Telemetry monitoring cancelled");
+            await _client.Monitor(handlers, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Telemetry monitoring stopped");
         }
         catch (Exception ex)
         {
@@ -597,77 +635,42 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         }
     }
 
+    // ── Session info (push model) ─────────────────────────────────────────
+
     /// <summary>
-    /// Attempt to get and parse session info from the SDK with version-based caching.
-    /// Optimization: Only parse YAML when iRacing SDK increments SessionInfoUpdate property.
-    /// Result: 99%+ cache hits (parsing only happens on session change or initial connect).
+    /// Hash of the last YAML document parsed. The SDK does not deduplicate raw
+    /// session pushes at the client, so a cheap guard here keeps the full YAML
+    /// parse to genuine changes only.
     /// </summary>
-    // ── Cached reflection handles for the SDK's session-info members ──────
-    // These were resolved on every call, i.e. on every telemetry tick.
-    private System.Reflection.PropertyInfo? _sessionInfoUpdateProp;
-    private System.Reflection.MethodInfo? _getSessionInfoYamlMethod;
-    private Type? _resolvedClientType;
+    private int _lastSessionYamlHash;
 
-    private void ResolveSessionInfoMembers()
+    /// <summary>
+    /// Log a session fact only when its rendered value changes. Session info is
+    /// republished about once a second while live result fields tick over; logging
+    /// every parse wrote ~10k identical "Parsed track name" lines an hour.
+    /// </summary>
+    private readonly Dictionary<string, string> _lastSessionFacts = new();
+
+    private void LogSessionFact(string template, params object?[] args)
     {
-        var clientType = _client?.GetType();
-        if (clientType == null || ReferenceEquals(clientType, _resolvedClientType)) return;
-
-        _resolvedClientType = clientType;
-        _sessionInfoUpdateProp = clientType.GetProperty("SessionInfoUpdate");
-        _getSessionInfoYamlMethod = clientType.GetMethod("GetRawTelemetrySessionInfoYaml");
-
-        if (_getSessionInfoYamlMethod == null)
-            _logger.LogWarning("Could not find GetRawTelemetrySessionInfoYaml method on telemetry client");
+        var rendered = string.Join("|", args.Select(a => a?.ToString() ?? ""));
+        if (_lastSessionFacts.TryGetValue(template, out var prev) && prev == rendered) return;
+        _lastSessionFacts[template] = rendered;
+        _logger.LogInformation(template, args);
     }
 
-    private void TryParseSessionInfo()
+    private void OnRawSessionInfo(string yaml)
     {
-        try
-        {
-            if (_client == null)
-            {
-                _logger.LogDebug("Client is null, cannot parse session info");
-                return;
-            }
-            
-            // Get SessionInfo update version via reflection (SDK increments this when SessionInfo changes).
-            // Member lookups are resolved once and cached — this runs on every telemetry tick.
-            ResolveSessionInfoMembers();
+        if (string.IsNullOrEmpty(yaml)) return;
 
-            int currentSessionInfoVersion = _sessionInfoUpdateProp != null
-                ? (int)(_sessionInfoUpdateProp.GetValue(_client) ?? -1)
-                : -1;
-            
-            // Skip parsing if SessionInfo unchanged (99%+ of calls after initial connection)
-            if (_sessionInfoParsed && currentSessionInfoVersion == _lastSessionInfoVersion)
-            {
-                // Cache hit - no parsing needed
-                return;
-            }
-            
-            // Cache miss - parse SessionInfo YAML (only on session change or first connect)
-            if (_getSessionInfoYamlMethod != null)
-            {
-                var sessionInfo = _getSessionInfoYamlMethod.Invoke(_client, null) as string;
-                if (!string.IsNullOrEmpty(sessionInfo))
-                {
-                    _logger.LogDebug("SessionInfo YAML parsing triggered (Version: {Version})", currentSessionInfoVersion);
-                    ParseSessionInfo(sessionInfo);
-                    _lastSessionInfoVersion = currentSessionInfoVersion;
-                }
-                else
-                {
-                    _logger.LogDebug("SessionInfo YAML is empty (may not be available yet)");
-                }
-            }
-            // A missing YAML accessor is reported once from ResolveSessionInfoMembers,
-            // not on every tick.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not retrieve session info. This is normal in test drive mode.");
-        }
+        int hash = yaml.GetHashCode();
+        if (hash == _lastSessionYamlHash) return;
+        _lastSessionYamlHash = hash;
+
+        _logger.LogDebug("Session info changed — parsing {Length} chars of YAML", yaml.Length);
+        ParseSessionInfo(yaml);
+        // Downstream distance maths keys off _trackLength > 0, which ParseSessionInfo
+        // sets; there is no separate "parsed" flag to maintain.
     }
 
     private void OnTelemetryUpdate(object? sender, SVappsLAB.iRacingTelemetrySDK.TelemetryData sdkData)
@@ -685,24 +688,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 _lastUpdateRateCalculation = now;
             }
             
-            // Try to parse session info - version-based cache in TryParseSessionInfo handles optimization
-            // Initial connection: Parse static data (track name, length, pit speed) until track length obtained
-            // After initial parse: SessionInfo version check provides 99%+ cache hits (no YAML parsing)
-            if (!_sessionInfoParsed || _trackLength <= 0)
-            {
-                TryParseSessionInfo();
-                // Mark as parsed once we have track length (critical for distance calculations)
-                if (_trackLength > 0)
-                {
-                    _sessionInfoParsed = true;
-                }
-            }
-            else
-            {
-                // Session info parsed - still call to detect session changes (version check is fast)
-                TryParseSessionInfo();
-            }
-            
+            // Session info arrives by push (OnRawSessionInfo) — nothing to poll here.
+
             // Detect lap change and reset lap timer
             if (sdkData.Lap != _lastLap)
             {
@@ -1001,6 +988,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 PitSvFuelAddKg = sdkData.dpFuelAddKg.GetValueOrDefault(),
                 PitSvTiresArmed = sdkData.dpTireChange.GetValueOrDefault() > 0.5f,
                 PitSvFastRepairArmed = sdkData.dpFastRepair.GetValueOrDefault() > 0.5f,
+                // Auto-fill: "no fuel armed" is not a problem on a car whose crew fills
+                // automatically. Without these two, the pit warning fired every stop
+                // on such cars (a finding from the live variable dump).
+                // dp* channels are floats in shared memory even when they are flags —
+                // same threshold the fuel/tyre/repair lines above use.
+                PitSvFuelAutoFillEnabled = sdkData.dpFuelAutoFillEnabled.GetValueOrDefault() > 0.5f,
+                PitSvFuelAutoFillActive = sdkData.dpFuelAutoFillActive.GetValueOrDefault() > 0.5f,
+                PitSvQTape = sdkData.dpQTape.GetValueOrDefault(),
+                PitSvWeightJackerLeft = sdkData.dpWeightJackerLeft.GetValueOrDefault(),
+                PitSvWeightJackerRight = sdkData.dpWeightJackerRight.GetValueOrDefault(),
+                PitSvChargeAddKWh = sdkData.dpChargeAddKWh.GetValueOrDefault(),
                 PitsOpen = sdkData.PitsOpen.GetValueOrDefault(),
                 FastRepairAvailable = sdkData.FastRepairAvailable.GetValueOrDefault(),
 
@@ -1067,6 +1065,18 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 WeightJackerRight = sdkData.dcWeightJackerRight.GetValueOrDefault(),
                 PowerSteeringEnabled = sdkData.dcPowerSteering.GetValueOrDefault(),
                 LaunchRPM = sdkData.dcLaunchRPM.GetValueOrDefault(),
+
+                // SDK 2.x channels (car-dependent)
+                BrakeBiasFine = sdkData.dcBrakeBiasFine.GetValueOrDefault(),
+                PeakBrakeBias = sdkData.dcPeakBrakeBias.GetValueOrDefault(),
+                TractionControl2 = sdkData.dcTractionControl2.GetValueOrDefault(),
+                TractionControl3 = sdkData.dcTractionControl3.GetValueOrDefault(),
+                TractionControl4 = sdkData.dcTractionControl4.GetValueOrDefault(),
+                DrsToggle = sdkData.dcDRSToggle.GetValueOrDefault(),
+                DrsStatus = sdkData.DRS_Status.GetValueOrDefault(),
+                DrsCount = sdkData.DRS_Count.GetValueOrDefault(),
+                ErsBatteryPct = sdkData.EnergyERSBatteryPct.GetValueOrDefault(),
+                ErsBatteryJoules = sdkData.EnergyERSBattery.GetValueOrDefault(),
             };
 
             // ===== DIRTY FIELD TRACKING (Task 6) =====
@@ -1532,11 +1542,30 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 }
             }
 
-            // Signal that driver data has changed — snapshot will be refreshed on next telemetry tick
-            Interlocked.Increment(ref _driverDataVersion);
+            // iRacing republishes session info roughly once a second while live result
+            // fields tick over, and the SDK forwards each one. The roster rarely moved,
+            // yet every pass bumped the version — forcing eight dictionary re-copies on
+            // the next tick — and logged a line. Gate both on the roster actually
+            // changing. Incident counts are part of the signature because they feed a
+            // snapshot dictionary too; the incident-delta detection above still runs
+            // on every pass regardless.
+            int signature = session.DriverInfo.Drivers.Count;
+            foreach (var d in session.DriverInfo.Drivers)
+                // HashCode.Combine caps at 8 arguments — fold the two strings into one.
+                signature = HashCode.Combine(signature, d.CarIdx, d.CarNumber, d.UserName,
+                                             d.IRating, d.LicLevel, d.CurDriverIncidentCount,
+                                             HashCode.Combine(d.CarScreenNameShort, d.ClubName));
 
-            _logger.LogInformation("Typed session info: {Count} drivers, player CarIdx={PlayerIdx}",
-                session.DriverInfo.Drivers.Count, driverCarIdx);
+            if (signature != _lastRosterSignature)
+            {
+                _lastRosterSignature = signature;
+
+                // Snapshot will be refreshed on the next telemetry tick
+                Interlocked.Increment(ref _driverDataVersion);
+
+                _logger.LogInformation("Roster changed: {Count} drivers, player CarIdx={PlayerIdx}",
+                    session.DriverInfo.Drivers.Count, driverCarIdx);
+            }
         }
         catch (Exception ex)
         {
@@ -1602,7 +1631,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     {
                         // TrackName is the internal ID (e.g., "spa", "imola") - use for turn database lookup
                         _trackId = ExtractYamlValue(trimmed).Trim('"', '\'');
-                        _logger.LogInformation("Parsed track ID: {TrackId}", _trackId);
+                        LogSessionFact("Parsed track ID: {TrackId}", _trackId);
                         
                         // Set track for turn tracking service
                         _turnTrackingService.SetTrack(_trackId);
@@ -1610,7 +1639,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     else if (trimmed.StartsWith("TrackDisplayName:"))
                     {
                         _trackName = ExtractYamlValue(trimmed);
-                        _logger.LogInformation("Parsed track name: {TrackName}", _trackName);
+                        LogSessionFact("Parsed track name: {TrackName}", _trackName);
                     }
                     else if (trimmed.StartsWith("TrackLength:"))
                     {
@@ -1620,7 +1649,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         {
                             _trackLength = lengthMeters;
                             foundTrackLength = true;
-                            _logger.LogInformation("Parsed track length: {TrackLength}m ({LengthStr})", _trackLength, lengthStr);
+                            LogSessionFact("Parsed track length: {TrackLength}m ({LengthStr})", _trackLength, lengthStr);
                         }
                         else
                         {
@@ -1634,7 +1663,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         if (ParsePitSpeedLimit(speedStr, out float speedMps))
                         {
                             _trackPitSpeedLimit = speedMps;
-                            _logger.LogInformation("Parsed pit speed limit: {SpeedMps:F2} m/s ({SpeedStr})", _trackPitSpeedLimit, speedStr);
+                            LogSessionFact("Parsed pit speed limit: {SpeedMps:F2} m/s ({SpeedStr})", _trackPitSpeedLimit, speedStr);
                         }
                         else
                         {
@@ -1647,7 +1676,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     if (trimmed.StartsWith("DriverUserName:"))
                     {
                         _driverName = ExtractYamlValue(trimmed);
-                        _logger.LogInformation("Parsed driver name: {DriverName}", _driverName);
+                        LogSessionFact("Parsed driver name: {DriverName}", _driverName);
                     }
                     else if (trimmed.StartsWith("DriverCarIdx:"))
                     {
@@ -1659,14 +1688,14 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     else if (trimmed.StartsWith("DriverSetupName:"))
                     {
                         _driverSetupName = ExtractYamlValue(trimmed).Trim('"', '\'');
-                        _logger.LogInformation("Parsed setup name: {SetupName}", _driverSetupName);
+                        LogSessionFact("Parsed setup name: {SetupName}", _driverSetupName);
                     }
                     else if (trimmed.StartsWith("DriverSetupIsModified:"))
                     {
                         if (int.TryParse(ExtractYamlValue(trimmed), out var isModified))
                         {
                             _driverSetupIsModified = isModified;
-                            _logger.LogInformation("Setup modified: {IsModified}", _driverSetupIsModified == 1);
+                            LogSessionFact("Setup modified: {IsModified}", _driverSetupIsModified == 1);
                         }
                     }
                     else if (trimmed.StartsWith("Drivers:"))
@@ -1704,7 +1733,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             if (isPlayerDriver)
                             {
                                 _carNumber = carNumber;
-                                _logger.LogInformation("Parsed player car number: {CarNumber}", _carNumber);
+                                LogSessionFact("Parsed player car number: {CarNumber}", _carNumber);
                             }
                         }
                         else if (trimmed.StartsWith("UserName:"))
@@ -1754,7 +1783,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             if (isPlayerDriver && !string.IsNullOrEmpty(carScreenName))
                             {
                                 _carScreenName = carScreenName;
-                                _logger.LogInformation("✅ Parsed player car screen name: {CarScreenName}", _carScreenName);
+                                LogSessionFact("Parsed player car screen name: {CarScreenName}", _carScreenName);
                             }
                             // FALLBACK: If we somehow missed the player check, use ANY CarScreenName if we don't have one yet
                             else if (string.IsNullOrEmpty(_carScreenName) && !string.IsNullOrEmpty(carScreenName))
@@ -1791,7 +1820,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         else if (trimmed.StartsWith("SessionType:") && isCurrentSession)
                         {
                             _sessionType = ExtractYamlValue(trimmed).Trim('"', '\'');
-                            _logger.LogInformation("Parsed session type: {SessionType}", _sessionType);
+                            LogSessionFact("Parsed session type: {SessionType}", _sessionType);
                             // Once we have session type, we can stop looking
                             inSessionsArray = false;
                         }
@@ -2001,8 +2030,8 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         {
             try
             {
-                // v1.0.0-beta.1: SubscribeToAllStreams handles cleanup via cancellationToken
-                // We just need to dispose the client
+                // Monitor(handlers, ct) has already returned by the time the shutdown
+                // token fires; disposing the client releases the shared-memory map.
                 await _client.DisposeAsync();
                 _client = null;
 

@@ -182,6 +182,9 @@ public static class TelemetryDataMapper
             TelemetryField.ShiftIndicator => data.ShiftIndicatorPct * 100f,
             TelemetryField.OptimalShiftRPM => data.ShiftOptimalRPM,
             TelemetryField.Redline => data.ShiftRedlineRPM,
+            TelemetryField.DrsStatus => data.DrsStatus,
+            TelemetryField.DrsCount => data.DrsCount,
+            TelemetryField.ErsBattery => data.ErsBatteryPct * 100f,
             
             // None
             TelemetryField.None => null,

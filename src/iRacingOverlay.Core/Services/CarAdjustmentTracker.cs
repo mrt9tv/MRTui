@@ -58,10 +58,52 @@ public sealed class CarAdjustmentTracker
             },
             new Adjustment
             {
+                Label = "BIAS FINE",
+                Read = d => d.BrakeBiasFine,
+                Format = v => v.ToString("F1", CultureInfo.InvariantCulture),
+            },
+            new Adjustment
+            {
+                Label = "PEAK BIAS",
+                Read = d => d.PeakBrakeBias,
+                Format = v => v.ToString("F1", CultureInfo.InvariantCulture) + "%",
+            },
+            new Adjustment
+            {
                 Label = "TC",
                 Read = d => d.TractionControl,
                 Format = v => v <= 0 ? "OFF" : v.ToString("F0", CultureInfo.InvariantCulture),
                 Tolerance = 0.4f, // integer levels
+            },
+            // Multi-channel TC cars expose up to four maps. Edge-triggered like the
+            // rest, so cars with one channel never show these.
+            new Adjustment
+            {
+                Label = "TC 2",
+                Read = d => d.TractionControl2,
+                Format = v => v <= 0 ? "OFF" : v.ToString("F0", CultureInfo.InvariantCulture),
+                Tolerance = 0.4f,
+            },
+            new Adjustment
+            {
+                Label = "TC 3",
+                Read = d => d.TractionControl3,
+                Format = v => v <= 0 ? "OFF" : v.ToString("F0", CultureInfo.InvariantCulture),
+                Tolerance = 0.4f,
+            },
+            new Adjustment
+            {
+                Label = "TC 4",
+                Read = d => d.TractionControl4,
+                Format = v => v <= 0 ? "OFF" : v.ToString("F0", CultureInfo.InvariantCulture),
+                Tolerance = 0.4f,
+            },
+            new Adjustment
+            {
+                Label = "DRS",
+                Read = d => d.DrsToggle ? 1f : 0f,
+                Format = v => v > 0.5f ? "ON" : "OFF",
+                Tolerance = 0.4f,
             },
             new Adjustment
             {

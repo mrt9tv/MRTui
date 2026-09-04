@@ -171,6 +171,11 @@ public enum TelemetryField
     OptimalShiftRPM,     // The car's optimal shift RPM
     Redline,             // Engine redline
 
+    // SDK 2.x — hybrid / DRS cars only, zero elsewhere
+    DrsStatus,           // DRS state as reported by the car
+    DrsCount,            // DRS activations remaining
+    ErsBattery,          // ERS battery charge %
+
     // None (default)
     None
 }
