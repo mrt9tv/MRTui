@@ -278,4 +278,65 @@
         <Setter Property="Cursor" Value="Hand"/>
     </Style>
 
+    <!-- ==================== DISCLOSURE (EXPANDER) ==================== -->
+    <!--
+        Used to keep the rarely-changed options out of the way. The Widgets page
+        carried 58 checkboxes and 18 sliders in flat lists for two shipping widgets,
+        which made the settings that matter hard to find among the ones that do not.
+    -->
+
+    <Style x:Key="MRT.Expander" TargetType="Expander">
+        <Setter Property="Foreground" Value="{StaticResource LightText}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Expander">
+                    <StackPanel>
+                        <ToggleButton x:Name="HeaderButton"
+                                      IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                      Cursor="Hand" Focusable="True"
+                                      HorizontalContentAlignment="Stretch"
+                                      Background="Transparent" BorderThickness="0">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Bg" Background="Transparent" Padding="0,4">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="Chevron" Text="&#x25B8;"
+                                                       FontSize="10" Margin="0,0,6,0"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{StaticResource TealPrimary}"/>
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Chevron" Property="Text" Value="&#x25BE;"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Chevron" Property="Foreground" Value="{StaticResource OrangePrimary}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                            <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+                        </ToggleButton>
+
+                        <ContentPresenter x:Name="Body" Margin="0,4,0,0" Visibility="Collapsed"/>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="Body" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="MRT.Expander.Header" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource MutedText}"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+
 </ResourceDictionary>

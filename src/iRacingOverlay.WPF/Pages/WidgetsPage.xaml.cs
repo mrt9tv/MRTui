@@ -46,6 +46,7 @@ public partial class WidgetsPage : UserControl
         _telemetryService = telemetryService;
 
         ApplySupportedWidgetVisibility();
+        RestoreExpanderStates();
         PopulateFieldCombos();
         HighlightActiveMenuButton();
         SyncPanelToActiveWidget();
@@ -83,6 +84,52 @@ public partial class WidgetsPage : UserControl
 
     /// <summary>Expose fuel alert settings for MainWindow to read.</summary>
     public FuelAlertSettings FuelAlerts => _fuelAlertSettings;
+
+    /// <summary>
+    /// Restore the "More options" disclosures the user had open, and keep them
+    /// persisted — reopening the same section on every visit is exactly the kind of
+    /// friction that makes a dense settings page feel worse than it is.
+    /// </summary>
+    private void RestoreExpanderStates()
+    {
+        var saved = AppSettings.Instance.ExpandedSections;
+
+        foreach (var expander in FindExpanders(this))
+        {
+            if (string.IsNullOrEmpty(expander.Name)) continue;
+
+            if (saved.TryGetValue(expander.Name, out bool wasOpen))
+                expander.IsExpanded = wasOpen;
+
+            expander.Expanded += OnExpanderStateChanged;
+            expander.Collapsed += OnExpanderStateChanged;
+        }
+    }
+
+    private void OnExpanderStateChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Expander expander || string.IsNullOrEmpty(expander.Name)) return;
+
+        AppSettings.Instance.ExpandedSections[expander.Name] = expander.IsExpanded;
+        AppSettings.Instance.SaveQuiet();
+    }
+
+    /// <summary>
+    /// Walk the logical tree, not the visual one: the per-widget panels start
+    /// collapsed, so their visual children do not exist yet when this runs.
+    /// </summary>
+    private static IEnumerable<Expander> FindExpanders(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root))
+        {
+            if (child is not DependencyObject node) continue;
+
+            if (node is Expander expander) yield return expander;
+
+            foreach (var nested in FindExpanders(node))
+                yield return nested;
+        }
+    }
 
     // ── Widget selector ─────────────────────────────────────────────
 

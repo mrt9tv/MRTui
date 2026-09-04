@@ -34,17 +34,17 @@
                         <Button x:Name="BtnWidgetTurnDisplay" Content="Turn Display"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetFuel" Content="Fuel Calculator"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetRelative" Content="Relative"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                         <Button x:Name="BtnWidgetProximityFeed" Content="Prox Feed"
                                 Style="{StaticResource MRT.Button.Secondary}"
@@ -54,7 +54,7 @@
                         <Button x:Name="BtnWidgetStandings" Content="Standings"
                                 Style="{StaticResource MRT.Button.Secondary}"
                                 Height="28" FontSize="11" Margin="0,0,0,2"
-                                HorizontalContentAlignment="Left" Padding="8,2"
+                                HorizontalContentAlignment="Left" Padding="8,2"
                                 Click="WidgetMenuButton_Click"/>
                     </StackPanel>
                     
@@ -698,21 +698,14 @@
                 <StackPanel x:Name="RelativeRightPanel" Visibility="Collapsed">
                     <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,6" Padding="12,8">
                         <StackPanel>
-                            <TextBlock Text="RELATIVE – EXTRA COLUMNS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
+                            <TextBlock Text="RELATIVE – COLUMNS" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,4"/>
                             <TextBlock Text="Toggle additional data columns on the overlay"
                                        FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                            <!-- The columns most people actually change -->
                             <WrapPanel>
-                                <CheckBox x:Name="ChkShowDriverInfo" Content="Driver Info" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show license badge + iRating"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkUseFullIRating" Content="Full iR" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show full iRating (2035) instead of compact (2.0k)"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                 <CheckBox x:Name="ChkShowCarNumber" Content="Car #" Style="{StaticResource MRT.ToggleButton}"
                                           IsChecked="True" Margin="0,0,8,4"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowCarModel" Content="Car Model" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show 3-letter car abbreviation"
                                           Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                 <CheckBox x:Name="ChkShowInterval" Content="Gap" Style="{StaticResource MRT.ToggleButton}"
                                           IsChecked="False" Margin="0,0,8,4" ToolTip="Show gap to car directly ahead in race position"
@@ -720,40 +713,58 @@
                                 <CheckBox x:Name="ChkShowLastLap" Content="Last Lap" Style="{StaticResource MRT.ToggleButton}"
                                           IsChecked="False" Margin="0,0,8,4"
                                           Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowAltRowShading" Content="Alt Rows" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Alternate row shading for readability"
+                                <CheckBox x:Name="ChkShowDriverInfo" Content="Driver Info" Style="{StaticResource MRT.ToggleButton}"
+                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show license badge + iRating"
                                           Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                                 <CheckBox x:Name="ChkShowInfoBar" Content="Info Bar" Style="{StaticResource MRT.ToggleButton}"
                                           IsChecked="False" Margin="0,0,8,4" ToolTip="Show est laps, time remaining, incidents at bottom"
                                           Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowClosingRate" Content="Closing ▲▼" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show closing rate arrow"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowPitStopCount" Content="Pit Stops" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show pit stop count per driver"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowPositionChange" Content="Pos Δ" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show position change arrows"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowSectorDelta" Content="Gap Color" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Color REL column green/red"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowNationality" Content="Nationality" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show 2-letter country code"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowClassLegend" Content="Class Legend" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Show class color legend"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowLappedDim" Content="Dim Lapped" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Dim cars 1+ laps behind/ahead"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkShowDangerGlow" Content="Danger Glow" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Red tint on high closing rate"
-                                          Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
-                                <CheckBox x:Name="ChkEnableRowAnimation" Content="Animate" Style="{StaticResource MRT.ToggleButton}"
-                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Smooth row slide animation"
+                                <CheckBox x:Name="ChkShowAltRowShading" Content="Alt Rows" Style="{StaticResource MRT.ToggleButton}"
+                                          IsChecked="False" Margin="0,0,8,4" ToolTip="Alternate row shading for readability"
                                           Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
                             </WrapPanel>
+
+                            <!-- Everything else, out of the way until asked for -->
+                            <Expander x:Name="ExpRelativeAdvanced" Style="{StaticResource MRT.Expander}" Margin="0,6,0,0">
+                                <Expander.Header>
+                                    <TextBlock Text="More columns" Style="{StaticResource MRT.Expander.Header}"/>
+                                </Expander.Header>
+                                <WrapPanel>
+                                    <CheckBox x:Name="ChkUseFullIRating" Content="Full iR" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show full iRating (2035) instead of compact (2.0k)"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowCarModel" Content="Car Model" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show 3-letter car abbreviation"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowClosingRate" Content="Closing ▲▼" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show closing rate arrow"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowPitStopCount" Content="Pit Stops" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show pit stop count per driver"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowPositionChange" Content="Pos Δ" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show position change arrows"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowSectorDelta" Content="Gap Color" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Color REL column green/red"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowNationality" Content="Nationality" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show 2-letter country code"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowClassLegend" Content="Class Legend" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Show class color legend"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowLappedDim" Content="Dim Lapped" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Dim cars 1+ laps behind/ahead"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkShowDangerGlow" Content="Danger Glow" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Red tint on high closing rate"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                    <CheckBox x:Name="ChkEnableRowAnimation" Content="Animate" Style="{StaticResource MRT.ToggleButton}"
+                                              IsChecked="False" Margin="0,0,8,4" ToolTip="Smooth row slide animation"
+                                              Checked="RelativeToggle_Changed" Unchecked="RelativeToggle_Changed"/>
+                                </WrapPanel>
+                            </Expander>
                         </StackPanel>
                     </Border>
                     

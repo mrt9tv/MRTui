@@ -258,6 +258,13 @@ public class AppSettings : INotifyPropertyChanged
     /// Restored on startup so the user returns to where they left off.
     /// </summary>
     public string LastNavPage { get; set; } = "Dashboard";
+
+    /// <summary>
+    /// Which "More options" disclosures the user has opened, keyed by expander name.
+    /// Persisted so a user who wants the advanced controls does not have to reopen
+    /// them every time they come back to the page.
+    /// </summary>
+    public Dictionary<string, bool> ExpandedSections { get; set; } = new();
     
     /// <summary>
     /// Start manager window minimized to taskbar
