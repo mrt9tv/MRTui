@@ -1,0 +1,15 @@
+{
+  "$schema": "https://yggdrasil.local/schema/realm-0.1.json",
+  "realm": "mrtui",
+  "title": "MRT UI — iRacing Telemetry Overlay",
+  "root": "F:\\VSCode\\Programming\\MRTui",
+  "created": "2026-06-18",
+  "classification": { "kind": "tool", "domain": "iRacing", "tech": ["dotnet", "csharp"], "status": "active", "family": "mrt9" },
+  "tags": ["mrt9", "iracing", "overlay"],
+  "note": "Canonical MRTui. The older NN and ML\\MRTui mockup is superseded -> Útgard/archive.",
+  "sovereign": true,
+  "allow_cross_realm": { "incoming": ["informs"], "outgoing": ["informs"], "auto_approve": false },
+  "acl": { "human": { "read": true, "write": true }, "agent": { "read": true, "write": "propose" } },
+  "brain": { "index_path": ".brain/index.sqlite", "rebuildable": true },
+  "provenance_required": true
+}

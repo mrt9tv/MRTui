@@ -4,7 +4,8 @@
       "Bash(dotnet run:*)",
       "Bash(find docs/ -name \"*.md\" -type f -exec wc -l {} +)",
       "Bash(cat global.json)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(xargs wc -l)"
     ],
     "deny": [],
     "ask": []

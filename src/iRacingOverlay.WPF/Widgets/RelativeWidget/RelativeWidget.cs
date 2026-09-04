@@ -282,7 +282,15 @@ public class RelativeWidget : WidgetBase
 
     #region Services
 
-    private readonly RelativeCalculator _calculator = new();
+    /// <summary>
+    /// Working copy of this frame's relative table, filtered and trimmed for display.
+    ///
+    /// The widget no longer runs its own RelativeCalculator: the table is computed
+    /// once per tick on the telemetry thread and published on the frame. This buffer
+    /// exists because the display filtering and trimming below mutate the list, and
+    /// the shared result is read by other widgets too.
+    /// </summary>
+    private readonly List<RelativeEntry> _viewBuffer = new(64);
 
     /// <summary>Cache of class ID → color brush (generated from hash)</summary>
     private readonly Dictionary<int, SolidColorBrush> _classColorCache = new();
@@ -833,16 +841,23 @@ public class RelativeWidget : WidgetBase
             maxBehind = MaxBehind;
         }
 
-        // Over-request from calculator to compensate for pit/disconnected cars
-        // that will be filtered out, ensuring we always fill the requested row count.
-        int overRequestAhead = maxAhead + 4;
-        int overRequestBehind = maxBehind + 4;
-        var entries = _calculator.Calculate(data, overRequestAhead, overRequestBehind);
+        // The full table is already computed for this frame — copy the rows we can
+        // display into our own buffer, since the trimming below mutates the list and
+        // the shared result belongs to every widget.
+        var source = data.Relatives;
+        if (source == null) return;
 
-        // Remove disconnected (not-in-world) entries, but keep pit road cars
-        entries.RemoveAll(e => !e.IsConnected && !e.IsPlayer);
+        _viewBuffer.Clear();
+        for (int i = 0; i < source.Count; i++)
+        {
+            var e = source[i];
+            // Keep pit road cars; drop disconnected (not-in-world) ones.
+            if (e.IsConnected || e.IsPlayer)
+                _viewBuffer.Add(e);
+        }
+        var entries = _viewBuffer;
 
-        // Trim back to desired display count: maxAhead ahead + player + maxBehind behind
+        // Trim to desired display count: maxAhead ahead + player + maxBehind behind
         TrimToDisplayCount(entries, maxAhead, maxBehind);
 
         // Advance blink frame counter

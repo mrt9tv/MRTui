@@ -1,6 +1,6 @@
 using iRacingOverlay.Core.Models;
 
-namespace iRacingOverlay.WPF.Utils;
+namespace iRacingOverlay.Core.Services;
 
 /// <summary>
 /// DECELERATION-BASED wheel lock-up detection system for iRacing telemetry
@@ -14,14 +14,14 @@ namespace iRacingOverlay.WPF.Utils;
 /// - wheel_lockup_debug.log file (persistent logging)
 /// See App.xaml.cs MultiTextWriter for implementation details
 /// </summary>
-public static class WheelLockupDetector
+public sealed class WheelLockupDetector
 {
     // ===== DECELERATION TRACKING =====
     
     // NOTE: _decelBuffer, _decelBufferStart, _decelBufferCount declared above as circular buffer
-    private static float _maxDecelThisStop = 0f;
-    private static bool _isHardBraking = false;
-    private static bool _wasLocked = false; // Track if wheels were locked in previous frame
+    private float _maxDecelThisStop = 0f;
+    private bool _isHardBraking = false;
+    private bool _wasLocked = false; // Track if wheels were locked in previous frame
     // Reserved for future unlock confirmation logic:
     // private static int _unlockConfirmFrames = 0;
     
@@ -37,24 +37,40 @@ public static class WheelLockupDetector
     }
     
     // ===== REUSABLE STATE OBJECTS (avoid per-frame heap allocation) =====
-    [ThreadStatic] private static WheelLockupState? _reusableState;
-    [ThreadStatic] private static WheelLockupState? _reusablePressureState;
+    // The published result rotates through a small pool: it is handed to widgets
+    // that render asynchronously, so a single reused object would mutate under
+    // them. The scratch object used for the pressure pass never leaves this class
+    // and can stay singular.
+    private const int ResultPoolDepth = 4;
+    private readonly WheelLockupState[] _resultPool =
+        { new(), new(), new(), new() };
+    private int _resultSlot;
+
+    private readonly WheelLockupState _reusablePressureState = new();
+
+    private WheelLockupState NextResult()
+    {
+        var state = _resultPool[_resultSlot];
+        _resultSlot = (_resultSlot + 1) % ResultPoolDepth;
+        state.Reset();
+        return state;
+    }
     
     // Circular buffer to replace Queue + LINQ (zero-allocation)
-    private static readonly DecelSample[] _decelBuffer = new DecelSample[15];
-    private static int _decelBufferStart = 0;
-    private static int _decelBufferCount = 0;
+    private readonly DecelSample[] _decelBuffer = new DecelSample[15];
+    private int _decelBufferStart = 0;
+    private int _decelBufferCount = 0;
     
     // ===== DETECTION THRESHOLDS (Configurable) =====
     
     /// <summary>Enable diagnostic logging to console (for debugging). WARNING: Very expensive — disable in release!</summary>
-    public static bool EnableDiagnostics { get; set; } = false;
+    public bool EnableDiagnostics { get; set; } = false;
     
     /// <summary>Minimum vehicle speed (m/s) - 8 m/s = 29 km/h (BALANCED AGGRESSIVE)</summary>
-    public static float MinSpeed { get; set; } = 8.0f;
+    public float MinSpeed { get; set; } = 8.0f;
     
     /// <summary>Minimum brake input (0-1) - 8% brake minimum (BALANCED AGGRESSIVE)</summary>
-    public static float MinBrakeInput { get; set; } = 0.08f;
+    public float MinBrakeInput { get; set; } = 0.08f;
     
     /// <summary>
     /// Deceleration efficiency drop threshold
@@ -62,14 +78,14 @@ public static class WheelLockupDetector
     /// Default 0.06 = 6% deceleration drop (HYPER AGGRESSIVE - 15% more sensitive than before)
     /// Example: Was decelerating at 20 m/s², now only 18.8 m/s² despite more brake → LOCKED
     /// </summary>
-    public static float DecelDropThreshold { get; set; } = 0.06f;
+    public float DecelDropThreshold { get; set; } = 0.06f;
     
     /// <summary>
     /// Brake input increase required to detect inefficiency
     /// Must be braking harder by at least this much to compare efficiency
     /// Default 0.02 = 2% more brake input (VERY AGGRESSIVE - sensitive to small changes)
     /// </summary>
-    public static float BrakeIncreaseThreshold { get; set; } = 0.02f;
+    public float BrakeIncreaseThreshold { get; set; } = 0.02f;
     
     // ===== BRAKE PRESSURE DETECTION THRESHOLDS =====
     
@@ -78,7 +94,7 @@ public static class WheelLockupDetector
     /// Below this, pressure readings may be unreliable
     /// LOWERED: 10.0 → 5.0 bar to catch light trail braking (turning + braking)
     /// </summary>
-    public static float MinBrakePressure { get; set; } = 5.0f;
+    public float MinBrakePressure { get; set; } = 5.0f;
     
     /// <summary>
     /// Pressure drop threshold indicating wheel lockup (bar)
@@ -88,19 +104,19 @@ public static class WheelLockupDetector
     /// Hard braking (80%): 15% drop = ~3.0 bar at 20 bar avg
     /// Minimum absolute floor to prevent false positives from sensor noise
     /// </summary>
-    public static float PressureDropThresholdPercentage { get; set; } = 0.15f; // 15% drop
+    public float PressureDropThresholdPercentage { get; set; } = 0.15f; // 15% drop
     
     /// <summary>
     /// Minimum absolute pressure drop (bar) - safety floor to prevent sensor noise false positives
     /// </summary>
-    public static float MinPressureDropThreshold { get; set; } = 0.8f;
+    public float MinPressureDropThreshold { get; set; } = 0.8f;
     
     /// <summary>
     /// Minimum speed for pressure-based detection (m/s)
     /// Below this speed, pressure detection is disabled (low-speed braking is less critical)
     /// LOWERED: 20.0 → 10.0 m/s (36 km/h / ~22 mph) for slow corner entry lockups
     /// </summary>
-    public static float MinPressureDetectionSpeed { get; set; } = 10.0f;
+    public float MinPressureDetectionSpeed { get; set; } = 10.0f;
     
     // ===== BRAKE PRESSURE DETECTION METHOD =====
     
@@ -109,9 +125,9 @@ public static class WheelLockupDetector
     /// PHYSICS: Locked wheel → sliding tire → friction drops → brake pressure drops
     /// This is PREDICTIVE detection (detects pressure drop BEFORE deceleration inefficiency)
     /// </summary>
-    private static WheelLockupState DetectPressureImbalance(TelemetryData data)
+    private WheelLockupState DetectPressureImbalance(TelemetryData data)
     {
-        var state = _reusablePressureState ??= new WheelLockupState();
+        var state = _reusablePressureState;
         state.Reset();
         
         // Early exit: Only check at speed during ANY braking (even light trail braking)
@@ -212,19 +228,20 @@ public static class WheelLockupDetector
     /// <summary>
     /// Detect wheel lockup using HYBRID detection: deceleration inefficiency + brake pressure imbalance
     /// </summary>
-    public static WheelLockupState DetectLockup(TelemetryData data)
+    public WheelLockupState DetectLockup(TelemetryData data)
     {
-        var state = _reusableState ??= new WheelLockupState();
-        state.Reset();
-        
+        var state = NextResult();
+
         // ===== BRAKE PRESSURE DETECTION (Priority #0 - Most Accurate) =====
         // Check brake pressure FIRST before deceleration analysis
         // Pressure drop is PREDICTIVE (detects cause) vs decel drop is REACTIVE (measures effect)
         var pressureState = DetectPressureImbalance(data);
         if (pressureState.AnyWheelLocked)
         {
-            // Pressure detection found lockup - return immediately for fastest response
-            return pressureState;
+            // Pressure detection found lockup — copy into the pooled result rather
+            // than handing out the internal scratch object, which the next call reuses.
+            state.CopyFrom(pressureState);
+            return state;
         }
         
         // Early exit if not braking hard enough or moving fast enough
@@ -571,7 +588,7 @@ public static class WheelLockupDetector
     /// <summary>
     /// Reset detector state (call when session changes or telemetry disconnects)
     /// </summary>
-    public static void Reset()
+    public void Reset()
     {
         _decelBufferCount = 0;
         _decelBufferStart = 0;
@@ -585,78 +602,3 @@ public static class WheelLockupDetector
     }
 }
 
-/// <summary>
-/// Wheel lockup detection result with granular per-wheel information
-/// </summary>
-public class WheelLockupState
-{
-    // Individual wheel lockup flags
-    public bool LeftFrontLocked { get; set; }
-    public bool RightFrontLocked { get; set; }
-    public bool LeftRearLocked { get; set; }
-    public bool RightRearLocked { get; set; }
-    
-    // Aggregate flags
-    public bool FrontAxleLockup { get; set; }
-    public bool RearAxleLockup { get; set; }
-    public bool AnyWheelLocked { get; set; }
-    
-    // Lock attempt flags (wheels would lock without ABS)
-    public bool LeftFrontLockAttempted { get; set; }
-    public bool RightFrontLockAttempted { get; set; }
-    public bool LeftRearLockAttempted { get; set; }
-    public bool RightRearLockAttempted { get; set; }
-    
-    // ABS information
-    public bool ABSActive { get; set; }
-    public bool ABSPreventingLockup { get; set; }
-    
-    // Detection metadata
-    public LockupDetectionMethod DetectionMethod { get; set; }
-    public LockupConfidence Confidence { get; set; }
-    
-    /// <summary>Reset all fields to defaults for reuse (avoid heap allocation)</summary>
-    public void Reset()
-    {
-        LeftFrontLocked = false;
-        RightFrontLocked = false;
-        LeftRearLocked = false;
-        RightRearLocked = false;
-        FrontAxleLockup = false;
-        RearAxleLockup = false;
-        AnyWheelLocked = false;
-        LeftFrontLockAttempted = false;
-        RightFrontLockAttempted = false;
-        LeftRearLockAttempted = false;
-        RightRearLockAttempted = false;
-        ABSActive = false;
-        ABSPreventingLockup = false;
-        DetectionMethod = LockupDetectionMethod.None;
-        Confidence = LockupConfidence.None;
-    }
-}
-
-/// <summary>
-/// Detection method used to identify lockup
-/// </summary>
-public enum LockupDetectionMethod
-{
-    None,
-    OdometerBased,      // Wheel rotation rate vs car speed
-    ABS,                // ABS system active
-    PressureCollapse,   // Brake pressure collapse
-    PressureImbalance,  // Individual wheel pressure drop
-    DecelerationPlateau,// Deceleration plateau/drop
-    TireRumble          // Tire rumble pitch spike
-}
-
-/// <summary>
-/// Confidence level of lockup detection
-/// </summary>
-public enum LockupConfidence
-{
-    None,
-    Low,
-    Medium,
-    High
-}

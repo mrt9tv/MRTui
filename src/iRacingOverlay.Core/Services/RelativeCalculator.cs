@@ -38,7 +38,20 @@ public class RelativeCalculator
 
     // ── Reusable scratch buffers (avoid allocations on the hot path) ────
 
-    private readonly List<RelativeEntry> _result = new(MAX_CARS);
+    /// <summary>
+    /// Rotating pool of result lists.
+    ///
+    /// A single reused list is unsafe now that the result is published on the
+    /// telemetry frame and read by widgets after an async dispatch — the list
+    /// would be cleared and refilled underneath them. Rotating means the list a
+    /// widget is reading is never the list being written. The entries themselves
+    /// are allocated per call, so an older list's contents stay valid.
+    /// </summary>
+    private const int ResultPoolDepth = 4;
+    private readonly List<RelativeEntry>[] _resultPool;
+    private int _resultSlot;
+
+    private List<RelativeEntry> _result;
     private readonly List<RelativeEntry> _ahead = new(MAX_CARS / 2);
     private readonly List<RelativeEntry> _behind = new(MAX_CARS / 2);
     private readonly List<RelativeEntry> _allCars = new(MAX_CARS); // for live position computation
@@ -104,6 +117,11 @@ public class RelativeCalculator
 
     public RelativeCalculator()
     {
+        _resultPool = new List<RelativeEntry>[ResultPoolDepth];
+        for (int i = 0; i < ResultPoolDepth; i++)
+            _resultPool[i] = new List<RelativeEntry>(MAX_CARS);
+        _result = _resultPool[0];
+
         // Initialize per-car circular history buffers
         _intervalHistory = new float[MAX_CARS][];
         _positionHistory = new int[MAX_CARS][];
@@ -126,6 +144,11 @@ public class RelativeCalculator
     /// </returns>
     public List<RelativeEntry> Calculate(TelemetryData data, int maxAhead = 3, int maxBehind = 3)
     {
+        // Take the next list in the rotation so a result already handed out is
+        // never the one being refilled.
+        _result = _resultPool[_resultSlot];
+        _resultSlot = (_resultSlot + 1) % ResultPoolDepth;
+
         _result.Clear();
         _ahead.Clear();
         _behind.Clear();

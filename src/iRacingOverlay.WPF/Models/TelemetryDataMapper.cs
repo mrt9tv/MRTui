@@ -29,7 +29,11 @@ public static class TelemetryDataMapper
             TelemetryField.Throttle => data.Throttle,
             TelemetryField.Brake => data.Brake,
             TelemetryField.ABSActive => data.BrakeABSactive ? 1 : 0, // Convert bool to 0/1 for display
-            TelemetryField.WheelLock => WheelLockupDetector.DetectLockup(data).AnyWheelLocked ? 1 : 0, // Hybrid lockup detection
+            // Read the result the telemetry pipeline already computed for this frame.
+            // This used to call DetectLockup here, which meant the detector's state
+            // machine only advanced when a widget happened to display the field —
+            // and advanced twice when two boxes did, corrupting its rolling window.
+            TelemetryField.WheelLock => (data.WheelLockup?.AnyWheelLocked ?? false) ? 1 : 0,
             TelemetryField.BrakeBias => data.BrakeBias, // Percentage (e.g., 55.5 = 55.5% front)
             TelemetryField.TractionControl => data.TractionControl, // TC level (0=OFF, >0=active)
             TelemetryField.Clutch => data.Clutch,

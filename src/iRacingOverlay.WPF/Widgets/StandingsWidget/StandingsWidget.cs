@@ -140,7 +140,13 @@ public class StandingsWidget : WidgetBase
 
     #region State
 
-    private readonly StandingsCalculator _calculator = new();
+    /// <summary>
+    /// Working copy of this frame's standings, trimmed for display.
+    /// The table itself is computed once per tick on the telemetry thread —
+    /// this widget no longer runs its own StandingsCalculator, which kept a
+    /// separate set of pit-stop counters from every other consumer.
+    /// </summary>
+    private readonly List<StandingsEntry> _viewBuffer = new(64);
     private bool _isTimedSession;
     private int _estimatedTotalLaps;
     private Canvas _canvas = null!;
@@ -390,12 +396,57 @@ public class StandingsWidget : WidgetBase
 
     #region UpdateUI
 
+    /// <summary>
+    /// Copy the rows this widget displays out of the shared standings table.
+    ///
+    /// Mirrors the row-limiting the calculator used to do for us: take the top
+    /// <paramref name="maxRows"/>, and when the player sits outside that range and
+    /// <paramref name="alwaysIncludePlayer"/> is set, give up the last visible row
+    /// to them so the driver can always find themselves.
+    /// </summary>
+    private static void BuildVisibleRows(
+        IReadOnlyList<StandingsEntry> source,
+        List<StandingsEntry> destination,
+        int maxRows,
+        bool alwaysIncludePlayer)
+    {
+        if (maxRows <= 0 || source.Count <= maxRows)
+        {
+            for (int i = 0; i < source.Count; i++) destination.Add(source[i]);
+            return;
+        }
+
+        for (int i = 0; i < maxRows; i++) destination.Add(source[i]);
+
+        if (!alwaysIncludePlayer) return;
+
+        // Already visible? Nothing to swap.
+        for (int i = 0; i < destination.Count; i++)
+            if (destination[i].IsPlayer) return;
+
+        for (int i = maxRows; i < source.Count; i++)
+        {
+            if (source[i].IsPlayer)
+            {
+                destination[maxRows - 1] = source[i];
+                return;
+            }
+        }
+    }
+
     protected override void UpdateUI(TelemetryData data)
     {
         _frameCount++;
         bool isBlinkOn = (_frameCount / BLINK_HALF_PERIOD) % 2 == 0;
 
-        var entries = _calculator.Calculate(data, MaxVisibleRows, AlwaysShowPlayer);
+        // Standings for this frame are already computed — take the rows we display.
+        var source = data.Standings;
+        if (source == null) return;
+
+        _viewBuffer.Clear();
+        BuildVisibleRows(source, _viewBuffer, MaxVisibleRows, AlwaysShowPlayer);
+
+        var entries = _viewBuffer;
         int count = Math.Min(entries.Count, MAX_DISPLAY_ROWS);
 
         // Detect timed session and estimated total laps for the lap column

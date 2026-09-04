@@ -1009,6 +1009,34 @@ public class TelemetryData
     /// </summary>
     public int PaceCarIdx { get; set; } = -1;
 
+    // ===== SHARED DERIVED STATE =====
+    //
+    // Computed once per tick on the telemetry thread and published here.
+    // Widgets previously each owned a private calculator and re-derived this
+    // from the UI thread — the same 64-car work two or three times per frame,
+    // with the instances holding separate per-car state (pit timers, out-lap
+    // flags) that could disagree about the same car.
+
+    /// <summary>
+    /// Full relative table (all on-track cars, ordered farthest-ahead → player →
+    /// farthest-behind). Widgets slice this to their own row counts.
+    /// Null before the first calculation or when position data is unavailable.
+    /// </summary>
+    public IReadOnlyList<RelativeEntry>? Relatives { get; set; }
+
+    /// <summary>
+    /// Full standings table ordered by overall position.
+    /// Null before the first calculation or when position data is unavailable.
+    /// </summary>
+    public IReadOnlyList<StandingsEntry>? Standings { get; set; }
+
+    /// <summary>
+    /// Wheel-lockup state for this frame. Previously this only advanced as a side
+    /// effect of a widget displaying the field, so detection silently stopped when
+    /// nothing showed it and double-stepped when two boxes did.
+    /// </summary>
+    public WheelLockupState? WheelLockup { get; set; }
+
     /// <summary>
     /// Whether a full-course caution (safety car) is currently active.
     /// Derived from SessionFlags bit 0x4000 (Caution) or 0x8 (Yellow).

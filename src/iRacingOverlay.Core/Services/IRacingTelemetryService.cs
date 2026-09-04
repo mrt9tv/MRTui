@@ -229,6 +229,19 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private readonly FuelCalculatorService _fuelCalculatorService;
     private readonly FuelSavingService _fuelSavingService;
     private readonly TurnTrackingService _turnTrackingService;
+
+    // ── Shared derived state (AR-1) ───────────────────────────────────────
+    // These were previously owned privately by individual widgets, so the same
+    // 64-car computation ran two or three times per frame on the UI thread, with
+    // each instance keeping its own per-car state (pit stall timers, out-lap
+    // flags, pit-stop counts) that could drift apart. One instance each, driven
+    // once per tick on the telemetry thread, published on the frame.
+    private readonly RelativeCalculator _relativeCalculator = new();
+    private readonly StandingsCalculator _standingsCalculator = new();
+    private readonly WheelLockupDetector _wheelLockupDetector = new();
+
+    /// <summary>Shared wheel-lockup detector, exposed so thresholds stay tunable.</summary>
+    public WheelLockupDetector WheelLockup => _wheelLockupDetector;
     private ConnectionStatus _status = ConnectionStatus.Disconnected;
     private bool _disposed = false;
     
@@ -895,6 +908,11 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             data.EstimatedTotalRaceLaps = _fuelCalculatorService.CurrentData.EstimatedTotalRaceLaps;
             data.SessionLapsRemainEx = _fuelCalculatorService.CurrentData.EstimatedLapsFromTime;
 
+            // ===== SHARED DERIVED STATE (AR-1) =====
+            // Computed once, here, on the telemetry thread. Widgets read these off
+            // the frame instead of each running their own copy from the UI thread.
+            ComputeSharedState(data);
+
             // Fire our telemetry event
             TelemetryUpdated?.Invoke(this, data);
         }
@@ -993,6 +1011,52 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             _snapshotCarModel    = _carIdxToCarModel.Count > 0 ? new Dictionary<int, string>(_carIdxToCarModel) : null;
             _snapshotCountryCode = _carIdxToCountryCode.Count > 0 ? new Dictionary<int, string>(_carIdxToCountryCode) : null;
             _lastCopiedDriverDataVersion = _driverDataVersion;
+        }
+    }
+
+    /// <summary>
+    /// Derive the shared per-frame state every widget needs.
+    ///
+    /// Each block is guarded independently: a fault in one derived table must not
+    /// stop the frame being published, or a single bad calculation would freeze
+    /// every widget rather than just its own display.
+    /// </summary>
+    private void ComputeSharedState(Models.TelemetryData data)
+    {
+        try
+        {
+            // Full table — widgets slice it to their own row counts, so the row
+            // limits belong to the view, not to this shared calculation.
+            data.Relatives = _relativeCalculator.Calculate(data, int.MaxValue, int.MaxValue);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Relative calculation failed");
+            data.Relatives = null;
+        }
+
+        try
+        {
+            data.Standings = _standingsCalculator.Calculate(data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Standings calculation failed");
+            data.Standings = null;
+        }
+
+        try
+        {
+            // Advanced exactly once per tick. It used to run only as a side effect
+            // of a widget displaying the field — so detection stopped entirely when
+            // nothing showed it, and double-stepped its rolling deceleration buffer
+            // when two boxes did.
+            data.WheelLockup = _wheelLockupDetector.DetectLockup(data);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Wheel lockup detection failed");
+            data.WheelLockup = null;
         }
     }
 

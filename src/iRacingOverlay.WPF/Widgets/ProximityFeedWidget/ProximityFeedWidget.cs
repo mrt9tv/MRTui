@@ -98,7 +98,6 @@ public class ProximityFeedWidget : WidgetBase
     private Border _dragHandle = null!;
     private StackPanel _feedStack = null!;
     private readonly NearbyEventDetector _detector = new();
-    private readonly RelativeCalculator _relativeCalculator = new();
     private readonly Dictionary<long, Border> _eventRows = new();
     private readonly HashSet<long> _knownEventIds = new();
 
@@ -344,17 +343,11 @@ public class ProximityFeedWidget : WidgetBase
         _isFormationPhase = data.SessionState == SESSION_STATE_PARADE_LAPS
             || (data.SessionState == SESSION_STATE_RACING && _detector.IsRaceStartGraceActive);
 
-        // Get relative entries from the calculator (already computed this frame)
-        IReadOnlyList<RelativeEntry>? relatives = null;
-        try
-        {
-            // The RelativeCalculator's last result is consumed via the widget system.
-            // We pass null if not available — detector handles gracefully.
-            relatives = _relativeCalculator.Calculate(data, int.MaxValue, int.MaxValue);
-        }
-        catch { /* Calculator may fail if arrays not yet populated */ }
-
-        _detector.Update(data, relatives);
+        // The relative table is computed once per tick on the telemetry thread and
+        // published on the frame. This widget used to run a second, private
+        // RelativeCalculator here — duplicating the whole 64-car pass on the UI
+        // thread, with per-car state that could disagree with the Relative widget's.
+        _detector.Update(data, data.Relatives);
 
         SyncFeedVisuals();
     }
