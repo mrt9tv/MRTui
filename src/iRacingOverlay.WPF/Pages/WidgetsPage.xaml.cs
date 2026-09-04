@@ -133,6 +133,18 @@ public partial class WidgetsPage : UserControl
 
     // ── Widget selector ─────────────────────────────────────────────
 
+    /// <summary>
+    /// Select a widget from outside this page (the dashboard's Settings button).
+    /// </summary>
+    public void SelectWidget(WidgetType type)
+    {
+        if (!WidgetManager.SupportedWidgetTypes.Contains(type)) return;
+
+        _selectedWidgetType = type;
+        HighlightActiveMenuButton();
+        SyncPanelToActiveWidget();
+    }
+
     private void WidgetMenuButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button btn) return;

@@ -244,6 +244,18 @@ public partial class DashboardPage : UserControl, IDisposable
         _widgetManager.SaveCurrentLayout();
     }
 
+    /// <summary>
+    /// Raised when the user asks to configure a widget from the dashboard list.
+    /// MainWindow navigates to the Widgets page with that widget selected.
+    /// </summary>
+    public event Action<WidgetType>? ConfigureWidgetRequested;
+
+    private void WidgetConfigure_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: WidgetType type })
+            ConfigureWidgetRequested?.Invoke(type);
+    }
+
     private void BtnLockAll_Click(object sender, RoutedEventArgs e)
     {
         var settings = AppSettings.Instance;

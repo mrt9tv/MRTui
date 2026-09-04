@@ -114,6 +114,13 @@ public partial class MainWindow : Window
         _aboutPage = new AboutPage();
         _aboutPage.SetUpdateService(_updateService);
 
+        // Dashboard "Settings" button jumps to that widget's controls
+        _dashboardPage.ConfigureWidgetRequested += type =>
+        {
+            _widgetsPage?.SelectWidget(type);
+            NavigateTo("Widgets");
+        };
+
         // Wire settings change events
         _settingsPage.SettingsChanged += OnSettingsChanged;
         _settingsPage.ResetLayoutRequested += OnResetLayout;

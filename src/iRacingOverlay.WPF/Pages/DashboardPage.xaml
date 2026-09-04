@@ -60,6 +60,7 @@
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Icon}" FontSize="16"
                                                    VerticalAlignment="Center" Margin="0,0,8,0"
@@ -70,10 +71,23 @@
                                             <TextBlock Text="{Binding Status}" FontSize="10"
                                                        Foreground="{StaticResource MutedText}"/>
                                         </StackPanel>
-                                        <CheckBox Grid.Column="2"
+                                        <!--
+                                            Takes the user straight to this widget's settings.
+                                            The Dashboard and Widgets pages both list the widgets
+                                            and both offer a toggle; this at least makes the
+                                            relationship between them explicit.
+                                        -->
+                                        <Button Grid.Column="2" Content="Settings"
+                                                Style="{StaticResource MRT.Button.Secondary}"
+                                                Click="WidgetConfigure_Click"
+                                                Tag="{Binding Type}"
+                                                Height="22" FontSize="9" Padding="8,1"
+                                                Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <CheckBox Grid.Column="3"
                                                   Style="{StaticResource MRT.ToggleButton}"
                                                   IsChecked="{Binding IsActive}"
                                                   VerticalAlignment="Center"
+                                                  ToolTip="Show or hide this widget. Settings are kept."
                                                   Checked="WidgetToggle_Changed"
                                                   Unchecked="WidgetToggle_Changed"/>
                                     </Grid>
