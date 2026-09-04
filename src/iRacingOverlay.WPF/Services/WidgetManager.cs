@@ -76,6 +76,10 @@ public class WidgetManager
         _activeWidgets[widget.WidgetId] = widget;
         widget.Closing += Widget_Closing;
 
+        // Match the edit outline to the current lock state so a widget created
+        // while the user is arranging things shows up like the rest.
+        widget.SetEditMode(!Models.AppSettings.Instance.LockWindows);
+
         WidgetCreated?.Invoke(this, widget);
         SaveCurrentLayout();
         return widget;
@@ -157,6 +161,17 @@ public class WidgetManager
     {
         foreach (var w in _activeWidgets.Values)
             w.SetLocked(lockState);
+
+        // Unlocked means "the user is arranging things" — show the edit outlines so
+        // widgets with no visible content can still be found and dragged.
+        SetEditMode(!lockState);
+    }
+
+    /// <summary>Show or hide the labelled drag outline on every widget.</summary>
+    public void SetEditMode(bool enabled)
+    {
+        foreach (var w in _activeWidgets.Values)
+            w.SetEditMode(enabled);
     }
 
     public bool HasWidgetType(WidgetType type) =>

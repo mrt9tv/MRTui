@@ -2,6 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -319,6 +320,77 @@ public abstract class WidgetBase : Window
         IsHitTestVisible = !locked;
         SetClickThrough(locked);
     }
+
+    #region Edit mode
+
+    private System.Windows.Shapes.Rectangle? _editOutline;
+    private TextBlock? _editLabel;
+    private Grid? _editLayer;
+
+    /// <summary>
+    /// Draw a labelled outline over the widget so it can be found and dragged.
+    ///
+    /// Unlocked widgets are invisible when their content happens to be blank — no
+    /// telemetry, an empty feed — so "unlock and drag it" meant hunting for a window
+    /// that renders nothing. This makes every widget visible and named while
+    /// arranging them, and pairs with the click-through the lock now applies.
+    /// </summary>
+    public void SetEditMode(bool enabled)
+    {
+        if (!enabled)
+        {
+            if (_editLayer != null) _editLayer.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (_editLayer == null) BuildEditOverlay();
+        if (_editLayer != null) _editLayer.Visibility = Visibility.Visible;
+    }
+
+    private void BuildEditOverlay()
+    {
+        // Wrap the existing content so the outline sits above it without
+        // disturbing whatever layout the widget already built.
+        var existing = Content as UIElement;
+        var root = new Grid();
+        if (existing != null)
+        {
+            Content = null;
+            root.Children.Add(existing);
+        }
+
+        _editOutline = new System.Windows.Shapes.Rectangle
+        {
+            Stroke = Utils.BrushCache.Get(0, 240, 240),
+            StrokeThickness = 2,
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+            Fill = Utils.BrushCache.Get(28, 0, 240, 240),
+            RadiusX = 4,
+            RadiusY = 4,
+            IsHitTestVisible = false,
+        };
+
+        _editLabel = new TextBlock
+        {
+            Text = WidgetType.ToString(),
+            Foreground = Utils.BrushCache.Get(0, 240, 240),
+            FontSize = 11,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(6, 4, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+
+        _editLayer = new Grid { Visibility = Visibility.Collapsed };
+        _editLayer.Children.Add(_editOutline);
+        _editLayer.Children.Add(_editLabel);
+
+        root.Children.Add(_editLayer);
+        Content = root;
+    }
+
+    #endregion
 
     /// <summary>
     /// Set widget size from the MRT UI overlay (proportional — width = height for square widgets)

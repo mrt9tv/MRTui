@@ -138,11 +138,10 @@ public partial class MainWindow : Window
         // Build nav button lookup
         _navButtons["Dashboard"] = NavDashboard;
         _navButtons["Widgets"] = NavWidgets;
-#if DEBUG
+        // Sessions is no longer DEBUG-only: SessionConfigService switches profiles
+        // automatically in Release too, so hiding this page left shipped users with
+        // automatic behaviour and no way to see or edit what it was switching between.
         _navButtons["Sessions"] = NavSessions;
-#else
-        NavSessions.Visibility = Visibility.Collapsed;
-#endif
         _navButtons["Settings"] = NavSettings;
         _navButtons["About"] = NavAbout;
 

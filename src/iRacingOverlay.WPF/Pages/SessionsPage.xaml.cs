@@ -10,7 +10,7 @@ using iRacingOverlay.WPF.Services;
 
 namespace iRacingOverlay.WPF.Pages;
 
-public partial class SessionsPage : UserControl
+public partial class SessionsPage : UserControl, IDisposable
 {
     private readonly SessionConfigService _sessionConfig;
     private ProfileStorageService? _profileService;
@@ -35,7 +35,7 @@ public partial class SessionsPage : UserControl
     {
         _profileService = profileService;
         _widgetManager = widgetManager;
-        _profileService.ActiveProfileChanged += (_, _) => Dispatcher.Invoke(SyncProfileList);
+        _profileService.ActiveProfileChanged += (_, _) => Dispatcher.BeginInvoke(SyncProfileList);
         SyncProfileList();
     }
 
@@ -43,7 +43,7 @@ public partial class SessionsPage : UserControl
 
     private void OnSessionChanged(object? sender, SessionCategory category)
     {
-        Dispatcher.Invoke(UpdateSessionIndicator);
+        Dispatcher.BeginInvoke(UpdateSessionIndicator);
     }
 
     private void UpdateSessionIndicator()
