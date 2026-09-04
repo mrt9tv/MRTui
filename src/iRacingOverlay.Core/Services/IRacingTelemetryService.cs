@@ -294,7 +294,22 @@ namespace iRacingOverlay.Core.Services;
 
     // ── Endurance / driver swaps ──────────────────────────────────────
     TelemetryVar.DCDriversSoFar,        // int - Drivers who have taken a stint
-    TelemetryVar.DCLapStatus            // int - Driver change lap status
+    TelemetryVar.DCLapStatus,           // int - Driver change lap status
+
+    // ── In-car adjustments ────────────────────────────────────────────
+    // Car-dependent: these exist only on cars that have the control, and read
+    // zero elsewhere. That is safe for the adjustment overlay, which is edge-
+    // triggered — a channel that never changes never fires. (dcTractionControl
+    // and dcBrakeBias are already subscribed above.)
+    TelemetryVar.dcABS,                     // float - ABS setting
+    TelemetryVar.dcTractionControlToggle,   // bool  - TC on/off
+    TelemetryVar.dcFuelMixture,             // float - Fuel mixture / engine map
+    TelemetryVar.dcThrottleShape,           // float - Throttle map
+    TelemetryVar.dcAntiRollFront,           // float - Front anti-roll bar
+    TelemetryVar.dcAntiRollRear,            // float - Rear anti-roll bar
+    TelemetryVar.dcWeightJackerRight,       // float - Weight jacker (ovals)
+    TelemetryVar.dcPowerSteering,           // float - Power steering assist
+    TelemetryVar.dcLaunchRPM                // float - Launch control RPM
 ])]
 public class IRacingTelemetryService : ITelemetryService, IDisposable
 {
@@ -314,6 +329,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private readonly RelativeCalculator _relativeCalculator = new();
     private readonly StandingsCalculator _standingsCalculator = new();
     private readonly WheelLockupDetector _wheelLockupDetector = new();
+    private readonly CarAdjustmentTracker _adjustmentTracker = new();
 
     /// <summary>Shared wheel-lockup detector, exposed so thresholds stay tunable.</summary>
     public WheelLockupDetector WheelLockup => _wheelLockupDetector;
@@ -1004,6 +1020,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 // Endurance
                 DriversSoFar = sdkData.DCDriversSoFar.GetValueOrDefault(),
                 DriverChangeLapStatus = sdkData.DCLapStatus.GetValueOrDefault(),
+
+                // In-car adjustments (car-dependent — zero on cars without the control)
+                AbsSetting = sdkData.dcABS.GetValueOrDefault(),
+                TractionControlEnabled = sdkData.dcTractionControlToggle.GetValueOrDefault(),
+                FuelMixture = sdkData.dcFuelMixture.GetValueOrDefault(),
+                ThrottleShape = sdkData.dcThrottleShape.GetValueOrDefault(),
+                AntiRollFront = sdkData.dcAntiRollFront.GetValueOrDefault(),
+                AntiRollRear = sdkData.dcAntiRollRear.GetValueOrDefault(),
+                WeightJackerRight = sdkData.dcWeightJackerRight.GetValueOrDefault(),
+                PowerSteeringEnabled = sdkData.dcPowerSteering.GetValueOrDefault(),
+                LaunchRPM = sdkData.dcLaunchRPM.GetValueOrDefault(),
             };
 
             // ===== DIRTY FIELD TRACKING (Task 6) =====
@@ -1187,6 +1214,19 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         {
             _logger.LogError(ex, "Standings calculation failed");
             data.Standings = null;
+        }
+
+        try
+        {
+            // Which in-car control the driver most recently touched. Also advanced
+            // exactly once per tick, on the telemetry thread.
+            data.AdjustmentChanged = _adjustmentTracker.Update(data);
+            data.LastAdjustmentLabel = _adjustmentTracker.CurrentLabel;
+            data.LastAdjustmentValue = _adjustmentTracker.CurrentValue;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Adjustment tracking failed");
         }
 
         try

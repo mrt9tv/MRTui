@@ -1171,6 +1171,49 @@ public class TelemetryData
     /// <summary>Driver-change lap status.</summary>
     public int DriverChangeLapStatus { get; set; }
 
+    // ── In-car adjustments (car-dependent) ────────────────────────────
+    // These exist only on cars that have the control and read zero elsewhere.
+    // CarAdjustmentTracker is edge-triggered, so an absent control never fires.
+
+    /// <summary>ABS level, on cars with an adjustable ABS.</summary>
+    public float AbsSetting { get; set; }
+
+    /// <summary>Traction control master toggle.</summary>
+    public bool TractionControlEnabled { get; set; }
+
+    /// <summary>Fuel mixture / engine map.</summary>
+    public float FuelMixture { get; set; }
+
+    /// <summary>Throttle map.</summary>
+    public float ThrottleShape { get; set; }
+
+    /// <summary>Front anti-roll bar setting.</summary>
+    public float AntiRollFront { get; set; }
+
+    /// <summary>Rear anti-roll bar setting.</summary>
+    public float AntiRollRear { get; set; }
+
+    /// <summary>Weight jacker (oval cars).</summary>
+    public float WeightJackerRight { get; set; }
+
+    /// <summary>Power steering assist enabled.</summary>
+    public bool PowerSteeringEnabled { get; set; }
+
+    /// <summary>Launch control RPM target.</summary>
+    public float LaunchRPM { get; set; }
+
+    /// <summary>
+    /// The in-car adjustment the driver most recently changed, e.g. "BRAKE BIAS".
+    /// Null when nothing has been adjusted this session.
+    /// </summary>
+    public string? LastAdjustmentLabel { get; set; }
+
+    /// <summary>Formatted value of <see cref="LastAdjustmentLabel"/>.</summary>
+    public string? LastAdjustmentValue { get; set; }
+
+    /// <summary>True on the frame an adjustment changed.</summary>
+    public bool AdjustmentChanged { get; set; }
+
     // ===== SHARED DERIVED STATE =====
     //
     // Computed once per tick on the telemetry thread and published here.

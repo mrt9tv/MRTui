@@ -1247,19 +1247,18 @@ public class MRTOneWidget : WidgetBase
             UpdateSection(_bottomValueText, _bottomLabelText, _dataBinding.TertiaryField.Value, data);
         }
         
-        // BRAKE BIAS OVERLAY: Show temporarily when value changes (if enabled in settings)
-        // Only trigger after initialization to prevent showing on connection/getting in car
+        // ADJUSTMENT OVERLAY: Show temporarily whenever the driver changes an in-car
+        // control. This was hardcoded to brake bias; the sim publishes a dozen
+        // adjusters (TC, ABS, mixture, throttle map, anti-roll, weight jacker,
+        // power steering, launch RPM), and CarAdjustmentTracker reports whichever
+        // one moved. Cars without a given control never publish it, so it never
+        // fires — no "not available" state needed.
         if (AppSettings.Instance.ShowBrakeBiasOverlay)
         {
-            float currentBrakeBias = data.BrakeBias;
-
-            // Use StateManager to check if brake bias changed (handles initialization logic)
-            var biasChange = _stateManager.CheckBrakeBiasChange(currentBrakeBias);
-
-            if (biasChange.ShowOverlay)
+            if (data.AdjustmentChanged && data.LastAdjustmentValue != null)
             {
-                // Update display value (use InvariantCulture to ensure "." decimal separator)
-                _brakeBiasValue.Text = biasChange.Value.ToString("F1", System.Globalization.CultureInfo.InvariantCulture) + "%";
+                UiUpdate.SetText(_brakeBiasLabel, data.LastAdjustmentLabel ?? "BRAKE BIAS");
+                UiUpdate.SetText(_brakeBiasValue, data.LastAdjustmentValue);
 
                 // Show overlay and hide center + left/right sections (keep top/bottom visible)
                 if (!_brakeBiasVisible)
