@@ -343,6 +343,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     public ShiftPointService ShiftPoints => _shiftPointService;
 
     // Car profile from session info
+    /// <summary>Last lap the LAP_CALC diagnostic was written for, to log once per lap.</summary>
+    private int _lastLoggedLapCalc = -1;
+
     private float _carRedline;
     private float _carIdleRpm;
     private int _carForwardGears;
@@ -553,6 +556,18 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                     if (state == ConnectState.Connected)
                     {
                         TryParseSessionInfo();
+
+                        // Record which channels this session actually publishes, with
+                        // iRacing's own descriptions. The enum is a superset that also
+                        // covers .ibt-only channels, so this file is the authority for
+                        // what can be built on.
+                        if (_client != null)
+                        {
+                            int count = TelemetryVariableDump.Write(_client);
+                            if (count > 0)
+                                _logger.LogInformation("Wrote {Count} live telemetry variables to {Path}",
+                                    count, TelemetryVariableDump.FilePath);
+                        }
                     }
 
                     await Task.CompletedTask;
@@ -1950,9 +1965,13 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 data.RaceLeaderLapNumber = data.ActualLeadingLapNumber;
             }
 
-            // Debug logging for first few laps to verify calculations
-            if (data.Lap <= 3)
+            // Diagnostic for the first few laps. Gated on the lap CHANGING, not on
+            // the lap number: "Lap <= 3" is true on every one of the 60 frames per
+            // second for three whole laps. With ILogger now writing to a file rather
+            // than a console nobody sees, that was ~8 MB of identical lines a minute.
+            if (data.Lap <= 3 && data.Lap != _lastLoggedLapCalc)
             {
+                _lastLoggedLapCalc = data.Lap;
                 _logger?.LogInformation(
                     "[LAP_CALC] Player: Lap {PlayerLap}, Completed {Completed} | " +
                     "ActualLeading: {ActualLeading} | RaceLeader(P1): {RaceLeader} | " +

@@ -21,6 +21,18 @@ public partial class AboutPage : UserControl
     /// <summary>
     /// Inject the UpdateService after construction (called from MainWindow).
     /// </summary>
+    /// <summary>
+    /// Show whether an update is waiting. The shell checks in the background at
+    /// startup and reports the result here rather than in the title bar.
+    /// </summary>
+    public void SetUpdateAvailable(bool available)
+    {
+        if (!available) return;
+        TxtUpdateInfo.Text = "An update is available.";
+        TxtUpdateInfo.Foreground = FindResource("Orange") as System.Windows.Media.Brush
+                                   ?? System.Windows.Media.Brushes.Orange;
+    }
+
     public void SetUpdateService(UpdateService updateService)
     {
         _updateService = updateService;

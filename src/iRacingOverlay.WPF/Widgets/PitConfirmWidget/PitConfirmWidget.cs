@@ -24,7 +24,7 @@ namespace iRacingOverlay.WPF.Widgets.PitConfirmWidget;
 /// armed service and turns amber when something looks wrong. The fuel check closes a
 /// loop the app already had half of: FuelCalculatorService knows how much you need.
 /// </summary>
-public class PitConfirmWidget : WidgetBase
+public partial class PitConfirmWidget : WidgetBase
 {
     #region Constants
 

@@ -88,9 +88,47 @@ public static class AppLog
         catch { /* nothing useful to do while shutting down */ }
     }
 
+    // ── Repeat suppression ────────────────────────────────────────────
+    //
+    // A single LogInformation left inside the 60 Hz telemetry path wrote ~8 MB a
+    // minute of identical lines once ILogger was routed to a file. The call site
+    // is fixed, but the log should not be one careless line away from filling a
+    // disk, so identical consecutive messages collapse into a count.
+
+    private static string? _lastMessage;
+    private static int _repeatCount;
+    private static readonly object _repeatGate = new();
+
     private static void Write(string level, string message, Exception? ex)
     {
         if (_started == 0 || _queue.IsAddingCompleted) return;
+
+        // Exceptions always get through — they are never noise.
+        if (ex == null)
+        {
+            lock (_repeatGate)
+            {
+                if (message == _lastMessage)
+                {
+                    _repeatCount++;
+
+                    // Report at 1, 10, 100, 1000 … so a runaway logger is visible
+                    // in the file without being the file.
+                    if (_repeatCount != 10 && _repeatCount != 100 && _repeatCount != 1000
+                        && _repeatCount % 10000 != 0)
+                    {
+                        return;
+                    }
+
+                    message = $"{message}   [repeated {_repeatCount}x]";
+                }
+                else
+                {
+                    _lastMessage = message;
+                    _repeatCount = 0;
+                }
+            }
+        }
 
         var sb = new StringBuilder(160);
         sb.Append(DateTime.Now.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture))

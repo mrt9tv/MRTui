@@ -24,7 +24,7 @@ namespace iRacingOverlay.WPF.Widgets.ProximityFeedWidget;
 ///
 /// MRT theme: dark translucent background, severity-colored left stripe, compact text.
 /// </summary>
-public class ProximityFeedWidget : WidgetBase
+public partial class ProximityFeedWidget : WidgetBase
 {
     #region Constants
 

@@ -2,62 +2,63 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Background="Transparent">
-    
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,12">
-        <StackPanel MaxWidth="500">
-            
-            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,14">
-                <StackPanel>
-                    <TextBlock Text="MRT UI" FontSize="28" FontWeight="Bold"
-                               Foreground="{StaticResource TealPrimary}" Margin="0,0,0,4"/>
-                    <TextBlock x:Name="TxtVersion" Text="v0.2.000"
-                               FontSize="14" Foreground="{StaticResource MutedText}" Margin="0,0,0,12"/>
-                    <TextBlock Text="iRacing Telemetry Overlay"
-                               FontSize="14" Foreground="{StaticResource LightText}" Margin="0,0,0,8"/>
-                    <TextBlock Text="Real-time transparent overlay widgets for iRacing. Shows car telemetry, fuel strategy, relative positions, proximity events, and more — all on top of the sim."
-                               FontSize="11" Foreground="{StaticResource MutedText}" TextWrapping="Wrap"/>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,16">
+        <StackPanel MaxWidth="620" HorizontalAlignment="Left">
+
+            <!-- Identity. The wordmark carries the team colours at a size the
+                 header cannot, so this reads as the product's front door. -->
+            <StackPanel Margin="0,8,0,24">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="MRT" FontFamily="{StaticResource Font.Ui}"
+                               FontSize="40" FontWeight="Bold"
+                               Foreground="{StaticResource TealBright}"/>
+                    <TextBlock Text="UI" FontFamily="{StaticResource Font.Ui}"
+                               FontSize="40" FontWeight="Bold"
+                               Foreground="{StaticResource Orange}" Margin="6,0,0,0"/>
                 </StackPanel>
-            </Border>
-            
-            <!-- Update check -->
-            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+                <TextBlock x:Name="TxtVersion" Text="v0.0.0"
+                           Style="{StaticResource T.Body}"
+                           Foreground="{StaticResource TextMuted}" Margin="0,2,0,0"/>
+                <TextBlock Text="Real-time telemetry overlays for iRacing."
+                           Style="{StaticResource T.Body}" Margin="0,12,0,0"/>
+            </StackPanel>
+
+            <Border Style="{StaticResource Card}" Margin="0,0,0,10">
                 <StackPanel>
-                    <TextBlock Text="UPDATES" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <Button x:Name="BtnCheckUpdate"
-                                Content="Check for Updates"
-                                Style="{StaticResource MRT.Button.Secondary}"
-                                Click="BtnCheckUpdate_Click"
-                                Height="28" FontSize="11" Padding="10,2" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="TxtUpdateStatus"
-                                   Text=""
-                                   FontSize="11"
-                                   Foreground="{StaticResource MutedText}"
+                    <TextBlock Text="UPDATES" Style="{StaticResource T.Label}" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="BtnCheckUpdate" Content="Check for updates"
+                                Style="{StaticResource Btn.Secondary}"
+                                Click="BtnCheckUpdate_Click" Margin="0,0,12,0"/>
+                        <TextBlock x:Name="TxtUpdateStatus" Style="{StaticResource T.Body}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock x:Name="TxtUpdateInfo"
-                               Text=""
-                               FontSize="10"
-                               Foreground="{StaticResource MutedText}"
-                               TextWrapping="Wrap"
-                               Margin="0,2,0,0"/>
+                    <TextBlock x:Name="TxtUpdateInfo" Style="{StaticResource T.Caption}"
+                               Margin="0,10,0,0"/>
                 </StackPanel>
             </Border>
 
-            <!-- Changelog -->
-            <Border Style="{StaticResource MRT.Card}" Margin="0,0,0,8" Padding="14,10">
+            <Border Style="{StaticResource Card}">
                 <StackPanel>
-                    <TextBlock Text="CHANGELOG" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
-                    <TextBlock FontSize="11" Foreground="{StaticResource MutedText}" Margin="0,0,0,6" TextWrapping="Wrap"
-                               Text="See what's new in each release."/>
-                    <TextBlock FontSize="11">
-                        <Hyperlink NavigateUri="https://github.com/mrt9tv/MRTui/releases" RequestNavigate="Hyperlink_RequestNavigate">
-                            <Run Text="View Changelog on GitHub" Foreground="{StaticResource TealPrimary}"/>
+                    <TextBlock Text="LINKS" Style="{StaticResource T.Label}" Margin="0,0,0,12"/>
+                    <TextBlock Style="{StaticResource T.Body}" Margin="0,0,0,6">
+                        <Hyperlink NavigateUri="https://github.com/mrt9tv/MRTui/releases"
+                                   RequestNavigate="Hyperlink_RequestNavigate"
+                                   TextDecorations="None">
+                            <Run Text="Release notes" Foreground="{StaticResource TealBright}"/>
+                        </Hyperlink>
+                    </TextBlock>
+                    <TextBlock Style="{StaticResource T.Body}">
+                        <Hyperlink NavigateUri="https://github.com/mrt9tv/MRTui"
+                                   RequestNavigate="Hyperlink_RequestNavigate"
+                                   TextDecorations="None">
+                            <Run Text="Project on GitHub" Foreground="{StaticResource TealBright}"/>
                         </Hyperlink>
                     </TextBlock>
                 </StackPanel>
             </Border>
-            
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

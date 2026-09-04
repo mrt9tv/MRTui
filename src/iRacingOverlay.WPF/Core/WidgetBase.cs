@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
@@ -589,6 +590,66 @@ public abstract class WidgetBase : Window
         _contextAllowsOverlay = allowed;
         UpdateVisibilityBasedOnConnection(_telemetryService.Status);
     }
+
+    /// <summary>
+    /// Settings this widget exposes in the configuration UI.
+    ///
+    /// The base implementation supplies the ones every widget has — opacity,
+    /// background opacity, size and placement. Those used to be hand-written per
+    /// widget: eight separate opacity sliders, each with its own label, handler and
+    /// sync code, for a single property defined here.
+    ///
+    /// Derived widgets override this, call <c>base.GetSettings()</c>, and append
+    /// their own. Adding a widget is now one method rather than eight edits.
+    /// </summary>
+    public virtual IEnumerable<Models.WidgetSetting> GetSettings()
+    {
+        yield return Models.WidgetSetting.Slider(
+            "Opacity", 20, 100,
+            () => Opacity * 100,
+            v => Opacity = v / 100.0,
+            group: "Appearance",
+            description: "Overall transparency of the whole widget.",
+            format: Models.WidgetSetting.Percent);
+
+        yield return Models.WidgetSetting.Slider(
+            "Background opacity", 0, 100,
+            () => BackgroundOpacity * 100,
+            v => BackgroundOpacity = v / 100.0,
+            group: "Appearance",
+            description: "Transparency of the background only — text and gauges stay fully opaque.",
+            format: Models.WidgetSetting.Percent);
+
+        if (SupportsResize)
+        {
+            yield return Models.WidgetSetting.Slider(
+                "Size", MinSize, MaxSize,
+                () => Width,
+                v => SetSize(v),
+                group: "Placement",
+                description: "Widget size in pixels.",
+                step: 5,
+                format: Models.WidgetSetting.Pixels);
+        }
+
+        yield return Models.WidgetSetting.Action(
+            "Centre horizontally", CenterHorizontally, group: "Placement");
+
+        yield return Models.WidgetSetting.Action(
+            "Centre vertically", CenterVertically, group: "Placement");
+    }
+
+    /// <summary>
+    /// Whether this widget has a meaningful single size slider. Widgets that size
+    /// themselves from their content (tables, feeds) override this to false.
+    /// </summary>
+    protected virtual bool SupportsResize => true;
+
+    /// <summary>Smallest sensible size for the resize slider.</summary>
+    protected virtual double MinSize => 120;
+
+    /// <summary>Largest sensible size for the resize slider.</summary>
+    protected virtual double MaxSize => 600;
 
     /// <summary>
     /// Called before layout save to persist widget-specific settings into Config.Settings.

@@ -1,327 +1,647 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
-    <!-- ==================== MRT COLOR PALETTE ==================== -->
     <!--
-        One token per colour. There used to be two parallel sets naming the same
-        values (MRT.Teal / TealPrimary, MRT.Background.Dark / DarkBackground), with
-        MRT.Background.Gray and MRT.Background.Charcoal both #2F2F2F — and the
-        status colours here disagreed with what the code actually painted. The
-        MRT.* names are now aliases of the short names, kept so existing XAML
-        references keep resolving.
+        ═══════════════════════════════════════════════════════════════════
+        MRT UI THEME
+
+        Brand: teal and orange on white, per team colours.
+
+        The brand teal (#008080) is a mid-dark cyan. It reads well as an
+        identity colour on a light ground, but as *text* on a near-black
+        surface it sits at roughly 3:1 contrast — legible for large type,
+        marginal for the 11px labels this UI is full of. So the brand hue is
+        kept for identity (borders, accents, the logo) and a lightened
+        sibling carries interactive text. Same hue, enough contrast to read.
+        ═══════════════════════════════════════════════════════════════════
     -->
 
-    <!-- Surfaces -->
-    <SolidColorBrush x:Key="DarkBackground" Color="#1A1A1A"/>
-    <SolidColorBrush x:Key="DarkSurface" Color="#2F2F2F"/>
-    <SolidColorBrush x:Key="DarkBorder" Color="#3F3F3F"/>
+    <!-- ══════════════ PALETTE ══════════════ -->
+
+    <!-- Grounds. Slightly cool rather than neutral grey, so the teal sits in
+         the same family as the surfaces instead of floating on top of them. -->
+    <Color x:Key="C.Bg">#0E1315</Color>
+    <Color x:Key="C.Surface">#161C1F</Color>
+    <Color x:Key="C.SurfaceRaised">#1E262A</Color>
+    <Color x:Key="C.SurfaceHover">#263035</Color>
+    <Color x:Key="C.Border">#283338</Color>
+    <Color x:Key="C.BorderStrong">#3A484F</Color>
 
     <!-- Brand -->
-    <SolidColorBrush x:Key="TealPrimary" Color="#008080"/>
-    <SolidColorBrush x:Key="OrangePrimary" Color="#FF8000"/>
-    <SolidColorBrush x:Key="DeepTeal" Color="#006666"/>
-    <SolidColorBrush x:Key="BrightOrange" Color="#FF9933"/>
+    <Color x:Key="C.Teal">#008080</Color>
+    <Color x:Key="C.TealBright">#19C9C9</Color>
+    <Color x:Key="C.TealDim">#0A5757</Color>
+    <Color x:Key="C.Orange">#FF8000</Color>
+    <Color x:Key="C.OrangeBright">#FFA340</Color>
+    <Color x:Key="C.OrangeDim">#7A3E00</Color>
 
     <!-- Text -->
-    <SolidColorBrush x:Key="LightText" Color="#E0E0E0"/>
-    <SolidColorBrush x:Key="MutedText" Color="#888888"/>
-    <SolidColorBrush x:Key="SilverGray" Color="#C0C0C0"/>
+    <Color x:Key="C.TextPrimary">#FFFFFF</Color>
+    <Color x:Key="C.TextBody">#DCE6E9</Color>
+    <Color x:Key="C.TextMuted">#8FA1A8</Color>
+    <Color x:Key="C.TextFaint">#5F7178</Color>
 
-    <!--
-        Connection status. These now match the values the code paints; the theme
-        previously said Connected was pure green while MainWindow and DashboardPage
-        both hardcoded cyan.
-    -->
-    <SolidColorBrush x:Key="StatusConnected" Color="#00BCD4"/>
-    <SolidColorBrush x:Key="StatusConnecting" Color="#FF9800"/>
-    <SolidColorBrush x:Key="StatusDisconnected" Color="#888888"/>
+    <!-- Status. Separate from the brand accent so "good/bad" never competes
+         with "this is MRT". -->
+    <Color x:Key="C.Good">#33C481</Color>
+    <Color x:Key="C.Warn">#FFB020</Color>
+    <Color x:Key="C.Bad">#FF5A4D</Color>
 
-    <!-- ==================== LEGACY ALIASES ==================== -->
-    <!-- Kept so existing XAML keeps resolving; prefer the short names above. -->
+    <!-- ══════════════ BRUSHES ══════════════ -->
 
-    <SolidColorBrush x:Key="MRT.Teal" Color="#008080"/>
-    <SolidColorBrush x:Key="MRT.Orange" Color="#FF8000"/>
-    <SolidColorBrush x:Key="MRT.White" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Bg" Color="{StaticResource C.Bg}"/>
+    <SolidColorBrush x:Key="Surface" Color="{StaticResource C.Surface}"/>
+    <SolidColorBrush x:Key="SurfaceRaised" Color="{StaticResource C.SurfaceRaised}"/>
+    <SolidColorBrush x:Key="SurfaceHover" Color="{StaticResource C.SurfaceHover}"/>
+    <SolidColorBrush x:Key="Border" Color="{StaticResource C.Border}"/>
+    <SolidColorBrush x:Key="BorderStrong" Color="{StaticResource C.BorderStrong}"/>
+
+    <SolidColorBrush x:Key="Teal" Color="{StaticResource C.Teal}"/>
+    <SolidColorBrush x:Key="TealBright" Color="{StaticResource C.TealBright}"/>
+    <SolidColorBrush x:Key="TealDim" Color="{StaticResource C.TealDim}"/>
+    <SolidColorBrush x:Key="Orange" Color="{StaticResource C.Orange}"/>
+    <SolidColorBrush x:Key="OrangeBright" Color="{StaticResource C.OrangeBright}"/>
+
+    <SolidColorBrush x:Key="TextPrimary" Color="{StaticResource C.TextPrimary}"/>
+    <SolidColorBrush x:Key="TextBody" Color="{StaticResource C.TextBody}"/>
+    <SolidColorBrush x:Key="TextMuted" Color="{StaticResource C.TextMuted}"/>
+    <SolidColorBrush x:Key="TextFaint" Color="{StaticResource C.TextFaint}"/>
+
+    <SolidColorBrush x:Key="Good" Color="{StaticResource C.Good}"/>
+    <SolidColorBrush x:Key="Warn" Color="{StaticResource C.Warn}"/>
+    <SolidColorBrush x:Key="Bad" Color="{StaticResource C.Bad}"/>
+
+    <!-- Connection status. These now live in one place; they used to be
+         hardcoded in two code-behinds and disagreed with the theme. -->
+    <SolidColorBrush x:Key="StatusConnected" Color="{StaticResource C.TealBright}"/>
+    <SolidColorBrush x:Key="StatusConnecting" Color="{StaticResource C.Warn}"/>
+    <SolidColorBrush x:Key="StatusDisconnected" Color="{StaticResource C.TextFaint}"/>
+
+    <!-- ══════════════ LEGACY ALIASES ══════════════ -->
+    <!-- Older XAML still references these names. Mapped onto the new palette
+         so nothing breaks while the remaining pages are migrated. -->
+
+    <SolidColorBrush x:Key="DarkBackground" Color="{StaticResource C.Bg}"/>
+    <SolidColorBrush x:Key="DarkSurface" Color="{StaticResource C.Surface}"/>
+    <SolidColorBrush x:Key="DarkBorder" Color="{StaticResource C.Border}"/>
+    <SolidColorBrush x:Key="TealPrimary" Color="{StaticResource C.TealBright}"/>
+    <SolidColorBrush x:Key="OrangePrimary" Color="{StaticResource C.Orange}"/>
+    <SolidColorBrush x:Key="LightText" Color="{StaticResource C.TextBody}"/>
+    <SolidColorBrush x:Key="MutedText" Color="{StaticResource C.TextMuted}"/>
+    <SolidColorBrush x:Key="MRT.Teal" Color="{StaticResource C.Teal}"/>
+    <SolidColorBrush x:Key="MRT.Orange" Color="{StaticResource C.Orange}"/>
+    <SolidColorBrush x:Key="MRT.White" Color="{StaticResource C.TextPrimary}"/>
     <SolidColorBrush x:Key="MRT.Black" Color="#000000"/>
-    <SolidColorBrush x:Key="MRT.Background.Dark" Color="#1A1A1A"/>
-    <SolidColorBrush x:Key="MRT.Background.Gray" Color="#2F2F2F"/>
-    <SolidColorBrush x:Key="MRT.Background.Charcoal" Color="#2F2F2F"/>
-    <SolidColorBrush x:Key="MRT.DeepTeal" Color="#006666"/>
-    <SolidColorBrush x:Key="MRT.BrightOrange" Color="#FF9933"/>
-    <SolidColorBrush x:Key="MRT.SilverGray" Color="#C0C0C0"/>
-    <SolidColorBrush x:Key="MRT.Status.Connected" Color="#00BCD4"/>
-    <SolidColorBrush x:Key="MRT.Status.Connecting" Color="#FF9800"/>
-    <SolidColorBrush x:Key="MRT.Status.Disconnected" Color="#888888"/>
+    <SolidColorBrush x:Key="MRT.Background.Dark" Color="{StaticResource C.Bg}"/>
+    <SolidColorBrush x:Key="MRT.Background.Gray" Color="{StaticResource C.Surface}"/>
+    <SolidColorBrush x:Key="MRT.Background.Charcoal" Color="{StaticResource C.Surface}"/>
+    <SolidColorBrush x:Key="MRT.DeepTeal" Color="{StaticResource C.TealDim}"/>
+    <SolidColorBrush x:Key="MRT.BrightOrange" Color="{StaticResource C.OrangeBright}"/>
+    <SolidColorBrush x:Key="MRT.SilverGray" Color="{StaticResource C.TextMuted}"/>
+    <SolidColorBrush x:Key="SilverGray" Color="{StaticResource C.TextMuted}"/>
+    <SolidColorBrush x:Key="DeepTeal" Color="{StaticResource C.TealDim}"/>
+    <SolidColorBrush x:Key="BrightOrange" Color="{StaticResource C.OrangeBright}"/>
+    <SolidColorBrush x:Key="MRT.Status.Connected" Color="{StaticResource C.TealBright}"/>
+    <SolidColorBrush x:Key="MRT.Status.Connecting" Color="{StaticResource C.Warn}"/>
+    <SolidColorBrush x:Key="MRT.Status.Disconnected" Color="{StaticResource C.TextFaint}"/>
 
-    <!-- ==================== BUTTON STYLES ==================== -->
-    
-    <!-- Navigation Button Style -->
-    <Style x:Key="MRT.Button.Navigation" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource MRT.Background.Gray}"/>
-        <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="BorderThickness" Value="0,0,0,3"/>
-        <Setter Property="Padding" Value="20,10"/>
-        <Setter Property="FontSize" Value="16"/>
-        <Setter Property="FontWeight" Value="Medium"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{StaticResource MRT.DeepTeal}"/>
-                        </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-    
-    <!-- Active Navigation Button Style -->
-    <Style x:Key="MRT.Button.Navigation.Active" TargetType="Button" BasedOn="{StaticResource MRT.Button.Navigation}">
-        <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource MRT.Orange}"/>
-    </Style>
-    
-    <!-- Navigation Button Alias for simplified usage -->
-    <Style x:Key="NavigationButton" TargetType="Button" BasedOn="{StaticResource MRT.Button.Navigation}">
-        <Style.Triggers>
-            <Trigger Property="Tag" Value="Active">
-                <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource MRT.Orange}"/>
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-    
-    <!-- Primary Action Button (Orange) -->
-    <Style x:Key="MRT.Button.Primary" TargetType="Button">
-        <Setter Property="Background" Value="{StaticResource MRT.Orange}"/>
-        <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource MRT.BrightOrange}"/>
-        <Setter Property="BorderThickness" Value="2"/>
-        <Setter Property="Padding" Value="15,8"/>
-        <Setter Property="FontSize" Value="14"/>
+    <!-- ══════════════ METRICS ══════════════ -->
+    <!-- One spacing and radius scale, so padding stops being ad-hoc per card. -->
+
+    <sys:Double x:Key="Radius.Control">5</sys:Double>
+    <sys:Double x:Key="Radius.Card">8</sys:Double>
+    <CornerRadius x:Key="CR.Control">5</CornerRadius>
+    <CornerRadius x:Key="CR.Card">8</CornerRadius>
+    <CornerRadius x:Key="CR.Pill">999</CornerRadius>
+
+    <Thickness x:Key="Pad.Card">16</Thickness>
+    <Thickness x:Key="Pad.Control">12,7</Thickness>
+
+    <!-- ══════════════ TYPOGRAPHY ══════════════ -->
+    <!--
+        The old UI ran on 9-11px type almost throughout, which is what made it
+        feel cramped. Body is now 13, labels 11 with tracking, and headings
+        have real weight separation.
+    -->
+
+    <FontFamily x:Key="Font.Ui">Segoe UI Variable Display, Segoe UI, Arial</FontFamily>
+    <FontFamily x:Key="Font.Data">Consolas, Cascadia Mono, Courier New</FontFamily>
+
+    <Style x:Key="T.Display" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="21"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+    </Style>
+
+    <Style x:Key="T.Title" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+    </Style>
+
+    <Style x:Key="T.Body" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+    </Style>
+
+    <Style x:Key="T.Caption" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- Section label: uppercase, tracked, muted. The one place letter-spacing
+         earns its keep. -->
+    <Style x:Key="T.Label" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
+        <Setter Property="TextBlock.LineHeight" Value="14"/>
+    </Style>
+
+    <!-- Numeric readout: monospace and tabular so digits stop shifting. -->
+    <Style x:Key="T.Data" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Data}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource TealBright}"/>
+    </Style>
+
+    <!-- Legacy text style names -->
+    <Style x:Key="MRT.Text.Label" TargetType="TextBlock" BasedOn="{StaticResource T.Label}"/>
+    <Style x:Key="MRT.Text.Header" TargetType="TextBlock" BasedOn="{StaticResource T.Title}"/>
+    <Style x:Key="MRT.Text.Status" TargetType="TextBlock" BasedOn="{StaticResource T.Title}"/>
+    <Style x:Key="MRT.Card.Header" TargetType="TextBlock" BasedOn="{StaticResource T.Label}"/>
+
+    <!-- ══════════════ SURFACES ══════════════ -->
+
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Surface}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{StaticResource CR.Card}"/>
+        <Setter Property="Padding" Value="{StaticResource Pad.Card}"/>
+    </Style>
+
+    <Style x:Key="MRT.Card" TargetType="Border" BasedOn="{StaticResource Card}"/>
+
+    <!-- ══════════════ BUTTONS ══════════════ -->
+
+    <Style x:Key="Btn.Base" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceRaised}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="{StaticResource Pad.Control}"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}"
-                            CornerRadius="3">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            CornerRadius="{StaticResource CR.Control}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{StaticResource MRT.BrightOrange}"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHover}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderStrong}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter Property="Background" Value="#CC6600"/>
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource TealDim}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Teal}"/>
+                        </Trigger>
+                        <!-- Visible keyboard focus. The old styles had none. -->
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource TealBright}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Opacity" Value="0.5"/>
+                            <Setter Property="Opacity" Value="0.4"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
-    
-    <!-- Secondary Button (Teal outline) -->
-    <Style x:Key="MRT.Button.Secondary" TargetType="Button">
+
+    <!-- Primary: the one action on a screen that matters most. -->
+    <Style x:Key="Btn.Primary" TargetType="Button" BasedOn="{StaticResource Btn.Base}">
+        <Setter Property="Foreground" Value="#04211F"/>
+        <Setter Property="Background" Value="{StaticResource TealBright}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource TealBright}"/>
+    </Style>
+
+    <Style x:Key="Btn.Secondary" TargetType="Button" BasedOn="{StaticResource Btn.Base}"/>
+
+    <!-- Destructive actions read differently from ordinary ones. -->
+    <Style x:Key="Btn.Danger" TargetType="Button" BasedOn="{StaticResource Btn.Base}">
+        <Setter Property="Foreground" Value="{StaticResource Bad}"/>
+    </Style>
+
+    <Style x:Key="Btn.Ghost" TargetType="Button" BasedOn="{StaticResource Btn.Base}">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="BorderThickness" Value="2"/>
-        <Setter Property="Padding" Value="15,8"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}"
-                            CornerRadius="3">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
-                            <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
     </Style>
-    
-    <!-- ==================== TOGGLE SWITCH STYLE ==================== -->
-    
-    <Style x:Key="MRT.ToggleButton" TargetType="CheckBox">
-        <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-        <Setter Property="FontSize" Value="14"/>
+
+    <!-- Legacy button style names -->
+    <Style x:Key="MRT.Button.Primary" TargetType="Button" BasedOn="{StaticResource Btn.Primary}"/>
+    <Style x:Key="MRT.Button.Secondary" TargetType="Button" BasedOn="{StaticResource Btn.Secondary}"/>
+    <Style x:Key="MRT.Button.Navigation" TargetType="Button" BasedOn="{StaticResource Btn.Ghost}"/>
+    <Style x:Key="MRT.Button.Navigation.Active" TargetType="Button" BasedOn="{StaticResource Btn.Ghost}"/>
+    <Style x:Key="NavigationButton" TargetType="Button" BasedOn="{StaticResource Btn.Ghost}"/>
+
+    <!-- ══════════════ TOGGLE SWITCH ══════════════ -->
+    <!--
+        A real switch rather than a checkbox styled as a button. On/off state is
+        readable at a glance from the knob position alone, not only from colour,
+        which matters on a page with dozens of them.
+    -->
+
+    <Style x:Key="Switch" TargetType="CheckBox">
         <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <StackPanel Orientation="Horizontal">
-                        <!-- Toggle Switch -->
-                        <Border x:Name="SwitchBorder"
-                                Width="50" Height="26" 
-                                Background="{StaticResource MRT.Background.Gray}"
-                                BorderBrush="{StaticResource MRT.SilverGray}"
-                                BorderThickness="2"
-                                CornerRadius="13"
-                                Margin="0,0,10,0">
-                            <Canvas>
-                                <Ellipse x:Name="ThumbEllipse" 
-                                         Width="18" Height="18" 
-                                         Fill="{StaticResource MRT.SilverGray}"
-                                         Canvas.Left="4" Canvas.Top="2"/>
-                            </Canvas>
+                    <Grid Background="Transparent">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border x:Name="Track" Grid.Column="0"
+                                Width="34" Height="19"
+                                CornerRadius="{StaticResource CR.Pill}"
+                                Background="{StaticResource SurfaceRaised}"
+                                BorderBrush="{StaticResource BorderStrong}"
+                                BorderThickness="1"
+                                VerticalAlignment="Center">
+                            <Ellipse x:Name="Knob" Width="13" Height="13"
+                                     Fill="{StaticResource TextFaint}"
+                                     HorizontalAlignment="Left"
+                                     Margin="3,0,0,0"/>
                         </Border>
-                        <!-- Content (label) -->
-                        <ContentPresenter VerticalAlignment="Center"/>
-                    </StackPanel>
+
+                        <ContentPresenter x:Name="Label" Grid.Column="1"
+                                          Margin="10,0,0,0"
+                                          VerticalAlignment="Center"
+                                          RecognizesAccessKey="True"/>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="SwitchBorder" Property="Background" Value="{StaticResource MRT.Teal}"/>
-                            <Setter TargetName="SwitchBorder" Property="BorderBrush" Value="{StaticResource MRT.Teal}"/>
-                            <Setter TargetName="ThumbEllipse" Property="Canvas.Left" Value="26"/>
-                            <Setter TargetName="ThumbEllipse" Property="Fill" Value="{StaticResource MRT.White}"/>
+                            <Setter TargetName="Track" Property="Background" Value="{StaticResource Teal}"/>
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource TealBright}"/>
+                            <Setter TargetName="Knob" Property="Fill" Value="{StaticResource TextPrimary}"/>
+                            <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
+                            <Setter TargetName="Knob" Property="Margin" Value="0,0,3,0"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource TealBright}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource OrangeBright}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
     </Style>
-    
-    <!-- ==================== SLIDER STYLES ==================== -->
-    
-    <Style x:Key="MRT.Slider" TargetType="Slider">
-        <Setter Property="Foreground" Value="{StaticResource MRT.Orange}"/>
-        <Setter Property="Background" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="Height" Value="30"/>
-        <Setter Property="Minimum" Value="0"/>
-        <Setter Property="Maximum" Value="100"/>
-        <Setter Property="TickFrequency" Value="10"/>
-        <Setter Property="IsSnapToTickEnabled" Value="False"/>
-    </Style>
-    
-    <!-- ==================== CARD/PANEL STYLES ==================== -->
-    
-    <Style x:Key="MRT.Card" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource MRT.Background.Gray}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="BorderThickness" Value="2"/>
-        <Setter Property="CornerRadius" Value="5"/>
-        <Setter Property="Padding" Value="15"/>
-        <Setter Property="Margin" Value="10"/>
-    </Style>
-    
-    <Style x:Key="MRT.Card.Header" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="FontSize" Value="18"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="Margin" Value="0,0,0,10"/>
-    </Style>
-    
-    <!-- ==================== TEXT STYLES ==================== -->
-    
-    <Style x:Key="MRT.Text.Header" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-        <Setter Property="FontSize" Value="24"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-    </Style>
-    
-    <Style x:Key="MRT.Text.SubHeader" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource MRT.Teal}"/>
-        <Setter Property="FontSize" Value="18"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
-    
-    <Style x:Key="MRT.Text.Body" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-        <Setter Property="FontSize" Value="14"/>
-    </Style>
-    
-    <Style x:Key="MRT.Text.Label" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource MRT.SilverGray}"/>
-        <Setter Property="FontSize" Value="12"/>
-    </Style>
-    
-    <Style x:Key="MRT.Text.Status" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="16"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-    </Style>
-    
-    <!-- ==================== RADIO BUTTON STYLE ==================== -->
-    
-    <Style x:Key="MRT.RadioButton" TargetType="RadioButton">
-        <Setter Property="Foreground" Value="{StaticResource MRT.White}"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="Margin" Value="0,5"/>
-        <Setter Property="Cursor" Value="Hand"/>
+
+    <!-- Legacy name: the old chip-style toggle. Mapped to the switch so every
+         existing CheckBox picks up the new control automatically. -->
+    <Style x:Key="MRT.ToggleButton" TargetType="CheckBox" BasedOn="{StaticResource Switch}"/>
+
+    <!-- ══════════════ SLIDER ══════════════ -->
+
+    <Style x:Key="Slider.Mrt" TargetType="Slider">
+        <Setter Property="Height" Value="20"/>
+        <Setter Property="IsMoveToPointEnabled" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid VerticalAlignment="Center">
+                        <Border Height="4" CornerRadius="{StaticResource CR.Pill}"
+                                Background="{StaticResource SurfaceRaised}"
+                                BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                VerticalAlignment="Center"/>
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Height="4" CornerRadius="{StaticResource CR.Pill}"
+                                                    Background="{StaticResource Teal}"
+                                                    VerticalAlignment="Center"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False"
+                                              Background="Transparent" BorderThickness="0">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent"/>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb x:Name="Thumb" Width="14" Height="14" Cursor="Hand">
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Ellipse x:Name="Dot"
+                                                     Fill="{StaticResource TextPrimary}"
+                                                     Stroke="{StaticResource TealBright}"
+                                                     StrokeThickness="2"/>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Dot" Property="Stroke" Value="{StaticResource OrangeBright}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter TargetName="Dot" Property="Stroke" Value="{StaticResource Orange}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <!-- ==================== DISCLOSURE (EXPANDER) ==================== -->
-    <!--
-        Used to keep the rarely-changed options out of the way. The Widgets page
-        carried 58 checkboxes and 18 sliders in flat lists for two shipping widgets,
-        which made the settings that matter hard to find among the ones that do not.
-    -->
+    <Style x:Key="MRT.Slider" TargetType="Slider" BasedOn="{StaticResource Slider.Mrt}"/>
+
+    <!-- ══════════════ COMBO BOX ══════════════ -->
+
+    <Style x:Key="Combo.Mrt" TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceRaised}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Height" Value="30"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Bd"
+                                            Background="{StaticResource SurfaceRaised}"
+                                            BorderBrush="{StaticResource Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource CR.Control}">
+                                        <Path x:Name="Arrow" Data="M 0 0 L 4 4 L 8 0 Z"
+                                              Fill="{StaticResource TextMuted}"
+                                              HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              Margin="0,0,10,0"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource TealBright}"/>
+                                            <Setter TargetName="Arrow" Property="Fill" Value="{StaticResource TealBright}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <ContentPresenter Margin="10,0,26,0" VerticalAlignment="Center"
+                                          IsHitTestVisible="False"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+
+                        <Popup x:Name="PART_Popup" AllowsTransparency="True"
+                               Placement="Bottom" Focusable="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen}"
+                               PopupAnimation="Fade">
+                            <Border Background="{StaticResource SurfaceRaised}"
+                                    BorderBrush="{StaticResource BorderStrong}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource CR.Control}"
+                                    MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="320" Margin="0,4,0,0">
+                                <ScrollViewer>
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="ComboItem.Mrt" TargetType="ComboBoxItem">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd" Background="Transparent" Padding="{TemplateBinding Padding}"
+                            CornerRadius="3" Margin="3,1">
+                        <ContentPresenter/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SurfaceHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource TealDim}"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Apply the combo styles by default so existing ComboBoxes pick them up. -->
+    <Style TargetType="ComboBox" BasedOn="{StaticResource Combo.Mrt}"/>
+    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource ComboItem.Mrt}"/>
+
+    <!-- ══════════════ TEXT BOX ══════════════ -->
+
+    <Style x:Key="TextBox.Mrt" TargetType="TextBox">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource TealBright}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource Teal}"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceRaised}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource CR.Control}">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BorderStrong}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource TealBright}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Mrt}"/>
+
+    <!-- ══════════════ SCROLLBAR ══════════════ -->
+    <!-- Slim and unobtrusive; the default WPF chrome is very light-themed. -->
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border x:Name="T" Background="{StaticResource BorderStrong}"
+                                                    CornerRadius="{StaticResource CR.Pill}" Margin="2,0"/>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="T" Property="Background" Value="{StaticResource Teal}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="Width" Value="Auto"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ══════════════ TOOLTIP ══════════════ -->
+
+    <Style TargetType="ToolTip">
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{StaticResource SurfaceRaised}"
+                            BorderBrush="{StaticResource BorderStrong}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource CR.Control}"
+                            Padding="10,7" MaxWidth="300">
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ══════════════ DISCLOSURE ══════════════ -->
 
     <Style x:Key="MRT.Expander" TargetType="Expander">
-        <Setter Property="Foreground" Value="{StaticResource LightText}"/>
-        <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Expander">
                     <StackPanel>
-                        <ToggleButton x:Name="HeaderButton"
+                        <ToggleButton x:Name="Head"
                                       IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                                      Cursor="Hand" Focusable="True"
-                                      HorizontalContentAlignment="Stretch"
-                                      Background="Transparent" BorderThickness="0">
+                                      Cursor="Hand" HorizontalContentAlignment="Stretch">
                             <ToggleButton.Template>
                                 <ControlTemplate TargetType="ToggleButton">
-                                    <Border x:Name="Bg" Background="Transparent" Padding="0,4">
+                                    <Border x:Name="Bd" Background="Transparent" Padding="0,6" CornerRadius="4">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock x:Name="Chevron" Text="&#x25B8;"
-                                                       FontSize="10" Margin="0,0,6,0"
-                                                       VerticalAlignment="Center"
-                                                       Foreground="{StaticResource TealPrimary}"/>
+                                            <TextBlock x:Name="Chev" Text="&#xE76C;"
+                                                       FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                                       Foreground="{StaticResource TealBright}"
+                                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
                                             <ContentPresenter VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsChecked" Value="True">
-                                            <Setter TargetName="Chevron" Property="Text" Value="&#x25BE;"/>
+                                            <Setter TargetName="Chev" Property="Text" Value="&#xE70D;"/>
                                         </Trigger>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Chevron" Property="Foreground" Value="{StaticResource OrangePrimary}"/>
+                                            <Setter TargetName="Chev" Property="Foreground" Value="{StaticResource OrangeBright}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
                             </ToggleButton.Template>
                             <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
                         </ToggleButton>
-
                         <ContentPresenter x:Name="Body" Margin="0,4,0,0" Visibility="Collapsed"/>
                     </StackPanel>
                     <ControlTemplate.Triggers>
@@ -334,9 +654,14 @@
         </Setter>
     </Style>
 
-    <Style x:Key="MRT.Expander.Header" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource MutedText}"/>
-        <Setter Property="FontSize" Value="11"/>
+    <Style x:Key="MRT.Expander.Header" TargetType="TextBlock" BasedOn="{StaticResource T.Label}"/>
+
+    <!-- Legacy radio style -->
+    <Style x:Key="MRT.RadioButton" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{StaticResource TextBody}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Margin" Value="0,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
     </Style>
 
 </ResourceDictionary>

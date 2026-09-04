@@ -24,7 +24,7 @@ namespace iRacingOverlay.WPF.Widgets.MRTOneWidget;
 /// Racelabs-inspired design with intelligent shift point detection and theme colors
 /// Phase 2: Toggleable visual enhancements (gradient, shift ring, glow, typography, dynamic colors)
 /// </summary>
-public class MRTOneWidget : WidgetBase
+public partial class MRTOneWidget : WidgetBase
 {
     #region Layout Constants
 

@@ -21,7 +21,7 @@ namespace iRacingOverlay.WPF.Widgets.RelativeWidget;
 /// class color stripes, pit indicators, and smart row count.
 /// MRT theme: dark background, teal/orange accents, high contrast text.
 /// </summary>
-public class RelativeWidget : WidgetBase
+public partial class RelativeWidget : WidgetBase
 {
     #region Constants
 
