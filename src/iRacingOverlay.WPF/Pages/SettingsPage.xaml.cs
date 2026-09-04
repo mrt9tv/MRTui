@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using iRacingOverlay.WPF.Models;
 using Microsoft.Win32;
 
@@ -18,6 +20,12 @@ public partial class SettingsPage : UserControl
     /// Raised when the user clicks Reset Layout — MainWindow should recreate default widgets.
     /// </summary>
     public event System.Action? ResetLayoutRequested;
+
+    /// <summary>
+    /// Raised when the user undoes a layout reset — MainWindow should reload
+    /// the restored layout.json.
+    /// </summary>
+    public event System.Action? UndoResetRequested;
 
     public SettingsPage()
     {
@@ -41,26 +49,132 @@ public partial class SettingsPage : UserControl
         ChkAutoHideInPits.IsChecked = s.AutoHideInPitsEnabled;
         PanelAutoHideWidgets.IsEnabled = s.AutoHideInPitsEnabled;
         PanelAutoHideWidgets.Opacity = s.AutoHideInPitsEnabled ? 1.0 : 0.4;
-        LoadAutoHideWidget(ChkAutoHideMRTOne, "MRTOne", s);
-        LoadAutoHideWidget(ChkAutoHideProxFeed, "ProximityFeed", s);
-        LoadAutoHideWidget(ChkAutoHideFuelCalc, "FuelCalculator", s);
-        LoadAutoHideWidget(ChkAutoHideStandings, "Standings", s);
-        LoadAutoHideWidget(ChkAutoHideRelative, "Relative", s);
+        BuildAutoHideWidgetList(s);
 
-        string FormatMod(string m) => m == "None" ? "" : m;
-        string lockMod = FormatMod(s.ToggleLockModifier);
-        string lockKey = s.ToggleLockKey;
-        TxtHotkeyLock.Text = string.IsNullOrEmpty(lockMod) ? lockKey : $"{lockMod}+{lockKey}";
-
-        string visMod = FormatMod(s.ToggleVisibilityModifier);
-        string visKey = s.ToggleVisibilityKey;
-        TxtHotkeyVisibility.Text = string.IsNullOrEmpty(visMod) ? visKey : $"{visMod}+{visKey}";
+        RefreshHotkeyDisplay();
     }
 
-    private static void LoadAutoHideWidget(CheckBox chk, string widgetKey, AppSettings s)
+    /// <summary>
+    /// Build the auto-hide checkbox list from the widgets this build actually ships,
+    /// rather than a hardcoded list that offered widgets the user cannot enable.
+    /// </summary>
+    private void BuildAutoHideWidgetList(AppSettings s)
     {
-        chk.IsChecked = s.AutoHideInPitsWidgets.TryGetValue(widgetKey, out bool v) && v;
+        AutoHideWidgetList.Children.Clear();
+
+        foreach (WidgetType wt in System.Enum.GetValues<WidgetType>())
+        {
+            if (!Services.WidgetManager.SupportedWidgetTypes.Contains(wt)) continue;
+
+            var key = wt.ToString();
+            var chk = new CheckBox
+            {
+                Content = wt.GetDisplayName(),
+                Style = FindResource("MRT.ToggleButton") as Style,
+                Margin = new Thickness(0, 0, 10, 4),
+                Tag = key,
+                IsChecked = s.AutoHideInPitsWidgets.TryGetValue(key, out bool v) && v,
+            };
+            chk.Checked += AutoHideWidget_Changed;
+            chk.Unchecked += AutoHideWidget_Changed;
+            AutoHideWidgetList.Children.Add(chk);
+        }
     }
+
+    private void RefreshHotkeyDisplay()
+    {
+        var s = AppSettings.Instance;
+        TxtHotkeyLock.Text = MainWindow.FormatHotkey(s.ToggleLockModifier, s.ToggleLockKey);
+        TxtHotkeyVisibility.Text = MainWindow.FormatHotkey(s.ToggleVisibilityModifier, s.ToggleVisibilityKey);
+
+        if (s.HotkeysConflict())
+        {
+            TxtHotkeyStatus.Text = "Both actions are bound to the same key — change one.";
+            TxtHotkeyStatus.Foreground = FindResource("OrangePrimary") as Brush ?? Brushes.Orange;
+            return;
+        }
+
+        var main = Window.GetWindow(this) as MainWindow;
+        if (main != null && (!main.LockHotkeyRegistered || !main.VisibilityHotkeyRegistered))
+        {
+            TxtHotkeyStatus.Text = "Windows refused a binding — another application already owns it.";
+            TxtHotkeyStatus.Foreground = FindResource("OrangePrimary") as Brush ?? Brushes.Orange;
+        }
+        else
+        {
+            TxtHotkeyStatus.Text = "";
+        }
+    }
+
+    // ── Hotkey rebinding ────────────────────────────────────────────
+
+    /// <summary>
+    /// Capture the next key combination the user presses and bind it.
+    /// The hotkeys were previously display-only: AppSettings already stored the
+    /// modifier and key, and HotkeysConflict() already existed — only the capture
+    /// step was missing, leaving the user no way to resolve a conflict.
+    /// </summary>
+    private void CaptureHotkey(bool forLockAction, Button trigger)
+    {
+        var original = trigger.Content;
+        trigger.Content = "Press…";
+        TxtHotkeyStatus.Text = "Press a key combination, or Esc to cancel.";
+        TxtHotkeyStatus.Foreground = FindResource("TealPrimary") as Brush ?? Brushes.Teal;
+
+        var window = Window.GetWindow(this);
+        if (window == null) { trigger.Content = original; return; }
+
+        void OnKeyDown(object sender, KeyEventArgs e)
+        {
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+            // Ignore bare modifier presses — wait for the actual key.
+            if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+                return;
+
+            e.Handled = true;
+            window.PreviewKeyDown -= OnKeyDown;
+            trigger.Content = original;
+
+            if (key == Key.Escape)
+            {
+                RefreshHotkeyDisplay();
+                return;
+            }
+
+            string modifier =
+                (Keyboard.Modifiers & ModifierKeys.Control) != 0 ? "Ctrl" :
+                (Keyboard.Modifiers & ModifierKeys.Alt) != 0 ? "Alt" :
+                (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? "Shift" : "None";
+
+            var s = AppSettings.Instance;
+            if (forLockAction)
+            {
+                s.ToggleLockModifier = modifier;
+                s.ToggleLockKey = key.ToString();
+            }
+            else
+            {
+                s.ToggleVisibilityModifier = modifier;
+                s.ToggleVisibilityKey = key.ToString();
+            }
+            s.Save();
+
+            // Re-register immediately so the new binding takes effect and any
+            // failure is reported straight away.
+            (window as MainWindow)?.RegisterGlobalHotkeys();
+            RefreshHotkeyDisplay();
+        }
+
+        window.PreviewKeyDown += OnKeyDown;
+    }
+
+    private void BtnRebindLock_Click(object sender, RoutedEventArgs e) =>
+        CaptureHotkey(forLockAction: true, (Button)sender);
+
+    private void BtnRebindVisibility_Click(object sender, RoutedEventArgs e) =>
+        CaptureHotkey(forLockAction: false, (Button)sender);
 
     private void GlobalFontScale_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -105,37 +219,75 @@ public partial class SettingsPage : UserControl
     private void AutoHideWidget_Changed(object sender, RoutedEventArgs e)
     {
         if (_suppressControlEvents) return;
-        var s = AppSettings.Instance;
-        s.AutoHideInPitsWidgets["MRTOne"] = ChkAutoHideMRTOne.IsChecked == true;
-        s.AutoHideInPitsWidgets["ProximityFeed"] = ChkAutoHideProxFeed.IsChecked == true;
-        s.AutoHideInPitsWidgets["FuelCalculator"] = ChkAutoHideFuelCalc.IsChecked == true;
-        s.AutoHideInPitsWidgets["Standings"] = ChkAutoHideStandings.IsChecked == true;
-        s.AutoHideInPitsWidgets["Relative"] = ChkAutoHideRelative.IsChecked == true;
-        s.Save();
+        if (sender is not CheckBox chk || chk.Tag is not string key) return;
+
+        AppSettings.Instance.AutoHideInPitsWidgets[key] = chk.IsChecked == true;
+        AppSettings.Instance.Save();
     }
 
     // ── Layout reset ────────────────────────────────────────────────
 
+    private static string LayoutPath => System.IO.Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
+        "MRT-UI", "layout.json");
+
+    private static string ResetBackupPath => LayoutPath + ".before-reset";
+
     private void BtnResetLayout_Click(object sender, RoutedEventArgs e)
     {
         var result = MessageBox.Show(
-            "This will reset all widget positions and sizes to defaults.\nYour current layout will be lost.\n\nContinue?",
+            "This will reset all widget positions and sizes to defaults.\n\n" +
+            "Your current layout will be saved so you can undo this until you close MRT UI.\n\nContinue?",
             "Reset Layout", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
-        if (result == MessageBoxResult.Yes)
-        {
-            // Delete the saved layout file
-            var layoutPath = System.IO.Path.Combine(
-                System.Environment.GetFolderPath(System.Environment.SpecialFolder.MyDocuments),
-                "MRT-UI", "layout.json");
-            try
-            {
-                if (System.IO.File.Exists(layoutPath))
-                    System.IO.File.Delete(layoutPath);
-            }
-            catch { /* ignore */ }
+        if (result != MessageBoxResult.Yes) return;
 
-            ResetLayoutRequested?.Invoke();
+        // Keep a copy so the reset is undoable — it used to be immediate and final.
+        try
+        {
+            if (System.IO.File.Exists(LayoutPath))
+                System.IO.File.Copy(LayoutPath, ResetBackupPath, overwrite: true);
+        }
+        catch (System.Exception ex)
+        {
+            Utils.AppLog.Warn("Could not back up layout before reset", ex);
+        }
+
+        try
+        {
+            if (System.IO.File.Exists(LayoutPath))
+                System.IO.File.Delete(LayoutPath);
+        }
+        catch (System.Exception ex)
+        {
+            Utils.AppLog.Warn("Could not delete layout during reset", ex);
+        }
+
+        ResetLayoutRequested?.Invoke();
+        BtnUndoReset.Visibility = Visibility.Visible;
+        TxtConfigStatus.Text = "";
+    }
+
+    private void BtnUndoReset_Click(object sender, RoutedEventArgs e)
+    {
+        if (!System.IO.File.Exists(ResetBackupPath))
+        {
+            BtnUndoReset.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        try
+        {
+            System.IO.File.Copy(ResetBackupPath, LayoutPath, overwrite: true);
+            System.IO.File.Delete(ResetBackupPath);
+            BtnUndoReset.Visibility = Visibility.Collapsed;
+            UndoResetRequested?.Invoke();
+        }
+        catch (System.Exception ex)
+        {
+            Utils.AppLog.Error("Could not restore layout", ex);
+            MessageBox.Show($"Could not restore the previous layout:\n{ex.Message}",
+                "Undo Reset", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

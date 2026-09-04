@@ -1200,11 +1200,26 @@ public class MRTOneWidget : WidgetBase
         }
     }
     
+    /// <summary>
+    /// RPM zone for the current frame. Computed once in <see cref="UpdateUI"/> and
+    /// reused by the gauge ring and the RPM value colour, which previously each
+    /// called GetRPMZone with identical arguments.
+    /// </summary>
+    private ShiftPointCalculator.RPMZone _currentRpmZone;
+
     protected override void UpdateUI(TelemetryData data)
     {
         // Update shift point calculator with current data (including SDK redline if available)
         ShiftPointCalculator.UpdateTracking(data.RPM, data.Throttle, data.Gear, data.EngineRedlineRPM);
-        
+
+        _currentRpmZone = ShiftPointCalculator.GetRPMZone(
+            data.RPM,
+            data.Gear,
+            data.PlayerCarSLFirstRPM,
+            data.PlayerCarSLShiftRPM,
+            data.PlayerCarSLLastRPM,
+            data.PlayerCarSLBlinkRPM);
+
         // Update TOP section (SecondaryField - typically Speed or RPM)
         if (_dataBinding.SecondaryField.HasValue)
         {
@@ -1283,17 +1298,8 @@ public class MRTOneWidget : WidgetBase
         
         if (!pitLimiterBlinkActive)
         {
-            // Update gauge circle color based on RPM zone
-            var rpm = data.RPM;
-            var zone = ShiftPointCalculator.GetRPMZone(
-                rpm, 
-                data.Gear, 
-                data.PlayerCarSLFirstRPM, 
-                data.PlayerCarSLShiftRPM, 
-                data.PlayerCarSLLastRPM, 
-                data.PlayerCarSLBlinkRPM);
-            
-            Color borderColor = zone switch
+            // Update gauge circle color based on this frame's RPM zone
+            Color borderColor = _currentRpmZone switch
             {
                 ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // RED - at limiter
                 ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // ORANGE - optimal shift
@@ -1342,56 +1348,55 @@ public class MRTOneWidget : WidgetBase
     {
         // Use telemetry service overload for fuel calculation fields
         var value = TelemetryDataMapper.GetValue(field, data, _telemetryService);
-        
-        // Use consistent formatting functions
-        valueText.Text = MRTOneDataFormatter.FormatValue(field, value ?? 0, data, AppSettings.Instance.UseMetricUnits);
-        
+
+        // Change-guarded: assigning Text invalidates layout even when the string is
+        // equal, and this runs 60 times a second per element.
+        UiUpdate.SetText(valueText,
+            MRTOneDataFormatter.FormatValue(field, value ?? 0, data, AppSettings.Instance.UseMetricUnits));
+
         // Special color handling for Gear (R=Red, N=Gray, forward gears=Teal)
         if (field == TelemetryField.Gear && value is int gear)
         {
-            valueText.Foreground = BrushCache.Get(gear switch
+            UiUpdate.SetForeground(valueText, BrushCache.Get(gear switch
             {
                 -1 => Colors.Red,           // Reverse
                 0 => Colors.Gray,           // Neutral
                 _ => _primaryColor          // Forward gears (Teal)
-            });
+            }));
         }
-        // Special color handling for RPM (shift point zones)
-        else if (field == TelemetryField.RPM && value is float rpm)
+        // Special color handling for RPM (shift point zones).
+        // _currentRpmZone is computed once per frame in UpdateUI — this used to
+        // recompute the identical zone a second time with the same arguments.
+        else if (field == TelemetryField.RPM && value is float)
         {
-            var zone = ShiftPointCalculator.GetRPMZone(
-                rpm, 
-                data.Gear, 
-                data.PlayerCarSLFirstRPM, 
-                data.PlayerCarSLShiftRPM, 
-                data.PlayerCarSLLastRPM, 
-                data.PlayerCarSLBlinkRPM);
-            valueText.Foreground = BrushCache.Get(zone switch
+            UiUpdate.SetForeground(valueText, BrushCache.Get(_currentRpmZone switch
             {
                 ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // At limiter
                 ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // Optimal shift (Orange)
                 ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,     // Approaching shift
                 _ => _primaryColor                                          // Safe range (Teal)
-            });
+            }));
         }
         else
         {
-            valueText.Foreground = BrushCache.Get(MRTOneDataFormatter.GetValueColor(field, value ?? 0, data, _primaryColor, _secondaryColor));
+            UiUpdate.SetForeground(valueText,
+                BrushCache.Get(MRTOneDataFormatter.GetValueColor(field, value ?? 0, data, _primaryColor, _secondaryColor)));
         }
-        
+
         // Update label if present
         if (labelText != null)
         {
             // Gear doesn't need a label (just shows R, N, 1, 2, etc.)
             if (field == TelemetryField.Gear)
             {
-                labelText.Visibility = Visibility.Collapsed;
+                UiUpdate.SetVisibility(labelText, Visibility.Collapsed);
             }
             else
             {
-                labelText.Text = MRTOneDataFormatter.GetLabel(field, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels);
-                labelText.Foreground = BrushCache.Get(_primaryColor);
-                labelText.Visibility = Visibility.Visible;
+                UiUpdate.SetText(labelText,
+                    MRTOneDataFormatter.GetLabel(field, AppSettings.Instance.UseMetricUnits, AppSettings.Instance.CustomLabels));
+                UiUpdate.SetForeground(labelText, BrushCache.Get(_primaryColor));
+                UiUpdate.SetVisibility(labelText, Visibility.Visible);
             }
         }
     }

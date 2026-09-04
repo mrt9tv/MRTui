@@ -42,39 +42,82 @@
         <!-- ═══════════════════════════════════════════════════════ -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="44"/>
+                <ColumnDefinition Width="88"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            
-            <!-- NAVIGATION SIDEBAR -->
+
+            <!-- ═══════════════════════════════════════════════════════ -->
+            <!-- NAVIGATION SIDEBAR                                      -->
+            <!--                                                         -->
+            <!-- Icon plus label. The rail was 44px of bare Unicode      -->
+            <!-- glyphs with tooltips as the only way to tell them apart.-->
+            <!-- ═══════════════════════════════════════════════════════ -->
             <Border Grid.Column="0" Background="{StaticResource DarkSurface}"
                     BorderBrush="{StaticResource DarkBorder}" BorderThickness="0,0,1,0">
                 <StackPanel VerticalAlignment="Top" Margin="0,6,0,0">
-                    <Button x:Name="NavDashboard" Content="&#x2302;" ToolTip="Dashboard"
+                    <StackPanel.Resources>
+                        <Style x:Key="NavItem" TargetType="Button">
+                            <Setter Property="Width" Value="80"/>
+                            <Setter Property="Height" Value="46"/>
+                            <Setter Property="Margin" Value="4,2"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Foreground" Value="{StaticResource LightText}"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                                CornerRadius="4" Padding="0,4">
+                                            <ContentPresenter HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bg" Property="Background" Value="#3A3A3A"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </StackPanel.Resources>
+
+                    <Button x:Name="NavDashboard" Style="{StaticResource NavItem}"
                             Click="NavButton_Click" Tag="Dashboard"
-                            Width="36" Height="36" Margin="4,2" FontSize="18"
-                            Foreground="{StaticResource TealPrimary}"
-                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
-                    <Button x:Name="NavWidgets" Content="&#x25A6;" ToolTip="Widgets"
-                            Click="NavButton_Click" Tag="Widgets"
-                            Width="36" Height="36" Margin="4,2" FontSize="16"
-                            Foreground="{StaticResource LightText}"
-                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
-                    <Button x:Name="NavSessions" Content="&#x23F1;" ToolTip="Sessions"
-                            Click="NavButton_Click" Tag="Sessions"
-                            Width="36" Height="36" Margin="4,2" FontSize="16"
-                            Foreground="{StaticResource LightText}"
-                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
-                    <Button x:Name="NavSettings" Content="&#x2699;" ToolTip="Settings"
-                            Click="NavButton_Click" Tag="Settings"
-                            Width="36" Height="36" Margin="4,2" FontSize="16"
-                            Foreground="{StaticResource LightText}"
-                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
-                    <Button x:Name="NavAbout" Content="&#x2139;" ToolTip="About"
-                            Click="NavButton_Click" Tag="About"
-                            Width="36" Height="36" Margin="4,2" FontSize="16"
-                            Foreground="{StaticResource LightText}"
-                            Background="Transparent" BorderThickness="0" Cursor="Hand"/>
+                            Foreground="{StaticResource TealPrimary}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#x2302;" FontSize="17" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Dashboard" FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavWidgets" Style="{StaticResource NavItem}"
+                            Click="NavButton_Click" Tag="Widgets">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#x25A6;" FontSize="15" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Widgets" FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavSessions" Style="{StaticResource NavItem}"
+                            Click="NavButton_Click" Tag="Sessions">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#x23F1;" FontSize="15" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Sessions" FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavSettings" Style="{StaticResource NavItem}"
+                            Click="NavButton_Click" Tag="Settings">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#x2699;" FontSize="15" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Settings" FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="NavAbout" Style="{StaticResource NavItem}"
+                            Click="NavButton_Click" Tag="About">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="&#x2139;" FontSize="15" HorizontalAlignment="Center"/>
+                            <TextBlock Text="About" FontSize="9" HorizontalAlignment="Center" Margin="0,1,0,0"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Border>
             

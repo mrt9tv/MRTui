@@ -2,43 +2,57 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ==================== MRT COLOR PALETTE ==================== -->
-    
-    <!-- Primary Racing Colors -->
+    <!--
+        One token per colour. There used to be two parallel sets naming the same
+        values (MRT.Teal / TealPrimary, MRT.Background.Dark / DarkBackground), with
+        MRT.Background.Gray and MRT.Background.Charcoal both #2F2F2F — and the
+        status colours here disagreed with what the code actually painted. The
+        MRT.* names are now aliases of the short names, kept so existing XAML
+        references keep resolving.
+    -->
+
+    <!-- Surfaces -->
+    <SolidColorBrush x:Key="DarkBackground" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="DarkSurface" Color="#2F2F2F"/>
+    <SolidColorBrush x:Key="DarkBorder" Color="#3F3F3F"/>
+
+    <!-- Brand -->
+    <SolidColorBrush x:Key="TealPrimary" Color="#008080"/>
+    <SolidColorBrush x:Key="OrangePrimary" Color="#FF8000"/>
+    <SolidColorBrush x:Key="DeepTeal" Color="#006666"/>
+    <SolidColorBrush x:Key="BrightOrange" Color="#FF9933"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="LightText" Color="#E0E0E0"/>
+    <SolidColorBrush x:Key="MutedText" Color="#888888"/>
+    <SolidColorBrush x:Key="SilverGray" Color="#C0C0C0"/>
+
+    <!--
+        Connection status. These now match the values the code paints; the theme
+        previously said Connected was pure green while MainWindow and DashboardPage
+        both hardcoded cyan.
+    -->
+    <SolidColorBrush x:Key="StatusConnected" Color="#00BCD4"/>
+    <SolidColorBrush x:Key="StatusConnecting" Color="#FF9800"/>
+    <SolidColorBrush x:Key="StatusDisconnected" Color="#888888"/>
+
+    <!-- ==================== LEGACY ALIASES ==================== -->
+    <!-- Kept so existing XAML keeps resolving; prefer the short names above. -->
+
     <SolidColorBrush x:Key="MRT.Teal" Color="#008080"/>
     <SolidColorBrush x:Key="MRT.Orange" Color="#FF8000"/>
     <SolidColorBrush x:Key="MRT.White" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="MRT.Black" Color="#000000"/>
-    
-    <!-- Background Colors -->
     <SolidColorBrush x:Key="MRT.Background.Dark" Color="#1A1A1A"/>
     <SolidColorBrush x:Key="MRT.Background.Gray" Color="#2F2F2F"/>
     <SolidColorBrush x:Key="MRT.Background.Charcoal" Color="#2F2F2F"/>
-    
-    <!-- Accent Colors -->
     <SolidColorBrush x:Key="MRT.DeepTeal" Color="#006666"/>
     <SolidColorBrush x:Key="MRT.BrightOrange" Color="#FF9933"/>
     <SolidColorBrush x:Key="MRT.SilverGray" Color="#C0C0C0"/>
-    
-    <!-- Status Colors -->
-    <SolidColorBrush x:Key="MRT.Status.Connected" Color="#00FF00"/>
-    <SolidColorBrush x:Key="MRT.Status.Connecting" Color="#FFFF00"/>
-    <SolidColorBrush x:Key="MRT.Status.Disconnected" Color="#FF3333"/>
-    
-    <!-- ==================== SIMPLIFIED ALIASES FOR EASE OF USE ==================== -->
-    
-    <!-- Background Aliases -->
-    <SolidColorBrush x:Key="DarkBackground" Color="#1A1A1A"/>
-    <SolidColorBrush x:Key="DarkSurface" Color="#2F2F2F"/>
-    <SolidColorBrush x:Key="DarkBorder" Color="#3F3F3F"/>
-    
-    <!-- Primary Color Aliases -->
-    <SolidColorBrush x:Key="TealPrimary" Color="#008080"/>
-    <SolidColorBrush x:Key="OrangePrimary" Color="#FF8000"/>
-    
-    <!-- Text Color Aliases -->
-    <SolidColorBrush x:Key="LightText" Color="#E0E0E0"/>
-    <SolidColorBrush x:Key="MutedText" Color="#888888"/>
-    
+    <SolidColorBrush x:Key="MRT.Status.Connected" Color="#00BCD4"/>
+    <SolidColorBrush x:Key="MRT.Status.Connecting" Color="#FF9800"/>
+    <SolidColorBrush x:Key="MRT.Status.Disconnected" Color="#888888"/>
+
     <!-- ==================== BUTTON STYLES ==================== -->
     
     <!-- Navigation Button Style -->

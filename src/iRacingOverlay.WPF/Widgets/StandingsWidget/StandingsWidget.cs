@@ -10,6 +10,7 @@ using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Core;
 using iRacingOverlay.WPF.Models;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.Widgets.StandingsWidget;
 
@@ -479,27 +480,27 @@ public class StandingsWidget : WidgetBase
             Canvas.SetTop(row.ClassStripe, y);
 
             // Position
-            row.Pos.Text = e.OverallPosition.ToString();
+            UiUpdate.SetText(row.Pos, e.OverallPosition.ToString());
             row.Pos.Foreground = e.IsPlayer ? BRUSH_TEAL : BRUSH_TEXT;
             row.Pos.FontWeight = e.IsPlayer ? FontWeights.Bold : FontWeights.Normal;
             Canvas.SetLeft(row.Pos, _layout.PosX);
             Canvas.SetTop(row.Pos, y);
 
             // Class position
-            row.ClassPos.Text = ShowClassPosition ? e.ClassPosition.ToString() : "";
+            UiUpdate.SetText(row.ClassPos, ShowClassPosition ? e.ClassPosition.ToString() : "");
             row.ClassPos.Visibility = ShowClassPosition ? Visibility.Visible : Visibility.Collapsed;
             Canvas.SetLeft(row.ClassPos, _layout.ClassPosX);
             Canvas.SetTop(row.ClassPos, y);
 
             // Car number
-            row.Num.Text = ShowCarNumber ? $"#{e.CarNumber}" : "";
+            UiUpdate.SetText(row.Num, ShowCarNumber ? $"#{e.CarNumber}" : "");
             row.Num.Foreground = e.IsPlayer ? BRUSH_TEAL : BRUSH_MUTED;
             row.Num.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
             Canvas.SetLeft(row.Num, _layout.NumX);
             Canvas.SetTop(row.Num, y);
 
             // Driver name — yellow when in pit, teal for player, white otherwise
-            row.Name.Text = FormatName(e.DriverName);
+            UiUpdate.SetText(row.Name, FormatName(e.DriverName));
             if (e.IsPlayer)
                 row.Name.Foreground = BRUSH_TEAL;
             else if (e.IsOnPitRoad)
@@ -515,7 +516,7 @@ public class StandingsWidget : WidgetBase
             if (ShowPositionChange)
             {
                 int delta = e.PositionChange;
-                row.PosDelta.Text = delta > 0 ? $"▲{delta}" : delta < 0 ? $"▼{Math.Abs(delta)}" : "–";
+                UiUpdate.SetText(row.PosDelta, delta > 0 ? $"▲{delta}" : delta < 0 ? $"▼{Math.Abs(delta)}" : "–");
                 row.PosDelta.Foreground = delta > 0 ? BRUSH_GREEN : delta < 0 ? BRUSH_RED : BRUSH_MUTED;
             }
             Canvas.SetLeft(row.PosDelta, _layout.PosDeltaX);
@@ -526,15 +527,15 @@ public class StandingsWidget : WidgetBase
             if (ShowInterval)
             {
                 if (e.OverallPosition == 1)
-                    row.Int.Text = "—";
+                    UiUpdate.SetText(row.Int, "—");
                 else if (e.LapDelta < 0)
                 {
-                    row.Int.Text = $"+{Math.Abs(e.LapDelta)}L";
+                    UiUpdate.SetText(row.Int, $"+{Math.Abs(e.LapDelta)}L");
                     row.Int.Foreground = BRUSH_RED;
                 }
                 else
                 {
-                    row.Int.Text = e.Interval > 0 ? $"+{e.Interval.ToString("F1", CultureInfo.InvariantCulture)}" : "—";
+                    UiUpdate.SetText(row.Int, e.Interval > 0 ? $"+{e.Interval.ToString("F1", CultureInfo.InvariantCulture)}" : "—");
                     row.Int.Foreground = BRUSH_MUTED;
                 }
             }
@@ -547,17 +548,17 @@ public class StandingsWidget : WidgetBase
             {
                 if (e.OverallPosition == 1)
                 {
-                    row.Gap.Text = "—";
+                    UiUpdate.SetText(row.Gap, "—");
                     row.Gap.Foreground = BRUSH_MUTED;
                 }
                 else if (e.LapDelta < 0)
                 {
-                    row.Gap.Text = $"+{Math.Abs(e.LapDelta)}L";
+                    UiUpdate.SetText(row.Gap, $"+{Math.Abs(e.LapDelta)}L");
                     row.Gap.Foreground = BRUSH_RED;
                 }
                 else
                 {
-                    row.Gap.Text = e.GapToLeader > 0 ? $"+{e.GapToLeader.ToString("F1", CultureInfo.InvariantCulture)}" : "—";
+                    UiUpdate.SetText(row.Gap, e.GapToLeader > 0 ? $"+{e.GapToLeader.ToString("F1", CultureInfo.InvariantCulture)}" : "—");
                     row.Gap.Foreground = BRUSH_MUTED;
                 }
             }
@@ -566,13 +567,13 @@ public class StandingsWidget : WidgetBase
 
             // Last lap
             row.Last.Visibility = ShowLastLap ? Visibility.Visible : Visibility.Collapsed;
-            row.Last.Text = ShowLastLap && e.LastLapTime > 0 ? FormatLapTime(e.LastLapTime) : "";
+            UiUpdate.SetText(row.Last, ShowLastLap && e.LastLapTime > 0 ? FormatLapTime(e.LastLapTime) : "");
             Canvas.SetLeft(row.Last, _layout.LastX);
             Canvas.SetTop(row.Last, y);
 
             // Best lap
             row.Best.Visibility = ShowBestLap ? Visibility.Visible : Visibility.Collapsed;
-            row.Best.Text = ShowBestLap && e.BestLapTime > 0 ? FormatLapTime(e.BestLapTime) : "";
+            UiUpdate.SetText(row.Best, ShowBestLap && e.BestLapTime > 0 ? FormatLapTime(e.BestLapTime) : "");
             Canvas.SetLeft(row.Best, _layout.BestX);
             Canvas.SetTop(row.Best, y);
 
@@ -581,11 +582,11 @@ public class StandingsWidget : WidgetBase
             row.Lap.Visibility = ShowCurrentLap ? Visibility.Visible : Visibility.Collapsed;
             if (ShowCurrentLap)
             {
-                row.Lap.Text = e.CurrentLap.ToString();
+                UiUpdate.SetText(row.Lap, e.CurrentLap.ToString());
             }
             else
             {
-                row.Lap.Text = "";
+                UiUpdate.SetText(row.Lap, "");
             }
             row.Lap.TextAlignment = TextAlignment.Right;
             row.Lap.Width = COL_W_LAP - 4; // fit within column, slight padding
@@ -594,13 +595,13 @@ public class StandingsWidget : WidgetBase
 
             // Pit stops
             row.Pits.Visibility = ShowPitStopCount ? Visibility.Visible : Visibility.Collapsed;
-            row.Pits.Text = ShowPitStopCount && e.PitStopCount > 0 ? $"{e.PitStopCount}p" : "";
+            UiUpdate.SetText(row.Pits, ShowPitStopCount && e.PitStopCount > 0 ? $"{e.PitStopCount}p" : "");
             Canvas.SetLeft(row.Pits, _layout.PitsX);
             Canvas.SetTop(row.Pits, y);
 
             // iRating
             row.IR.Visibility = ShowIRating ? Visibility.Visible : Visibility.Collapsed;
-            row.IR.Text = ShowIRating && e.IRating > 0 ? FormatIRating(e.IRating) : "";
+            UiUpdate.SetText(row.IR, ShowIRating && e.IRating > 0 ? FormatIRating(e.IRating) : "");
             Canvas.SetLeft(row.IR, _layout.IRX);
             Canvas.SetTop(row.IR, y);
 
@@ -608,7 +609,7 @@ public class StandingsWidget : WidgetBase
             row.Lic.Visibility = ShowLicense ? Visibility.Visible : Visibility.Collapsed;
             if (ShowLicense)
             {
-                row.Lic.Text = e.LicenseClass;
+                UiUpdate.SetText(row.Lic, e.LicenseClass);
                 row.Lic.Foreground = GetLicenseBrush(e.LicenseClass);
             }
             Canvas.SetLeft(row.Lic, _layout.LicX);
@@ -616,13 +617,13 @@ public class StandingsWidget : WidgetBase
 
             // Car model
             row.Car.Visibility = ShowCarModel ? Visibility.Visible : Visibility.Collapsed;
-            row.Car.Text = ShowCarModel ? TruncateModel(e.CarModel) : "";
+            UiUpdate.SetText(row.Car, ShowCarModel ? TruncateModel(e.CarModel) : "");
             Canvas.SetLeft(row.Car, _layout.CarX);
             Canvas.SetTop(row.Car, y);
 
             // Nationality
             row.Nat.Visibility = ShowNationality ? Visibility.Visible : Visibility.Collapsed;
-            row.Nat.Text = ShowNationality ? e.CountryCode : "";
+            UiUpdate.SetText(row.Nat, ShowNationality ? e.CountryCode : "");
             Canvas.SetLeft(row.Nat, _layout.NatX);
             Canvas.SetTop(row.Nat, y);
 

@@ -901,11 +901,11 @@ public class RelativeWidget : WidgetBase
                 int hrs = (int)(timeRemain / 3600);
                 int mins = (int)((timeRemain % 3600) / 60);
                 int secs = (int)(timeRemain % 60);
-                _infoTimeRemain.Text = hrs > 0 ? $"{hrs}:{mins:D2}:{secs:D2}" : $"{mins}:{secs:D2}";
+                UiUpdate.SetText(_infoTimeRemain, hrs > 0 ? $"{hrs}:{mins:D2}:{secs:D2}" : $"{mins}:{secs:D2}");
             }
             else
             {
-                _infoTimeRemain.Text = "";
+                UiUpdate.SetText(_infoTimeRemain, "");
             }
             _infoTimeRemain.Width = barW;
             Canvas.SetLeft(_infoTimeRemain, 4);
@@ -923,7 +923,7 @@ public class RelativeWidget : WidgetBase
             if (totalLaps > 0)
             {
                 // Lap-based race: X/Y is current/total
-                _infoEstLaps.Text = $"{currentLap}/{totalLaps}";
+                UiUpdate.SetText(_infoEstLaps, $"{currentLap}/{totalLaps}");
             }
             else if (estimatedTotal > 0)
             {
@@ -931,17 +931,17 @@ public class RelativeWidget : WidgetBase
                 double fractionalTotal = estLapsRemain > 0
                     ? currentLap + estLapsRemain
                     : (double)estimatedTotal;
-                _infoEstLaps.Text = $"{currentLap}/~{fractionalTotal:F1}";
+                UiUpdate.SetText(_infoEstLaps, $"{currentLap}/~{fractionalTotal:F1}");
             }
             else if (estLapsRemain > 0)
             {
                 // Fallback: SDK estimated laps remaining
                 double estTotal = currentLap + estLapsRemain;
-                _infoEstLaps.Text = $"{currentLap}/~{estTotal:F1}";
+                UiUpdate.SetText(_infoEstLaps, $"{currentLap}/~{estTotal:F1}");
             }
             else
             {
-                _infoEstLaps.Text = currentLap > 0 ? $"Lap {currentLap}" : "";
+                UiUpdate.SetText(_infoEstLaps, currentLap > 0 ? $"Lap {currentLap}" : "");
             }
             Canvas.SetLeft(_infoEstLaps, 0);
             Canvas.SetTop(_infoEstLaps, infoY);
@@ -951,7 +951,7 @@ public class RelativeWidget : WidgetBase
             // Player incident count (RIGHT aligned — format: Inc: X/17x)
             int playerInc = data.PlayerCarMyIncidentCount;
             int incLimit = 17; // iRacing standard incident limit
-            _infoIncidents.Text = $"Inc: {playerInc}/{incLimit}x";
+            UiUpdate.SetText(_infoIncidents, $"Inc: {playerInc}/{incLimit}x");
             _infoIncidents.Foreground = playerInc >= incLimit - 4 ? BRUSH_ORANGE
                 : playerInc >= incLimit - 8 ? BRUSH_PIT : BRUSH_TEXT;
             _infoIncidents.Width = barW;
@@ -1130,7 +1130,7 @@ public class RelativeWidget : WidgetBase
 
         // Position
         int pos = ShowClassPosition ? entry.ClassPosition : entry.OverallPosition;
-        row.Position.Text = pos > 0 ? pos.ToString() : "-";
+        UiUpdate.SetText(row.Position, pos > 0 ? pos.ToString() : "-");
         row.Position.Foreground = entry.IsPlayer ? BRUSH_TEAL : textBrush;
 
         // Position delta (▲3 gained / ▼2 lost)
@@ -1145,7 +1145,7 @@ public class RelativeWidget : WidgetBase
                 row.PositionDelta.Foreground = entry.PositionDelta > 0 ? BRUSH_GREEN : BRUSH_RED;
             }
             else
-                row.PositionDelta.Text = "";
+                UiUpdate.SetText(row.PositionDelta, "");
         }
         else
             row.PositionDelta.Visibility = Visibility.Collapsed;
@@ -1153,20 +1153,20 @@ public class RelativeWidget : WidgetBase
         // Car number — Safety Car shows "SC" with orange highlight
         if (entry.IsSafetyCar)
         {
-            row.CarNumber.Text = "SC";
+            UiUpdate.SetText(row.CarNumber, "SC");
             row.CarNumber.Foreground = BRUSH_ORANGE;
             row.CarNumber.FontWeight = FontWeights.Bold;
         }
         else
         {
-            row.CarNumber.Text = !string.IsNullOrEmpty(entry.CarNumber) ? $"#{entry.CarNumber}" : "-";
+            UiUpdate.SetText(row.CarNumber, !string.IsNullOrEmpty(entry.CarNumber) ? $"#{entry.CarNumber}" : "-");
             row.CarNumber.Foreground = mutedBrush;
             row.CarNumber.FontWeight = FontWeights.Normal;
         }
         row.CarNumber.Visibility = ShowCarNumber ? Visibility.Visible : Visibility.Collapsed;
 
         // Car model abbreviation
-        row.CarModel.Text = !string.IsNullOrEmpty(entry.CarModel) ? entry.CarModel : "";
+        UiUpdate.SetText(row.CarModel, !string.IsNullOrEmpty(entry.CarModel) ? entry.CarModel : "");
         row.CarModel.Visibility = ShowCarModel ? Visibility.Visible : Visibility.Collapsed;
 
         // Nationality (2-letter country code)
@@ -1174,7 +1174,7 @@ public class RelativeWidget : WidgetBase
         {
             Canvas.SetLeft(row.Nationality, _layout.NatX);
             row.Nationality.Visibility = Visibility.Visible;
-            row.Nationality.Text = !string.IsNullOrEmpty(entry.CountryCode) ? entry.CountryCode : "";
+            UiUpdate.SetText(row.Nationality, !string.IsNullOrEmpty(entry.CountryCode) ? entry.CountryCode : "");
         }
         else
             row.Nationality.Visibility = Visibility.Collapsed;
@@ -1182,7 +1182,7 @@ public class RelativeWidget : WidgetBase
         // Name — Safety Car shows "Safety Car" with orange accent
         if (entry.IsSafetyCar)
         {
-            row.Name.Text = "Safety Car";
+            UiUpdate.SetText(row.Name, "Safety Car");
             row.Name.Foreground = BRUSH_ORANGE;
             row.Name.FontWeight = FontWeights.Bold;
         }
@@ -1191,7 +1191,7 @@ public class RelativeWidget : WidgetBase
             string name = !string.IsNullOrEmpty(entry.DriverName)
                 ? FormatDriverName(entry.DriverName)
                 : "---";
-            row.Name.Text = name;
+            UiUpdate.SetText(row.Name, name);
             row.Name.Foreground = textBrush;
             row.Name.FontWeight = entry.IsPlayer ? FontWeights.Bold : FontWeights.Normal;
         }
@@ -1205,7 +1205,7 @@ public class RelativeWidget : WidgetBase
             row.LicenseBadge.Background = licBrush;
             row.LicenseBadge.Visibility = Visibility.Visible;
             Canvas.SetLeft(row.LicenseBadge, _layout.InfoX);
-            row.LicenseText.Text = licLetter;
+            UiUpdate.SetText(row.LicenseText, licLetter);
             row.LicenseText.Foreground = GetLicenseTextBrush(entry.LicenseClass);
             row.LicenseText.Visibility = Visibility.Visible;
             Canvas.SetLeft(row.LicenseText, _layout.InfoX);
@@ -1226,7 +1226,7 @@ public class RelativeWidget : WidgetBase
             }
             else
                 irText = "-";
-            row.DriverInfo.Text = irText;
+            UiUpdate.SetText(row.DriverInfo, irText);
             row.DriverInfo.Foreground = entry.IRating > 0 ? licTextBrush : BRUSH_MUTED;
             row.DriverInfo.FontSize = UseFullIRating ? 10 : FONT_DATA;
             row.DriverInfo.Visibility = Visibility.Visible;
@@ -1249,7 +1249,7 @@ public class RelativeWidget : WidgetBase
         {
             Canvas.SetLeft(row.PitStops, _layout.PitsX);
             row.PitStops.Visibility = Visibility.Visible;
-            row.PitStops.Text = entry.PitStopCount > 0 ? $"{entry.PitStopCount}p" : "";
+            UiUpdate.SetText(row.PitStops, entry.PitStopCount > 0 ? $"{entry.PitStopCount}p" : "");
             row.PitStops.Foreground = entry.PitStopCount >= 2 ? BRUSH_ORANGE : BRUSH_MUTED;
         }
         else
@@ -1261,7 +1261,7 @@ public class RelativeWidget : WidgetBase
             row.Interval.Visibility = Visibility.Visible;
             if (entry.IsPlayer || entry.GapToCarAhead <= 0f)
             {
-                row.Interval.Text = "---";
+                UiUpdate.SetText(row.Interval, "---");
                 row.Interval.Foreground = BRUSH_MUTED;
             }
             else
@@ -1281,7 +1281,7 @@ public class RelativeWidget : WidgetBase
         if (ShowLastLap)
         {
             row.LastLap.Visibility = Visibility.Visible;
-            row.LastLap.Text = FormatLapTime(entry.LastLapTime);
+            UiUpdate.SetText(row.LastLap, FormatLapTime(entry.LastLapTime));
             if (entry.IsSessionBest)
                 row.LastLap.Foreground = BRUSH_PURPLE;
             else if (entry.IsPersonalBest)
@@ -1301,11 +1301,11 @@ public class RelativeWidget : WidgetBase
             row.ClosingArrow.Visibility = Visibility.Visible;
             if (!entry.IsPlayer && Math.Abs(entry.ClosingRate) > 0.05f)
             {
-                row.ClosingArrow.Text = entry.ClosingRate > 0 ? "▲" : "▼";
+                UiUpdate.SetText(row.ClosingArrow, entry.ClosingRate > 0 ? "▲" : "▼");
                 row.ClosingArrow.Foreground = entry.ClosingRate > 0 ? BRUSH_GREEN : BRUSH_RED;
             }
             else
-                row.ClosingArrow.Text = "";
+                UiUpdate.SetText(row.ClosingArrow, "");
         }
         else
             row.ClosingArrow.Visibility = Visibility.Collapsed;
@@ -1313,13 +1313,13 @@ public class RelativeWidget : WidgetBase
         // REL column (always visible) — relative interval to player
         if (entry.IsPlayer)
         {
-            row.Gap.Text = "---";
+            UiUpdate.SetText(row.Gap, "---");
             row.Gap.Foreground = BRUSH_MUTED;
             row.Gap.FontWeight = FontWeights.Normal;
         }
         else
         {
-            row.Gap.Text = FormatInterval(entry.IntervalToPlayer, entry.LapDelta);
+            UiUpdate.SetText(row.Gap, FormatInterval(entry.IntervalToPlayer, entry.LapDelta));
             // Sector delta: green=closing, red=opening (overrides default position colors)
             if (ShowSectorDelta)
                 row.Gap.Foreground = entry.IsGapClosing ? BRUSH_GREEN : BRUSH_RED;
@@ -1417,7 +1417,7 @@ public class RelativeWidget : WidgetBase
             showStatusBg = true;
         }
 
-        row.Status.Text = statusText;
+        UiUpdate.SetText(row.Status, statusText);
         row.Status.Foreground = statusBrush;
         row.StatusBg.Background = entry.HasBlackFlag && !entry.IsPlayer && showStatusBg
             ? BRUSH_STATUS_BG_BLACK : BRUSH_STATUS_BG_DEFAULT;

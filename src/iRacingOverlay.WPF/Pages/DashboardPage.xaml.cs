@@ -13,7 +13,7 @@ using iRacingOverlay.WPF.Services;
 
 namespace iRacingOverlay.WPF.Pages;
 
-public partial class DashboardPage : UserControl
+public partial class DashboardPage : UserControl, IDisposable
 {
     private readonly WidgetManager _widgetManager;
     private readonly ITelemetryService _telemetryService;
@@ -39,7 +39,23 @@ public partial class DashboardPage : UserControl
 
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _refreshTimer.Tick += (_, _) => RefreshDashboard();
-        _refreshTimer.Start();
+
+        // Only tick while the page is actually on screen. It used to run twice a
+        // second for the life of the app — rebuilding a list and re-templating the
+        // whole ItemsControl even while another page was showing or the window was
+        // minimised to tray, which is exactly when the user is driving.
+        IsVisibleChanged += (_, e) =>
+        {
+            if ((bool)e.NewValue)
+            {
+                RefreshDashboard();
+                _refreshTimer.Start();
+            }
+            else
+            {
+                _refreshTimer.Stop();
+            }
+        };
 
         RefreshDashboard();
         UpdateHotkeysDisplay();
@@ -72,22 +88,22 @@ public partial class DashboardPage : UserControl
         UpdateSessionDisplay();
 
         // Widget list
+        // Single source of truth for which widgets this build ships. This used to be
+        // a separate #if DEBUG list, in parallel with WidgetManager.SupportedWidgetTypes
+        // and hardcoded XAML visibility on the Widgets page — three lists that drifted.
         var items = new List<WidgetItem>();
-#if DEBUG
-        var widgetTypes = Enum.GetValues<WidgetType>();
-#else
-        // Release build: only show MRT One and Proximity Feed (Relative hidden for now)
-        var widgetTypes = new[] { WidgetType.MRTOne, WidgetType.ProximityFeed };
-#endif
-        foreach (WidgetType wt in widgetTypes)
+        foreach (WidgetType wt in Enum.GetValues<WidgetType>())
         {
-            bool active = _widgetManager.HasWidgetType(wt);
+            if (!WidgetManager.SupportedWidgetTypes.Contains(wt)) continue;
+
+            bool exists = _widgetManager.HasWidgetType(wt);
+            bool visible = exists && _widgetManager.GetWidgetsByType(wt).Any(w => w.UserWantsVisible);
             items.Add(new WidgetItem
             {
                 Icon = GetWidgetIcon(wt),
                 Name = wt.GetDisplayName(),
-                Status = active ? "Active" : "Hidden",
-                IsActive = active,
+                Status = visible ? "Shown" : exists ? "Hidden" : "Not added",
+                IsActive = visible,
                 Type = wt,
             });
         }
@@ -120,7 +136,8 @@ public partial class DashboardPage : UserControl
 
     private void OnStatusChanged(object? sender, ConnectionStatusEventArgs e)
     {
-        Dispatcher.Invoke(() => UpdateConnectionDisplay(e.Status));
+        // Fires on the SDK thread — must not block it.
+        Dispatcher.BeginInvoke(() => UpdateConnectionDisplay(e.Status));
     }
 
     private void UpdateConnectionDisplay(ConnectionStatus status)
@@ -132,22 +149,24 @@ public partial class DashboardPage : UserControl
             _ => "Disconnected"
         };
 
-        var color = status switch
+        // Same theme tokens the status bar uses, rather than a second hardcoded copy.
+        var key = status switch
         {
-            ConnectionStatus.Connected => Color.FromRgb(0, 188, 212),
-            ConnectionStatus.Connecting => Color.FromRgb(255, 152, 0),
-            _ => Color.FromRgb(136, 136, 136)
+            ConnectionStatus.Connected => "StatusConnected",
+            ConnectionStatus.Connecting => "StatusConnecting",
+            _ => "StatusDisconnected"
         };
+        var brush = FindResource(key) as Brush ?? Brushes.Gray;
 
-        ConnectionDot.Fill = new SolidColorBrush(color);
-        TxtConnectionStatus.Foreground = new SolidColorBrush(color);
+        ConnectionDot.Fill = brush;
+        TxtConnectionStatus.Foreground = brush;
     }
 
     // ── Session ─────────────────────────────────────────────────────
 
     private void OnSessionChanged(object? sender, SessionCategory category)
     {
-        Dispatcher.Invoke(UpdateSessionDisplay);
+        Dispatcher.BeginInvoke(UpdateSessionDisplay);
     }
 
     private void UpdateSessionDisplay()
@@ -171,16 +190,24 @@ public partial class DashboardPage : UserControl
         if (sender is not CheckBox chk) return;
         if (chk.DataContext is not WidgetItem item) return;
 
-        if (item.IsActive && !_widgetManager.HasWidgetType(item.Type))
+        if (item.IsActive)
         {
-            _widgetManager.CreateWidget(item.Type);
+            if (!_widgetManager.HasWidgetType(item.Type))
+                _widgetManager.CreateWidget(item.Type);
+            else
+                foreach (var w in _widgetManager.GetWidgetsByType(item.Type))
+                    w.SetUserVisibility(true);
         }
-        else if (!item.IsActive && _widgetManager.HasWidgetType(item.Type))
+        else
         {
-            var widgets = _widgetManager.GetWidgetsByType(item.Type).ToList();
-            foreach (var w in widgets)
-                _widgetManager.RemoveWidget(w.WidgetId);
+            // Hide, don't remove. Removing rewrote layout.json without this widget,
+            // discarding its position, size and settings — the same data-loss the
+            // Widgets page's Show/Hide button had.
+            foreach (var w in _widgetManager.GetWidgetsByType(item.Type))
+                w.SetUserVisibility(false);
         }
+
+        _widgetManager.SaveCurrentLayout();
     }
 
     private void BtnLockAll_Click(object sender, RoutedEventArgs e)

@@ -930,62 +930,60 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     /// </summary>
     private void PopulateChangedFields(Models.TelemetryData data)
     {
-        // Clear previous dirty flags
-        data.ClearChangedFields();
-        
-        // Compare high-frequency fields (tolerance for floating point comparison)
+        // Tolerance for floating point comparison
         const float FLOAT_TOLERANCE = 0.001f;
-        
+
+        var changes = Models.TelemetryChanges.None;
+
         if (Math.Abs(data.Speed - _prevSpeed) > FLOAT_TOLERANCE)
         {
-            data.MarkFieldChanged(nameof(data.Speed));
+            changes |= Models.TelemetryChanges.Speed;
             _prevSpeed = data.Speed;
         }
-        
+
         if (Math.Abs(data.RPM - _prevRPM) > FLOAT_TOLERANCE)
         {
-            data.MarkFieldChanged(nameof(data.RPM));
+            changes |= Models.TelemetryChanges.RPM;
             _prevRPM = data.RPM;
         }
-        
+
         if (data.Gear != _prevGear)
         {
-            data.MarkFieldChanged(nameof(data.Gear));
+            changes |= Models.TelemetryChanges.Gear;
             _prevGear = data.Gear;
         }
-        
+
         if (Math.Abs(data.Throttle - _prevThrottle) > FLOAT_TOLERANCE)
         {
-            data.MarkFieldChanged(nameof(data.Throttle));
+            changes |= Models.TelemetryChanges.Throttle;
             _prevThrottle = data.Throttle;
         }
-        
+
         if (Math.Abs(data.Brake - _prevBrake) > FLOAT_TOLERANCE)
         {
-            data.MarkFieldChanged(nameof(data.Brake));
+            changes |= Models.TelemetryChanges.Brake;
             _prevBrake = data.Brake;
         }
-        
+
         if (Math.Abs(data.FuelLevel - _prevFuelLevel) > FLOAT_TOLERANCE)
         {
-            data.MarkFieldChanged(nameof(data.FuelLevel));
+            changes |= Models.TelemetryChanges.FuelLevel;
             _prevFuelLevel = data.FuelLevel;
         }
-        
+
         if (data.Lap != _prevLap)
         {
-            data.MarkFieldChanged(nameof(data.Lap));
+            changes |= Models.TelemetryChanges.Lap;
             _prevLap = data.Lap;
         }
-        
+
         if (Math.Abs(data.LapDistPct - _prevLapDistPct) > FLOAT_TOLERANCE)
         {
-            data.MarkFieldChanged(nameof(data.LapDistPct));
+            changes |= Models.TelemetryChanges.LapDistPct;
             _prevLapDistPct = data.LapDistPct;
         }
-        
-        // Add more fields as needed by widgets (tire temps, position, etc.)
-        // Only track fields that are actively checked by widgets to minimize overhead
+
+        data.ChangedFields = changes;
     }
 
     // ── Thread-safe dictionary copy helpers ──────────────────────────────

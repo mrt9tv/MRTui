@@ -109,6 +109,7 @@ public partial class MainWindow : Window
         // Wire settings change events
         _settingsPage.SettingsChanged += OnSettingsChanged;
         _settingsPage.ResetLayoutRequested += OnResetLayout;
+        _settingsPage.UndoResetRequested += OnUndoResetLayout;
 
         // Initialize tray icon
         _trayIcon.Initialize();
@@ -336,14 +337,17 @@ public partial class MainWindow : Window
             ConnectionStatus.Disconnected => "Disconnected",
             _ => "Unknown"
         };
-        var brush = new SolidColorBrush(status switch
+        // From the theme, not hardcoded here — the same three colours were
+        // duplicated in DashboardPage and disagreed with the theme's own tokens.
+        var key = status switch
         {
-            ConnectionStatus.Connected => Color.FromRgb(0, 188, 212),
-            ConnectionStatus.Connecting => Color.FromRgb(255, 152, 0),
-            _ => Color.FromRgb(136, 136, 136)
-        });
+            ConnectionStatus.Connected => "StatusConnected",
+            ConnectionStatus.Connecting => "StatusConnecting",
+            _ => "StatusDisconnected"
+        };
+
         ConnectionStatusText.Text = text;
-        ConnectionStatusText.Foreground = brush;
+        ConnectionStatusText.Foreground = FindResource(key) as Brush ?? Brushes.Gray;
     }
 
     private void UpdateStatusBar()
@@ -552,9 +556,25 @@ public partial class MainWindow : Window
     private void OnResetLayout()
     {
         _widgetManager.RemoveAllWidgets();
+
+        // Recreate the same default set startup would create. Reset previously
+        // made only MRT One, so a reset left the user with fewer widgets than a
+        // fresh install.
         _widgetManager.CreateWidget(Models.WidgetType.MRTOne);
+        _widgetManager.CreateWidget(Models.WidgetType.ProximityFeed);
+
         _widgetManager.SaveCurrentLayout();
         _widgetsPage?.SyncPanelToActiveWidget();
+    }
+
+    /// <summary>Reload the layout the user restored after undoing a reset.</summary>
+    private void OnUndoResetLayout()
+    {
+        if (_widgetManager.LoadSavedLayout())
+        {
+            _widgetsPage?.SyncPanelToActiveWidget();
+            _logger.LogInformation("Layout restored after reset");
+        }
     }
 
     /// <summary>

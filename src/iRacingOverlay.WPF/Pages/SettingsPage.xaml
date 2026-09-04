@@ -65,29 +65,15 @@
                               Style="{StaticResource MRT.ToggleButton}"
                               Margin="0,0,0,8"
                               Checked="AutoHideInPits_Changed" Unchecked="AutoHideInPits_Changed"/>
+                    <!--
+                        Populated at runtime from WidgetManager.SupportedWidgetTypes.
+                        This list was hardcoded and offered Fuel Calculator, Standings and
+                        Relative — three widgets a Release user cannot even enable.
+                    -->
                     <StackPanel x:Name="PanelAutoHideWidgets" Margin="12,0,0,0">
                         <TextBlock Text="Widgets to hide:" FontSize="10"
                                    Foreground="{StaticResource MutedText}" Margin="0,0,0,4"/>
-                        <CheckBox x:Name="ChkAutoHideMRTOne" Content="MRT One"
-                                  Style="{StaticResource MRT.ToggleButton}"
-                                  Margin="0,0,10,4"
-                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
-                        <CheckBox x:Name="ChkAutoHideProxFeed" Content="Proximity Feed"
-                                  Style="{StaticResource MRT.ToggleButton}"
-                                  Margin="0,0,10,4"
-                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
-                        <CheckBox x:Name="ChkAutoHideFuelCalc" Content="Fuel Calculator"
-                                  Style="{StaticResource MRT.ToggleButton}"
-                                  Margin="0,0,10,4"
-                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
-                        <CheckBox x:Name="ChkAutoHideStandings" Content="Standings"
-                                  Style="{StaticResource MRT.ToggleButton}"
-                                  Margin="0,0,10,4"
-                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
-                        <CheckBox x:Name="ChkAutoHideRelative" Content="Relative"
-                                  Style="{StaticResource MRT.ToggleButton}"
-                                  Margin="0,0,10,4"
-                                  Checked="AutoHideWidget_Changed" Unchecked="AutoHideWidget_Changed"/>
+                        <StackPanel x:Name="AutoHideWidgetList"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -103,24 +89,38 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Lock Widgets:" FontSize="11"
                                    Foreground="{StaticResource LightText}" VerticalAlignment="Center"/>
                         <TextBlock x:Name="TxtHotkeyLock" Grid.Column="1" Text="Ctrl+L"
                                    FontSize="12" FontWeight="SemiBold"
                                    Foreground="{StaticResource TealPrimary}" VerticalAlignment="Center"/>
+                        <Button x:Name="BtnRebindLock" Grid.Column="2" Content="Change"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnRebindLock_Click"
+                                Width="72" Height="24" FontSize="10" Padding="4,1"/>
                     </Grid>
-                    <Grid>
+                    <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Show/Hide:" FontSize="11"
                                    Foreground="{StaticResource LightText}" VerticalAlignment="Center"/>
                         <TextBlock x:Name="TxtHotkeyVisibility" Grid.Column="1" Text="Ctrl+H"
                                    FontSize="12" FontWeight="SemiBold"
                                    Foreground="{StaticResource TealPrimary}" VerticalAlignment="Center"/>
+                        <Button x:Name="BtnRebindVisibility" Grid.Column="2" Content="Change"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnRebindVisibility_Click"
+                                Width="72" Height="24" FontSize="10" Padding="4,1"/>
                     </Grid>
+
+                    <TextBlock x:Name="TxtHotkeyStatus" Text=""
+                               FontSize="10" TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedText}"/>
                 </StackPanel>
             </Border>
             
@@ -141,10 +141,18 @@
                     <TextBlock Text="LAYOUT" Style="{StaticResource MRT.Text.Label}" Margin="0,0,0,6"/>
                     <TextBlock Text="Reset all widget positions and sizes to defaults."
                                FontSize="10" Foreground="{StaticResource MutedText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
-                    <Button x:Name="BtnResetLayout" Content="Reset Widget Layout"
-                            Style="{StaticResource MRT.Button.Secondary}"
-                            Click="BtnResetLayout_Click"
-                            Height="28" FontSize="11" Padding="10,2" HorizontalAlignment="Left"/>
+                    <WrapPanel>
+                        <Button x:Name="BtnResetLayout" Content="Reset Widget Layout"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnResetLayout_Click"
+                                Height="28" FontSize="11" Padding="10,2" Margin="0,0,6,0"/>
+                        <!-- Shown only after a reset, so the action is recoverable. -->
+                        <Button x:Name="BtnUndoReset" Content="Undo Reset"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnUndoReset_Click"
+                                Visibility="Collapsed"
+                                Height="28" FontSize="11" Padding="10,2"/>
+                    </WrapPanel>
                 </StackPanel>
             </Border>
 
