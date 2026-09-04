@@ -181,13 +181,37 @@
                 </StackPanel>
             </Border>
             
-            <!-- PERFORMANCE FOOTER -->
-            <Border Background="#0D0D0D" CornerRadius="6" Padding="10,6" Margin="0,0,0,8">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <TextBlock Text="CPU: " FontSize="10" Foreground="{StaticResource MutedText}"/>
-                    <TextBlock x:Name="TxtCpuUsage" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="0,0,14,0"/>
-                    <TextBlock Text="MEM: " FontSize="10" Foreground="{StaticResource MutedText}"/>
-                    <TextBlock x:Name="TxtMemUsage" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}"/>
+            <!--
+                DIAGNOSTICS FOOTER
+
+                CPU and memory alone do not say whether the overlay is keeping up.
+                UI frame time and dropped frames do: if frames are being dropped the
+                UI thread is behind the 60 Hz feed, which is what a user experiences
+                as the overlay freezing. These are the numbers to ask for in a bug
+                report, and the log path is where the rest of the evidence lives.
+            -->
+            <Border Background="#0D0D0D" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
+                <StackPanel>
+                    <WrapPanel HorizontalAlignment="Center">
+                        <TextBlock Text="CPU " FontSize="10" Foreground="{StaticResource MutedText}"/>
+                        <TextBlock x:Name="TxtCpuUsage" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="0,0,14,0"/>
+                        <TextBlock Text="MEM " FontSize="10" Foreground="{StaticResource MutedText}"/>
+                        <TextBlock x:Name="TxtMemUsage" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="0,0,14,0"/>
+                        <TextBlock Text="UI FRAME " FontSize="10" Foreground="{StaticResource MutedText}"
+                                   ToolTip="Time the UI thread takes per render. Above ~16 ms it cannot keep up with 60 Hz telemetry."/>
+                        <TextBlock x:Name="TxtFrameTime" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}" Margin="0,0,14,0"/>
+                        <TextBlock Text="DROPPED " FontSize="10" Foreground="{StaticResource MutedText}"
+                                   ToolTip="Telemetry frames skipped because a widget render was still pending. Steady growth means the UI thread is behind."/>
+                        <TextBlock x:Name="TxtDroppedFrames" Text="—" FontSize="10" Foreground="{StaticResource TealPrimary}"/>
+                    </WrapPanel>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+                        <TextBlock Text="Logs: " FontSize="9" Foreground="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                        <Button x:Name="BtnOpenLogs" Content="Open log folder"
+                                Style="{StaticResource MRT.Button.Secondary}"
+                                Click="BtnOpenLogs_Click"
+                                Height="22" FontSize="9" Padding="8,1"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
             

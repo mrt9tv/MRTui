@@ -10,6 +10,7 @@ using iRacingOverlay.Core.Models;
 using iRacingOverlay.Core.Services;
 using iRacingOverlay.WPF.Models;
 using iRacingOverlay.WPF.Services;
+using iRacingOverlay.WPF.Utils;
 
 namespace iRacingOverlay.WPF.Pages;
 
@@ -25,6 +26,36 @@ public partial class DashboardPage : UserControl, IDisposable
     private TimeSpan _lastCpuTime = TimeSpan.Zero;
     private double _cpuPercent;
     private int _perfTickCounter;
+
+    // Overlay health — is the UI thread keeping up with the 60 Hz feed?
+    private long _lastDroppedFrames;
+    private double _frameTimeTotalMs;
+    private int _frameSamples;
+    private TimeSpan _lastRenderTime = TimeSpan.Zero;
+
+    /// <summary>
+    /// Sample the interval between WPF composition passes. CompositionTarget.Rendering
+    /// fires once per rendered frame, so the gap between ticks is the UI thread's
+    /// actual frame time — the number that says whether the overlay can keep up.
+    /// </summary>
+    private void OnRendering(object? sender, EventArgs e)
+    {
+        if (e is not RenderingEventArgs args) return;
+
+        if (_lastRenderTime != TimeSpan.Zero)
+        {
+            double deltaMs = (args.RenderingTime - _lastRenderTime).TotalMilliseconds;
+
+            // Ignore the long gaps that follow the window being hidden or restored.
+            if (deltaMs > 0 && deltaMs < 500)
+            {
+                _frameTimeTotalMs += deltaMs;
+                _frameSamples++;
+            }
+        }
+
+        _lastRenderTime = args.RenderingTime;
+    }
 
     public DashboardPage(WidgetManager widgetManager, ITelemetryService telemetryService,
                          SessionConfigService sessionConfig)
@@ -50,10 +81,13 @@ public partial class DashboardPage : UserControl, IDisposable
             {
                 RefreshDashboard();
                 _refreshTimer.Start();
+                CompositionTarget.Rendering += OnRendering;
             }
             else
             {
                 _refreshTimer.Stop();
+                CompositionTarget.Rendering -= OnRendering;
+                _lastRenderTime = TimeSpan.Zero;
             }
         };
 
@@ -347,9 +381,59 @@ public partial class DashboardPage : UserControl, IDisposable
             TxtCpuUsage.Text = $"{_cpuPercent:F1}%";
             TxtMemUsage.Text = $"{proc.WorkingSet64 / (1024.0 * 1024.0):F0} MB";
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore – non-critical display
+            AppLog.Warn("Could not read process performance counters", ex);
+        }
+
+        UpdateOverlayHealth();
+    }
+
+    /// <summary>
+    /// Show whether the overlay is actually keeping up with the telemetry feed.
+    ///
+    /// Frame time above ~16 ms, or a dropped-frame count that keeps climbing, means
+    /// the UI thread is behind the 60 Hz feed — which is what a user experiences as
+    /// the overlay stuttering or freezing.
+    /// </summary>
+    private void UpdateOverlayHealth()
+    {
+        long dropped = 0;
+        foreach (var widget in _widgetManager.ActiveWidgets.Values)
+            dropped += widget.DroppedFrames;
+
+        long deltaDropped = dropped - _lastDroppedFrames;
+        _lastDroppedFrames = dropped;
+
+        TxtDroppedFrames.Text = deltaDropped > 0 ? $"{dropped} (+{deltaDropped})" : dropped.ToString();
+        TxtDroppedFrames.Foreground = deltaDropped > 30
+            ? (FindResource("OrangePrimary") as Brush ?? Brushes.Orange)
+            : (FindResource("TealPrimary") as Brush ?? Brushes.Teal);
+
+        double frameMs = _frameSamples > 0 ? _frameTimeTotalMs / _frameSamples : 0;
+        _frameTimeTotalMs = 0;
+        _frameSamples = 0;
+
+        TxtFrameTime.Text = frameMs > 0 ? $"{frameMs:F1} ms" : "—";
+        TxtFrameTime.Foreground = frameMs > 16.0
+            ? (FindResource("OrangePrimary") as Brush ?? Brushes.Orange)
+            : (FindResource("TealPrimary") as Brush ?? Brushes.Teal);
+    }
+
+    private void BtnOpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(AppLog.LogDirectory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = AppLog.LogDirectory,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Could not open the log folder", ex);
         }
     }
 
@@ -358,6 +442,7 @@ public partial class DashboardPage : UserControl, IDisposable
     public void Dispose()
     {
         _refreshTimer.Stop();
+        CompositionTarget.Rendering -= OnRendering;
         _telemetryService.StatusChanged -= OnStatusChanged;
         _sessionConfig.SessionCategoryChanged -= OnSessionChanged;
     }

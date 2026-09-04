@@ -76,8 +76,16 @@ public partial class MainWindow : Window
         Loaded += MainWindow_Loaded;
 
         // Update rate display timer
+        // Status bar refresh — only while the window is actually on screen. It kept
+        // ticking while minimised to tray, which is precisely when the user is driving
+        // and the UI thread should be doing nothing.
         _updateRateTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _updateRateTimer.Tick += (_, _) => UpdateStatusBar();
+        IsVisibleChanged += (_, e) =>
+        {
+            if ((bool)e.NewValue) { UpdateStatusBar(); _updateRateTimer.Start(); }
+            else _updateRateTimer.Stop();
+        };
         _updateRateTimer.Start();
 
         // Apply saved settings and restore widget layout
