@@ -68,7 +68,11 @@ public partial class AboutPage : UserControl
 
                 await _updateService.DownloadUpdateAsync(progress =>
                 {
-                    Dispatcher.Invoke(() => TxtUpdateInfo.Text = $"Downloading... {progress}%");
+                    // BeginInvoke, not Invoke: this fires from Velopack's download
+                    // thread many times per second, and blocking it on the UI thread
+                    // for each percent both stalls the download and can deadlock if
+                    // the UI thread is itself waiting on the download.
+                    Dispatcher.BeginInvoke(() => TxtUpdateInfo.Text = $"Downloading… {progress}%");
                 });
 
                 TxtUpdateInfo.Text = "Download complete. Restarting...";
