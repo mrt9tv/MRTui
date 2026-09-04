@@ -339,7 +339,10 @@ public static class MRTOneDataFormatter
             TelemetryField.ShiftIndicator when value is float sh =>
                 $"{sh:F0}%",
 
-            // Hybrid / DRS
+            // Hybrid / DRS.
+            // UNVERIFIED: no DRS-equipped car was in either live session used to check
+            // this, so the 0/1/2 -> OFF/ARMED/OPEN mapping comes from the channel
+            // description, not from an observed value. Confirm before relying on it.
             TelemetryField.DrsStatus when value is int drs => drs switch
             {
                 0 => "OFF", 1 => "ARMED", 2 => "OPEN", _ => drs.ToString()
