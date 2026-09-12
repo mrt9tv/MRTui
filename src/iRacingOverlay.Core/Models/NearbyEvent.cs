@@ -179,6 +179,12 @@ public enum NearbyEventType
 
     /// <summary>Tire sets are running low against the session limit.</summary>
     LowTireSets,
+
+    /// <summary>The player's own incident count went up.</summary>
+    IncidentGained,
+
+    /// <summary>Pit lane opened or closed.</summary>
+    PitLaneStatus,
 }
 
 /// <summary>

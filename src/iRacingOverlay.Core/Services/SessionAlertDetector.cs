@@ -46,6 +46,23 @@ public sealed class SessionAlertDetector
     private DateTime? _ffbClipStart;
     private bool _ffbAnnounced;
 
+    // The player's own car. NearbyEventDetector skips the player when it walks
+    // the field for flags and incidents, so nothing else reports these.
+    private int _prevPlayerFlags;
+    private int _prevIncidents = -1;
+    private bool? _prevPitsOpen;
+
+    // Per-car SessionFlags bits, as iRacing publishes them in CarIdxSessionFlags.
+    private const int FlagBlack = 0x10000;
+    private const int FlagDisqualify = 0x20000;
+    private const int FlagRepair = 0x100000;
+
+    /// <summary>
+    /// Incidents in one hit at or above this get a warning rather than a note;
+    /// 4x is iRacing's contact penalty and the first sign of a real accident.
+    /// </summary>
+    private const int IncidentWarningStep = 4;
+
     /// <summary>Reset all state. Call on disconnect or a new session.</summary>
     public void Reset()
     {
@@ -57,6 +74,9 @@ public sealed class SessionAlertDetector
         _prevTireSets = -1;
         _ffbClipStart = null;
         _ffbAnnounced = false;
+        _prevPlayerFlags = 0;
+        _prevIncidents = -1;
+        _prevPitsOpen = null;
     }
 
     /// <summary>
@@ -74,6 +94,75 @@ public sealed class SessionAlertDetector
         CheckConnection(data, output, ref nextEventId, now);
         CheckFfbClipping(data, output, ref nextEventId, now);
         CheckTireSets(data, output, ref nextEventId, now);
+        CheckPlayerFlags(data, output, ref nextEventId, now);
+        CheckIncidents(data, output, ref nextEventId, now);
+        CheckPitLane(data, output, ref nextEventId, now);
+    }
+
+    // ── The player's own flags ────────────────────────────────────────
+
+    private void CheckPlayerFlags(TelemetryData data, List<NearbyEvent> output, ref long nextId, DateTime now)
+    {
+        var flags = data.CarIdxSessionFlags;
+        int idx = data.PlayerCarIdx;
+        if (flags == null || idx < 0 || idx >= flags.Length) return;
+
+        int current = flags[idx];
+        int raised = current & ~_prevPlayerFlags;
+        _prevPlayerFlags = current;
+
+        if (raised == 0) return;
+
+        // Each of these is a race-changing instruction; none may be lost to the
+        // cooldown another flag started.
+        if ((raised & FlagDisqualify) != 0)
+            Emit(output, ref nextId, now, NearbyEventType.Disqualified,
+                 NearbyEventSeverity.Critical, "DISQUALIFIED", cooldownSeconds: 0);
+
+        if ((raised & FlagBlack) != 0)
+            Emit(output, ref nextId, now, NearbyEventType.BlackFlag,
+                 NearbyEventSeverity.Critical, "BLACK FLAG — SERVE PENALTY", cooldownSeconds: 0);
+
+        if ((raised & FlagRepair) != 0)
+            Emit(output, ref nextId, now, NearbyEventType.MeatballFlag,
+                 NearbyEventSeverity.Critical, "MEATBALL — PIT FOR REPAIRS", cooldownSeconds: 0);
+    }
+
+    // ── Incidents ─────────────────────────────────────────────────────
+
+    private void CheckIncidents(TelemetryData data, List<NearbyEvent> output, ref long nextId, DateTime now)
+    {
+        int count = data.PlayerCarMyIncidentCount;
+
+        // Seed silently: joining mid-session with 6x already is not news.
+        if (_prevIncidents < 0) { _prevIncidents = count; return; }
+
+        int gained = count - _prevIncidents;
+        _prevIncidents = count;
+
+        if (gained <= 0) return;
+
+        // No cooldown — two incidents thirty seconds apart are two pieces of news.
+        Emit(output, ref nextId, now, NearbyEventType.IncidentGained,
+             gained >= IncidentWarningStep ? NearbyEventSeverity.Warning : NearbyEventSeverity.Info,
+             $"+{gained}x  ({count}x)", cooldownSeconds: 0);
+    }
+
+    // ── Pit lane ──────────────────────────────────────────────────────
+
+    private void CheckPitLane(TelemetryData data, List<NearbyEvent> output, ref long nextId, DateTime now)
+    {
+        bool open = data.PitsOpen;
+
+        if (_prevPitsOpen == null) { _prevPitsOpen = open; return; }
+        if (open == _prevPitsOpen) return;
+        _prevPitsOpen = open;
+
+        // Closing matters more than opening: a planned stop just became a
+        // drive-through risk.
+        Emit(output, ref nextId, now, NearbyEventType.PitLaneStatus,
+             open ? NearbyEventSeverity.Info : NearbyEventSeverity.Warning,
+             open ? "PITS OPEN" : "PITS CLOSED", cooldownSeconds: 0);
     }
 
     // ── Weather ───────────────────────────────────────────────────────
@@ -195,10 +284,11 @@ public sealed class SessionAlertDetector
     // ── Emission ──────────────────────────────────────────────────────
 
     private void Emit(List<NearbyEvent> output, ref long nextId, DateTime now,
-                      NearbyEventType type, NearbyEventSeverity severity, string text)
+                      NearbyEventType type, NearbyEventSeverity severity, string text,
+                      double cooldownSeconds = CooldownSeconds)
     {
         if (_lastFired.TryGetValue(type, out var last)
-            && (now - last).TotalSeconds < CooldownSeconds)
+            && (now - last).TotalSeconds < cooldownSeconds)
         {
             return;
         }

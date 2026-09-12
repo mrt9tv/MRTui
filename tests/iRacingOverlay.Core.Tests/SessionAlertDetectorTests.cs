@@ -191,6 +191,79 @@ public class SessionAlertDetectorTests
         // After a reset the same transition is new information again.
         Assert.Single(Run(detector, OnTrack(), wet));
     }
+
+    // ── The player's own car ──────────────────────────────────────────
+
+    private static TelemetryData OnTrackWithFlags(int playerFlags, int playerIdx = 3)
+    {
+        var d = OnTrack();
+        d.PlayerCarIdx = playerIdx;
+        d.CarIdxSessionFlags = new int[64];
+        d.CarIdxSessionFlags[playerIdx] = playerFlags;
+        return d;
+    }
+
+    [Fact]
+    public void PlayerBlackFlag_FiresOnceOnTheRisingEdge()
+    {
+        const int black = 0x10000;
+        var detector = new SessionAlertDetector();
+
+        var events = Run(detector,
+            OnTrackWithFlags(0),
+            OnTrackWithFlags(black),
+            OnTrackWithFlags(black),
+            OnTrackWithFlags(0),
+            OnTrackWithFlags(black));
+
+        var blacks = events.Where(e => e.EventType == NearbyEventType.BlackFlag).ToList();
+        Assert.Equal(2, blacks.Count);
+        Assert.All(blacks, e => Assert.Equal(-1, e.CarIdx));
+        Assert.Equal(NearbyEventSeverity.Critical, blacks[0].Severity);
+    }
+
+    [Fact]
+    public void PlayerFlags_DoNotSuppressEachOther()
+    {
+        const int black = 0x10000, repair = 0x100000;
+        var detector = new SessionAlertDetector();
+
+        var events = Run(detector, OnTrackWithFlags(0), OnTrackWithFlags(black | repair));
+
+        Assert.Contains(events, e => e.EventType == NearbyEventType.BlackFlag);
+        Assert.Contains(events, e => e.EventType == NearbyEventType.MeatballFlag);
+    }
+
+    [Fact]
+    public void Incidents_SeedSilently_ThenReportEachGain()
+    {
+        var detector = new SessionAlertDetector();
+        TelemetryData Inc(int count) { var d = OnTrack(); d.PlayerCarMyIncidentCount = count; return d; }
+
+        var events = Run(detector, Inc(6), Inc(6), Inc(7), Inc(7), Inc(11))
+            .Where(e => e.EventType == NearbyEventType.IncidentGained).ToList();
+
+        Assert.Equal(2, events.Count);
+        Assert.Equal("+1x  (7x)", events[0].DisplayText);
+        Assert.Equal(NearbyEventSeverity.Info, events[0].Severity);
+        Assert.Equal("+4x  (11x)", events[1].DisplayText);
+        Assert.Equal(NearbyEventSeverity.Warning, events[1].Severity);
+    }
+
+    [Fact]
+    public void PitLane_ReportsTransitionsOnly()
+    {
+        var detector = new SessionAlertDetector();
+        TelemetryData Pits(bool open) { var d = OnTrack(); d.PitsOpen = open; return d; }
+
+        var events = Run(detector, Pits(false), Pits(false), Pits(true), Pits(true), Pits(false))
+            .Where(e => e.EventType == NearbyEventType.PitLaneStatus).ToList();
+
+        Assert.Equal(2, events.Count);
+        Assert.Equal("PITS OPEN", events[0].DisplayText);
+        Assert.Equal("PITS CLOSED", events[1].DisplayText);
+        Assert.Equal(NearbyEventSeverity.Warning, events[1].Severity);
+    }
 }
 
 public class TelemetryStatusTests

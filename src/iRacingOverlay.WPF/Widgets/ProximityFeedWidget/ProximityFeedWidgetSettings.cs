@@ -63,6 +63,11 @@ public partial class ProximityFeedWidget
             group: "Event types",
             description: "Safety car, end of line, free pass and wave-around.");
 
+        yield return WidgetSetting.Toggle(
+            "My incidents", () => ShowMyIncidents, v => ShowMyIncidents = v,
+            group: "Event types",
+            description: "Note each time your own incident count goes up, with the new total.");
+
         foreach (var s in base.GetSettings()) yield return s;
     }
 

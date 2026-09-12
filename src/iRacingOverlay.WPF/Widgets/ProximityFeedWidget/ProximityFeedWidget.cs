@@ -88,6 +88,8 @@ public partial class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_NETWORK = Color.FromRgb(190, 140, 255);      // violet — connection
     private static readonly Color COLOR_FFB = Color.FromRgb(140, 200, 210);          // muted cyan — advisory
     private static readonly Color COLOR_TYRES = Color.FromRgb(255, 190, 90);         // amber — strategy
+    private static readonly Color COLOR_MY_INCIDENT = Color.FromRgb(255, 120, 120);  // soft red — own incidents
+    private static readonly Color COLOR_PIT_LANE = Color.FromRgb(255, 200, 50);      // yellow — matches pitting
 
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
@@ -136,6 +138,9 @@ public partial class ProximityFeedWidget : WidgetBase
 
     /// <summary>Show pace car / caution events (safety car, pace flags).</summary>
     public bool ShowPaceFlags { get; set; } = true;
+
+    /// <summary>Show the player's own incident count going up.</summary>
+    public bool ShowMyIncidents { get; set; } = true;
 
     /// <summary>Detection range ahead of the player in seconds (1-30, default 12).</summary>
     public float DetectionAheadSeconds { get; set; } = 12.0f;
@@ -222,6 +227,11 @@ public partial class ProximityFeedWidget : WidgetBase
             if (v8 is JsonElement je8) ShowPaceFlags = je8.ValueKind == JsonValueKind.True;
             else if (v8 is bool b8) ShowPaceFlags = b8;
         }
+        if (Config.Settings.TryGetValue("showMyIncidents", out var v11))
+        {
+            if (v11 is JsonElement je11) ShowMyIncidents = je11.ValueKind == JsonValueKind.True;
+            else if (v11 is bool b11) ShowMyIncidents = b11;
+        }
         if (Config.Settings.TryGetValue("detectionAhead", out var v9))
         {
             if (v9 is JsonElement je9 && je9.TryGetDouble(out var d9)) DetectionAheadSeconds = (float)Math.Clamp(d9, 1.0, 30.0);
@@ -251,6 +261,7 @@ public partial class ProximityFeedWidget : WidgetBase
         Config.Settings["showStartSequence"] = ShowStartSequence;
         Config.Settings["showCheckeredFlag"] = ShowCheckeredFlag;
         Config.Settings["showPaceFlags"] = ShowPaceFlags;
+        Config.Settings["showMyIncidents"] = ShowMyIncidents;
         Config.Settings["detectionAhead"] = DetectionAheadSeconds;
         Config.Settings["detectionBehind"] = DetectionBehindSeconds;
     }
@@ -387,6 +398,7 @@ public partial class ProximityFeedWidget : WidgetBase
             if (!ShowOvertakingAlert && e.EventType == NearbyEventType.OvertakingImminent) continue;
             if (!ShowStartSequence && e.EventType == NearbyEventType.StartSequence) continue;
             if (!ShowCheckeredFlag && e.EventType == NearbyEventType.CheckeredFlag) continue;
+            if (!ShowMyIncidents && e.EventType == NearbyEventType.IncidentGained) continue;
             if (!ShowPaceFlags && (e.EventType == NearbyEventType.SafetyCar
                 || e.EventType == NearbyEventType.PaceEndOfLine
                 || e.EventType == NearbyEventType.PaceFreePass
@@ -803,6 +815,8 @@ public partial class ProximityFeedWidget : WidgetBase
         NearbyEventType.PoorConnection => COLOR_NETWORK,
         NearbyEventType.FfbClipping => COLOR_FFB,
         NearbyEventType.LowTireSets => COLOR_TYRES,
+        NearbyEventType.IncidentGained => COLOR_MY_INCIDENT,
+        NearbyEventType.PitLaneStatus => COLOR_PIT_LANE,
 
         _ => GetSeverityColor(evt.Severity),
     };
