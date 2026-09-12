@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scrollbar** — 8 px rounded-rectangle thumb in a faint lane instead of a hairline
 - Action descriptions sit under their button rather than beside it
 
+### Fixed
+- **Race start never reached the Proximity Feed** — the announcement hung on a one-frame flag the 30 Hz feed missed about half the time; it is keyed on a sequence number now
+- Rolling start with the throttle already flat at the green reports "GREEN · already flat" instead of timing out silently
+- Each measured start is written to the log
+
 ---
 
 ## [0.3.1] - 2026-09-12
