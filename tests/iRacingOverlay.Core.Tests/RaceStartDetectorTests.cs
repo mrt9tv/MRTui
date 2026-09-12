@@ -209,4 +209,58 @@ public class RaceStartDetectorTests
         g.Throttle = 1f; g.Speed = 5f; g.Frames(30);
         Assert.Null(g.Detector.Result);
     }
+
+    // ── Rolling, already flat ─────────────────────────────────────────
+
+    [Fact]
+    public void RollingStart_FlatBeforeTheGreen_ReportsNothingToMeasure()
+    {
+        var g = new Grid { State = Parade, Speed = 30f, Throttle = 1f, Gear = 4 };
+        g.Frames(60);
+        g.State = Racing; g.Flags = Green; g.Frame();
+
+        var r = Measured(g);
+        Assert.True(r.FlatAtGreen);
+        Assert.Equal(LaunchTechnique.Rolling, r.Technique);
+        Assert.Equal(0f, r.ReactionSeconds);
+    }
+
+    // ── Announcement survives skipped frames ──────────────────────────
+
+    [Fact]
+    public void Sequence_IncrementsPerStart_AndFeedAnnouncesEvenWhenItSkipsTheFrame()
+    {
+        var g = new Grid { Gear = 1, Clutch = 1f, Throttle = 0f };
+        g.Lights();
+        g.Frames(12); g.Throttle = 1f; g.Frame(); g.Speed = 1f; g.Frame();
+        var first = Measured(g);
+        Assert.Equal(1, first.Sequence);
+
+        // A feed that never saw the "just measured" frame — only the next one,
+        // where the flag is already false — must still announce exactly once.
+        var feed = new NearbyEventDetector();
+        var idle = new TelemetryData { RaceStart = null, IsOnTrack = true };
+        feed.Update(idle, null);
+
+        var later = new TelemetryData { RaceStart = first, RaceStartJustMeasured = false, IsOnTrack = true };
+        feed.Update(later, null);
+        feed.Update(later, null);
+
+        Assert.Single(feed.ActiveEvents, e => e.EventType == NearbyEventType.ReactionTime);
+    }
+
+    [Fact]
+    public void FeedCreatedMidRace_DoesNotReplayAnOldStart()
+    {
+        var old = new RaceStartResult { ReactionSeconds = 0.3f, Sequence = 1 };
+        var feed = new NearbyEventDetector();
+        feed.Update(new TelemetryData { RaceStart = old, IsOnTrack = true }, null);
+
+        Assert.DoesNotContain(feed.ActiveEvents, e => e.EventType == NearbyEventType.ReactionTime);
+
+        // The next start is new information.
+        var next = new RaceStartResult { ReactionSeconds = 0.2f, Sequence = 2 };
+        feed.Update(new TelemetryData { RaceStart = next, IsOnTrack = true }, null);
+        Assert.Single(feed.ActiveEvents, e => e.EventType == NearbyEventType.ReactionTime);
+    }
 }

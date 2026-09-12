@@ -57,6 +57,18 @@ public sealed class RaceStartResult
     /// <summary>Best reaction of the session so far, this start included. Zero when this is the first.</summary>
     public float SessionBestSeconds { get; init; }
 
+    /// <summary>
+    /// Rolling start taken with the throttle already flat, so there was no input
+    /// to time. ReactionSeconds is zero and means "nothing to measure", not "instant".
+    /// </summary>
+    public bool FlatAtGreen { get; init; }
+
+    /// <summary>
+    /// Increments with every result the detector produces. Consumers that may
+    /// skip frames announce on a change of sequence rather than on a one-frame flag.
+    /// </summary>
+    public int Sequence { get; init; }
+
     /// <summary>Short label for the technique: "clutch", "N→1st", "throttle", "rolling".</summary>
     public string TechniqueLabel => Technique switch
     {

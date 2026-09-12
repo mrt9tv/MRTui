@@ -187,6 +187,9 @@ public sealed class NearbyEventDetector
     // ── Session-level tracking ──────────────────────────────────────
     private int _prevSessionState;
     private uint _prevSessionFlags;
+
+    /// <summary>Sequence of the last race start announced, so each is announced once.</summary>
+    private int _announcedStartSequence = -1;   // -1: adopt whatever exists on the first frame without announcing
     private bool _cautionWasActive;
     private bool _redFlagActive;
     private bool _checkeredActive;
@@ -256,6 +259,7 @@ public sealed class NearbyEventDetector
         _lastUpdateTime = DateTime.UtcNow;
         _prevSessionState = 0;
         _prevSessionFlags = 0;
+        _announcedStartSequence = -1;
         _cautionWasActive = false;
         _redFlagActive = false;
         _playerBlueFlagActive = false;
@@ -290,10 +294,20 @@ public sealed class NearbyEventDetector
         if (EnableSessionAlerts)
             _sessionAlerts.Update(data, _activeEvents, ref _nextEventId);
 
-        // The start is measured once, on the telemetry thread; announce it the
-        // tick it lands. Independent of the relative table — a lone car still starts.
-        if (data.RaceStartJustMeasured && data.RaceStart != null)
+        // The start is measured once, on the telemetry thread. This widget runs at
+        // 30 Hz and drops frames when the UI is behind, so a one-frame "just
+        // measured" flag was missed as often as not; the result carries a sequence
+        // number and is announced when that changes. Independent of the relative
+        // table — a lone car still starts.
+        // A widget created mid-race must not replay a start that already happened.
+        if (_announcedStartSequence < 0)
+            _announcedStartSequence = data.RaceStart?.Sequence ?? 0;
+
+        if (data.RaceStart != null && data.RaceStart.Sequence != _announcedStartSequence)
+        {
+            _announcedStartSequence = data.RaceStart.Sequence;
             AnnounceRaceStart(data.RaceStart);
+        }
 
         if (relativeEntries == null || relativeEntries.Count == 0) return;
         if (data.CarIdxTrackSurface == null || data.CarIdxLapDistPct == null) return;
@@ -1228,6 +1242,12 @@ public sealed class NearbyEventDetector
         if (start.JumpStart)
         {
             EmitSessionEvent(NearbyEventType.JumpStart, "JUMP START", NearbyEventSeverity.Critical, 8.0f);
+            return;
+        }
+
+        if (start.FlatAtGreen)
+        {
+            EmitSessionEvent(NearbyEventType.ReactionTime, "GREEN  ·  already flat", NearbyEventSeverity.Info, 8.0f);
             return;
         }
 

@@ -1311,6 +1311,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
             _raceStartDetector.Update(data);
             data.RaceStart = _raceStartDetector.Result;
             data.RaceStartJustMeasured = _raceStartDetector.JustMeasured;
+
+            if (data.RaceStartJustMeasured && data.RaceStart is { } start)
+            {
+                if (start.JumpStart)
+                    _logger.LogInformation("Race start: JUMP START");
+                else if (start.FlatAtGreen)
+                    _logger.LogInformation("Race start: rolling, throttle already flat at the green");
+                else
+                    _logger.LogInformation("Race start: reaction {Reaction:F2} s, launch {Launch:F2} s, {Technique} ({Input} first), gear {Gear}",
+                        start.ReactionSeconds, start.LaunchSeconds, start.TechniqueLabel, start.FirstInput, start.GearAtGo);
+            }
         }
         catch (Exception ex)
         {

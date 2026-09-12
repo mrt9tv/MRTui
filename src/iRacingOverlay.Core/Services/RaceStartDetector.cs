@@ -52,6 +52,9 @@ public sealed class RaceStartDetector
     /// <summary>Give up on a start that produces no input — a stall, or the driver is away.</summary>
     private const double TimeoutSeconds = 5.0;
 
+    /// <summary>Throttle at or above this at a rolling green counts as already flat.</summary>
+    private const float FlatThrottle = 0.9f;
+
     private enum Phase { Idle, ArmedStanding, ArmedRolling, Timing, Done }
 
     private Phase _phase = Phase.Idle;
@@ -70,6 +73,7 @@ public sealed class RaceStartDetector
     private LaunchInput _firstInput;
 
     private float _best;
+    private int _sequence;
 
     /// <summary>The most recent completed start, or null before the first.</summary>
     public RaceStartResult? Result { get; private set; }
@@ -179,6 +183,10 @@ public sealed class RaceStartDetector
             : LaunchTechnique.ThrottleOnly;
 
         _phase = Phase.Timing;
+
+        // Rolling with the pedal already down: there is no rise to wait for.
+        if (rolling && _baseThrottle >= FlatThrottle)
+            Finish(data, jumpStart: false, launch: 0f, flatAtGreen: true);
     }
 
     private void Time(TelemetryData data)
@@ -224,9 +232,9 @@ public sealed class RaceStartDetector
         }
     }
 
-    private void Finish(TelemetryData data, bool jumpStart, float launch = 0f)
+    private void Finish(TelemetryData data, bool jumpStart, float launch = 0f, bool flatAtGreen = false)
     {
-        float reaction = jumpStart ? 0f : _reaction;
+        float reaction = jumpStart || flatAtGreen ? 0f : _reaction;
         if (!jumpStart && reaction > 0 && (_best <= 0 || reaction < _best))
             _best = reaction;
 
@@ -239,6 +247,8 @@ public sealed class RaceStartDetector
             FirstInput = jumpStart ? LaunchInput.None : _firstInput,
             GearAtGo = jumpStart ? data.Gear : _baseGear,
             SessionBestSeconds = _best,
+            FlatAtGreen = flatAtGreen,
+            Sequence = ++_sequence,
         };
         JustMeasured = true;
         _phase = Phase.Done;
