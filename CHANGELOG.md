@@ -19,12 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.2] - 2026-09-12
 
+### Added
+- **Race Start widget** — the start lights as five squares (red on SET, green on GO), then reaction time, launch time, technique and best on its own card; JUMP START in red. Hidden until the lights come up, clears with the session. Replaces the line in the Proximity Feed, which lost to the chaos of a race start for the feed's six slots
+- **Proximity Feed event families** — every event type now has a switch in the widget (cars in trouble, overtaking, pit activity, flags on other cars, start lights, pace/safety car, red/white/blue flags, chequered, conditions and car warnings, my incidents). The global "Session alerts" toggle is gone
+
 ### Changed
 - **Switch** — rounded rectangle with a square-cornered knob instead of a pill; matches the cards and inputs around it
 - **Scrollbar** — 8 px rounded-rectangle thumb in a faint lane instead of a hairline
+- No pill shapes anywhere in the config window: slider track and thumb, connection badge and status dot are rounded rectangles
 - Action descriptions sit under their button rather than beside it
+- Speed in mph shown to one decimal
+- **Shift indicator** now derives from the car's own shift geometry (0% as the lights start, 100% at the optimal RPM); iRacing's `ShiftIndicatorPct` is deprecated and topped out near 90%
 
 ### Fixed
+- **Proximity Feed switches did nothing for most event types** — they were only applied at display time, and the types without a switch were gated elsewhere. Switches are now enforced in the detector so a disabled type never takes a slot
+- **"GO GO GO!" never showed on a rolling start** — it shares an event type with "PACE LAPS", whose fade-out blocked it
+- **Flags never showed with no other car nearby** — session-level detection sat behind the relative-table guard
+- **Nothing reset on a session advance** — the feed detector, and the race start result, now reset on session change; the start result also clears on a restart
 - **Race start never reached the Proximity Feed** — the announcement hung on a one-frame flag the 30 Hz feed missed about half the time; it is keyed on a sequence number now
 - Rolling start with the throttle already flat at the green reports "GREEN · already flat" instead of timing out silently
 - Each measured start is written to the log
