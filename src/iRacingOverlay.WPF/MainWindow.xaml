@@ -96,12 +96,12 @@
                 <Border Grid.Column="3" VerticalAlignment="Center"
                         Background="{StaticResource SurfaceRaised}"
                         BorderBrush="{StaticResource Border}" BorderThickness="1"
-                        CornerRadius="{StaticResource CR.Pill}"
+                        CornerRadius="{StaticResource CR.Control}"
                         Padding="12,6">
                     <StackPanel Orientation="Horizontal">
-                        <Ellipse x:Name="ConnectionDot" Width="8" Height="8"
+                        <Border x:Name="ConnectionDot" Width="8" Height="8" CornerRadius="2"
                                  VerticalAlignment="Center" Margin="0,0,8,0"
-                                 Fill="{StaticResource StatusDisconnected}"/>
+                                 Background="{StaticResource StatusDisconnected}"/>
                         <TextBlock x:Name="ConnectionStatusText" Text="Disconnected"
                                    Style="{StaticResource T.Body}" FontSize="12"/>
                         <Rectangle Width="1" Margin="12,2" Fill="{StaticResource Border}"

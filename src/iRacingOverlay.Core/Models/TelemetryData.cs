@@ -1284,6 +1284,9 @@ public class TelemetryData
     /// <summary>Which RPM colour band the engine is in right now.</summary>
     public ShiftZone ShiftZone { get; set; }
 
+    /// <summary>Where the shift lights start coming on — the foot of the indicator ramp.</summary>
+    public float ShiftLightsOnRPM { get; set; }
+
     /// <summary>The car's optimal shift RPM.</summary>
     public float ShiftOptimalRPM { get; set; }
 

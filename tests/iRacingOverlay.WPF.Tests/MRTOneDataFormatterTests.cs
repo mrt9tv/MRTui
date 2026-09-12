@@ -20,7 +20,7 @@ public class MRTOneDataFormatterTests
 
     [Theory]
     [InlineData(50f, true, "180")]   // 50 m/s = 180 km/h
-    [InlineData(50f, false, "111")]  // 111.8 mph, truncated
+    [InlineData(50f, false, "111.8")]  // mph to one decimal
     [InlineData(0f, true, "0")]
     public void Speed_ConvertsFromMetresPerSecond(float mps, bool metric, string expected)
     {

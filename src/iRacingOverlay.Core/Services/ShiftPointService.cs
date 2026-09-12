@@ -103,6 +103,7 @@ public sealed class ShiftPointService
 
         var points = ResolveShiftPoints(data);
 
+        data.ShiftLightsOnRPM = points.First;
         data.ShiftOptimalRPM = points.Optimal;
         data.ShiftWindowStartRPM = points.WindowStart;
         data.ShiftWindowEndRPM = points.WindowEnd;

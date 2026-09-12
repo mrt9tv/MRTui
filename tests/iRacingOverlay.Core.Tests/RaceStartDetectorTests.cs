@@ -225,42 +225,20 @@ public class RaceStartDetectorTests
         Assert.Equal(0f, r.ReactionSeconds);
     }
 
-    // ── Announcement survives skipped frames ──────────────────────────
+    // ── Sequence ──────────────────────────────────────────────────────
 
     [Fact]
-    public void Sequence_IncrementsPerStart_AndFeedAnnouncesEvenWhenItSkipsTheFrame()
+    public void Sequence_IncrementsPerStart()
     {
         var g = new Grid { Gear = 1, Clutch = 1f, Throttle = 0f };
         g.Lights();
         g.Frames(12); g.Throttle = 1f; g.Frame(); g.Speed = 1f; g.Frame();
-        var first = Measured(g);
-        Assert.Equal(1, first.Sequence);
+        Assert.Equal(1, Measured(g).Sequence);
 
-        // A feed that never saw the "just measured" frame — only the next one,
-        // where the flag is already false — must still announce exactly once.
-        var feed = new NearbyEventDetector();
-        var idle = new TelemetryData { RaceStart = null, IsOnTrack = true };
-        feed.Update(idle, null);
-
-        var later = new TelemetryData { RaceStart = first, RaceStartJustMeasured = false, IsOnTrack = true };
-        feed.Update(later, null);
-        feed.Update(later, null);
-
-        Assert.Single(feed.ActiveEvents, e => e.EventType == NearbyEventType.ReactionTime);
-    }
-
-    [Fact]
-    public void FeedCreatedMidRace_DoesNotReplayAnOldStart()
-    {
-        var old = new RaceStartResult { ReactionSeconds = 0.3f, Sequence = 1 };
-        var feed = new NearbyEventDetector();
-        feed.Update(new TelemetryData { RaceStart = old, IsOnTrack = true }, null);
-
-        Assert.DoesNotContain(feed.ActiveEvents, e => e.EventType == NearbyEventType.ReactionTime);
-
-        // The next start is new information.
-        var next = new RaceStartResult { ReactionSeconds = 0.2f, Sequence = 2 };
-        feed.Update(new TelemetryData { RaceStart = next, IsOnTrack = true }, null);
-        Assert.Single(feed.ActiveEvents, e => e.EventType == NearbyEventType.ReactionTime);
+        g.Flags = 0; g.State = 2; g.Speed = 0f; g.Throttle = 0f; g.Frames(120);
+        g.State = Racing;
+        g.Lights();
+        g.Frames(12); g.Throttle = 1f; g.Frame(); g.Speed = 1f; g.Frame();
+        Assert.Equal(2, Measured(g).Sequence);
     }
 }

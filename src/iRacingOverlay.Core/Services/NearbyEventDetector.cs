@@ -188,8 +188,6 @@ public sealed class NearbyEventDetector
     private int _prevSessionState;
     private uint _prevSessionFlags;
 
-    /// <summary>Sequence of the last race start announced, so each is announced once.</summary>
-    private int _announcedStartSequence = -1;   // -1: adopt whatever exists on the first frame without announcing
     private bool _cautionWasActive;
     private bool _redFlagActive;
     private bool _checkeredActive;
@@ -220,7 +218,17 @@ public sealed class NearbyEventDetector
 
     /// <summary>Whether session alerts are emitted into the feed.</summary>
     public bool EnableSessionAlerts { get; set; } = true;
+
+    /// <summary>
+    /// Event types the consumer has switched off. Enforced here, at emission, so a
+    /// disabled type never occupies one of the few active slots — filtering only at
+    /// display time let hidden events crowd out visible ones.
+    /// </summary>
+    public HashSet<NearbyEventType> DisabledTypes { get; } = new();
     private DateTime _lastUpdateTime = DateTime.UtcNow;
+
+    /// <summary>Session the state below belongs to; a change resets everything.</summary>
+    private int _sessionNum = -1;
 
     /// <summary>Read-only snapshot of currently active (non-expired) events.</summary>
     public IReadOnlyList<NearbyEvent> ActiveEvents => _activeEvents;
@@ -259,7 +267,6 @@ public sealed class NearbyEventDetector
         _lastUpdateTime = DateTime.UtcNow;
         _prevSessionState = 0;
         _prevSessionFlags = 0;
-        _announcedStartSequence = -1;
         _cautionWasActive = false;
         _redFlagActive = false;
         _playerBlueFlagActive = false;
@@ -274,6 +281,15 @@ public sealed class NearbyEventDetector
     /// </summary>
     public void Update(TelemetryData data, IReadOnlyList<RelativeEntry>? relativeEntries)
     {
+        // A session advance or a restart into a new session is a clean slate:
+        // per-car state, ongoing flags and the visible events all belong to the
+        // old one. Disabled types survive — they are the consumer's choice.
+        if (data.SessionNum != _sessionNum)
+        {
+            if (_sessionNum >= 0) Reset();
+            _sessionNum = data.SessionNum;
+        }
+
         var now = DateTime.UtcNow;
         float dt = (float)(now - _lastUpdateTime).TotalSeconds;
         _lastUpdateTime = now;
@@ -294,28 +310,20 @@ public sealed class NearbyEventDetector
         if (EnableSessionAlerts)
             _sessionAlerts.Update(data, _activeEvents, ref _nextEventId);
 
-        // The start is measured once, on the telemetry thread. This widget runs at
-        // 30 Hz and drops frames when the UI is behind, so a one-frame "just
-        // measured" flag was missed as often as not; the result carries a sequence
-        // number and is announced when that changes. Independent of the relative
-        // table — a lone car still starts.
-        // A widget created mid-race must not replay a start that already happened.
-        if (_announcedStartSequence < 0)
-            _announcedStartSequence = data.RaceStart?.Sequence ?? 0;
+        // Flags and session state need no other car on track: a lone car still
+        // sees the chequered flag. This used to sit behind the relative-table
+        // guard below, so in an empty session no flag ever showed.
+        DetectSessionLevelEvents(data);
 
-        if (data.RaceStart != null && data.RaceStart.Sequence != _announcedStartSequence)
-        {
-            _announcedStartSequence = data.RaceStart.Sequence;
-            AnnounceRaceStart(data.RaceStart);
-        }
+        // Anything the consumer has switched off leaves now, whichever path
+        // produced it, so it cannot take a slot from something wanted.
+        if (DisabledTypes.Count > 0)
+            _activeEvents.RemoveAll(e => DisabledTypes.Contains(e.EventType));
 
         if (relativeEntries == null || relativeEntries.Count == 0) return;
         if (data.CarIdxTrackSurface == null || data.CarIdxLapDistPct == null) return;
 
         int playerIdx = data.PlayerCarIdx;
-
-        // ── SESSION-LEVEL events (not per-car) ─────────────────────
-        DetectSessionLevelEvents(data);
 
         // Tick down race-start grace period
         if (_raceStartGraceRemaining > 0)
@@ -1171,6 +1179,18 @@ public sealed class NearbyEventDetector
         }
         _whiteFlagActive = whiteNow;
 
+        // ── PACE LAPS (ongoing while in parade state) ───────────
+        bool paceNow = ss == SESSION_STATE_PARADE_LAPS;
+        if (paceNow && !_paceLapsActive)
+        {
+            EmitSessionEvent(NearbyEventType.StartSequence, "🟡 PACE LAPS",
+                NearbyEventSeverity.Info, 6.0f, isOngoing: true);
+        }
+        else if (!paceNow && _paceLapsActive)
+        {
+            ClearOngoingEvent(-1, NearbyEventType.StartSequence);
+        }
+        _paceLapsActive = paceNow;
         // ── START SEQUENCE (green flag — 5s max, not ongoing) ───
         if (ss == SESSION_STATE_RACING && _prevSessionState == SESSION_STATE_PARADE_LAPS)
         {
@@ -1184,20 +1204,6 @@ public sealed class NearbyEventDetector
         {
             _raceStartGraceRemaining = RACE_START_GRACE_SECONDS;
         }
-
-        // ── PACE LAPS (ongoing while in parade state) ───────────
-        bool paceNow = ss == SESSION_STATE_PARADE_LAPS;
-        if (paceNow && !_paceLapsActive)
-        {
-            EmitSessionEvent(NearbyEventType.StartSequence, "🟡 PACE LAPS",
-                NearbyEventSeverity.Info, 6.0f, isOngoing: true);
-        }
-        else if (!paceNow && _paceLapsActive)
-        {
-            ClearOngoingEvent(-1, NearbyEventType.StartSequence);
-        }
-        _paceLapsActive = paceNow;
-
         // ── CHECKERED FLAG (ongoing while session state is checkered) ─
         bool checkeredNow = ss == SESSION_STATE_CHECKERED;
         if (checkeredNow && !_checkeredActive)
@@ -1237,40 +1243,21 @@ public sealed class NearbyEventDetector
     /// Emit a session-level event (not tied to a specific car).
     /// Uses CarIdx = -1, empty driver/car info.
     /// </summary>
-    private void AnnounceRaceStart(RaceStartResult start)
-    {
-        if (start.JumpStart)
-        {
-            EmitSessionEvent(NearbyEventType.JumpStart, "JUMP START", NearbyEventSeverity.Critical, 8.0f);
-            return;
-        }
-
-        if (start.FlatAtGreen)
-        {
-            EmitSessionEvent(NearbyEventType.ReactionTime, "GREEN  ·  already flat", NearbyEventSeverity.Info, 8.0f);
-            return;
-        }
-
-        var text = new System.Text.StringBuilder("REACTION ");
-        text.Append(start.ReactionSeconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append(" s");
-        if (start.LaunchSeconds > 0)
-            text.Append("  ·  MOVE ").Append(start.LaunchSeconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append(" s");
-        if (start.TechniqueLabel.Length > 0)
-            text.Append("  ·  ").Append(start.TechniqueLabel);
-
-        // A slow reaction is worth a second look; a good one is just news.
-        var severity = start.ReactionSeconds > 0.5f ? NearbyEventSeverity.Warning : NearbyEventSeverity.Info;
-        EmitSessionEvent(NearbyEventType.ReactionTime, text.ToString(), severity, 10.0f);
-    }
 
     private void EmitSessionEvent(NearbyEventType type, string text,
         NearbyEventSeverity severity, float duration, bool isOngoing = false)
     {
-        // Dedup: check for existing same-type session event
-        for (int j = 0; j < _activeEvents.Count; j++)
+        // Dedup against a live same-type session event. An event that has
+        // already cleared and is fading out does not count — it is replaced, so
+        // "GO GO GO!" can follow "PACE LAPS" (same type) instead of being
+        // swallowed by its six-second fade.
+        for (int j = _activeEvents.Count - 1; j >= 0; j--)
         {
-            if (_activeEvents[j].CarIdx == -1 && _activeEvents[j].EventType == type && !_activeEvents[j].IsExpired)
-                return; // already showing
+            var existing = _activeEvents[j];
+            if (existing.CarIdx != -1 || existing.EventType != type || existing.IsExpired) continue;
+
+            if (existing.ClearedAt == null) return; // genuinely still showing
+            _activeEvents.RemoveAt(j);
         }
 
         // Cap active events

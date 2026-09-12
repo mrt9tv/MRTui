@@ -26,7 +26,7 @@ public partial class ProximityFeedWidget
             "Maximum events", 1, 6,
             () => MaxVisibleEvents, v => MaxVisibleEvents = (int)v,
             group: "Detection range",
-            description: "How many events can be shown at once.");
+            description: "How many events can be shown at once. The most severe win when there are more.");
 
         yield return WidgetSetting.Toggle(
             "Direction arrows", () => ShowDirection, v => ShowDirection = v,
@@ -44,34 +44,53 @@ public partial class ProximityFeedWidget
             description: "Newest event appears at the bottom instead of the top.",
             tier: SettingTier.Advanced);
 
-        yield return WidgetSetting.Toggle(
-            "Overtaking alerts", () => ShowOvertakingAlert, v => ShowOvertakingAlert = v,
-            group: "Event types",
-            description: "Warn when a faster-class car is about to come past.");
+        // ── Event families ────────────────────────────────────────────
+        // One switch per family, and every event type belongs to a family. A
+        // switch takes effect in the detector, so a disabled family never
+        // occupies one of the six slots.
+        WidgetSetting Family(string label, string desc, System.Func<bool> get, System.Action<bool> set,
+                             SettingTier tier = SettingTier.Basic) =>
+            WidgetSetting.Toggle(label, get, v => { set(v); ApplyEventFilters(); },
+                group: "Event types", description: desc, tier: tier);
 
-        yield return WidgetSetting.Toggle(
-            "Start lights", () => ShowStartSequence, v => ShowStartSequence = v,
-            group: "Event types",
-            description: "Ready / Set / Go at the start.");
+        yield return Family("Cars in trouble",
+            "Off-track, spins, stopped and slow cars, contact, tows.",
+            () => ShowCarIncidents, v => ShowCarIncidents = v);
 
-        yield return WidgetSetting.Toggle(
-            "Chequered flag", () => ShowCheckeredFlag, v => ShowCheckeredFlag = v,
-            group: "Event types");
+        yield return Family("Overtaking",
+            "A faster class about to come past, or a fast car closing while you are slow.",
+            () => ShowOvertakingAlert, v => ShowOvertakingAlert = v);
 
-        yield return WidgetSetting.Toggle(
-            "Pace and safety car", () => ShowPaceFlags, v => ShowPaceFlags = v,
-            group: "Event types",
-            description: "Safety car, end of line, free pass and wave-around.");
+        yield return Family("Pit activity",
+            "Cars entering, in and leaving the pits near you.",
+            () => ShowPitActivity, v => ShowPitActivity = v);
 
-        yield return WidgetSetting.Toggle(
-            "My incidents", () => ShowMyIncidents, v => ShowMyIncidents = v,
-            group: "Event types",
-            description: "Note each time your own incident count goes up, with the new total.");
+        yield return Family("Flags on other cars",
+            "Meatball, black flag, disqualification and local yellows.",
+            () => ShowCarFlags, v => ShowCarFlags = v);
 
-        yield return WidgetSetting.Toggle(
-            "Race start", () => ShowRaceStart, v => ShowRaceStart = v,
-            group: "Event types",
-            description: "Reaction time, launch time and technique after the lights, and a warning on a jump start.");
+        yield return Family("Start lights",
+            "Pace laps and the green.",
+            () => ShowStartSequence, v => ShowStartSequence = v);
+
+        yield return Family("Pace and safety car",
+            "Safety car, end of line, free pass and wave-around.",
+            () => ShowPaceFlags, v => ShowPaceFlags = v);
+
+        yield return Family("Red, white and blue flags",
+            "Red flag, final lap, and your own blue flag.",
+            () => ShowRaceControlFlags, v => ShowRaceControlFlags = v);
+
+        yield return Family("Chequered flag", "",
+            () => ShowCheckeredFlag, v => ShowCheckeredFlag = v);
+
+        yield return Family("Conditions and car warnings",
+            "Weather, engine faults, connection quality, FFB clipping, tyre sets, pit lane open or closed.",
+            () => ShowConditions, v => ShowConditions = v);
+
+        yield return Family("My incidents",
+            "Each time your own incident count goes up, with the new total.",
+            () => ShowMyIncidents, v => ShowMyIncidents = v);
 
         foreach (var s in base.GetSettings()) yield return s;
     }
@@ -79,4 +98,3 @@ public partial class ProximityFeedWidget
     /// <summary>The feed sizes itself from its row count, so no single size slider.</summary>
     protected override bool SupportsResize => false;
 }
-

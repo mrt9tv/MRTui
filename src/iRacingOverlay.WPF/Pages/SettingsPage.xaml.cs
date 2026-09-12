@@ -197,11 +197,6 @@ public partial class SettingsPage : UserControl, IDisposable
             description: "Hide widgets in the garage, on the garage screen, and while a replay is playing.");
 
         yield return WidgetSetting.Toggle(
-            "Session alerts", () => s.ShowSessionAlerts, v => s.ShowSessionAlerts = v,
-            group: "Alerts",
-            description: "Weather, engine faults, connection quality, FFB clipping and tyre sets appear in the Proximity Feed.");
-
-        yield return WidgetSetting.Toggle(
             "Auto-hide in the pits", () => s.AutoHideInPitsEnabled, v => s.AutoHideInPitsEnabled = v,
             group: "Auto-hide in the pits",
             description: "Hide the widgets below whenever you enter pit lane.");

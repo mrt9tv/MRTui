@@ -335,7 +335,7 @@ public partial class MainWindow : Window
         };
 
         var brush = FindResource(key) as Brush ?? Brushes.Gray;
-        ConnectionDot.Fill = brush;
+        ConnectionDot.Background = brush;
         ConnectionStatusText.Foreground = brush;
     }
 

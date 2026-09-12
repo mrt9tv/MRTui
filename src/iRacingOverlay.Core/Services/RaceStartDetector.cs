@@ -97,14 +97,17 @@ public sealed class RaceStartDetector
     {
         JustMeasured = false;
 
-        // A new session is a new start. The best carries across, since a
-        // driver's reaction is theirs rather than the session's.
+        // A new session is a new start, and the previous result goes with it —
+        // a widget must not show the practice-session start during the race.
+        // The best carries across, since a driver's reaction is theirs rather
+        // than the session's.
         if (data.SessionNum != _sessionNum)
         {
             _sessionNum = data.SessionNum;
             _phase = Phase.Idle;
             _prevFlags = 0;
             _prevState = 0;
+            Result = null;
         }
 
         uint flags = data.SessionFlags;
@@ -157,9 +160,13 @@ public sealed class RaceStartDetector
                 break;
 
             case Phase.Done:
-                // Re-arm for a restart: the session drops back out of racing.
+                // Re-arm for a restart: the session drops back out of racing. The
+                // result is cleared too, so the next lights start from a blank card.
                 if (state != SessionStateRacing && _prevState == SessionStateRacing)
+                {
                     _phase = Phase.Idle;
+                    Result = null;
+                }
                 break;
         }
 

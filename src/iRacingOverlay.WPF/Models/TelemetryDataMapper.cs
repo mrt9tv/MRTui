@@ -12,6 +12,16 @@ public static class TelemetryDataMapper
     /// <summary>
     /// Get the value for a specific telemetry field from telemetry data
     /// </summary>
+    /// <summary>
+    /// 0 as the shift lights start, 100 at the optimal shift RPM, held there past it.
+    /// </summary>
+    private static float ShiftRamp(TelemetryData d)
+    {
+        float from = d.ShiftLightsOnRPM, to = d.ShiftOptimalRPM;
+        if (to <= from || to <= 0) return 0f;
+        return Math.Clamp((d.RPM - from) / (to - from), 0f, 1f) * 100f;
+    }
+
     public static object? GetValue(TelemetryField field, TelemetryData? data)
     {
         if (data == null) return null;
@@ -179,7 +189,10 @@ public static class TelemetryDataMapper
             TelemetryField.DeltaToOptimal => data.LapDeltaToOptimalLapOK ? data.LapDeltaToOptimalLap : (object?)null,
 
             TelemetryField.BatteryVoltage => data.Voltage,
-            TelemetryField.ShiftIndicator => data.ShiftIndicatorPct * 100f,
+            // iRacing deprecated ShiftIndicatorPct and it tops out around 0.9 on
+            // current cars. Derive the ramp from the shift geometry instead: 0% as
+            // the lights start, 100% at the optimal shift RPM, held past it.
+            TelemetryField.ShiftIndicator => ShiftRamp(data),
             TelemetryField.OptimalShiftRPM => data.ShiftOptimalRPM,
             TelemetryField.Redline => data.ShiftRedlineRPM,
             TelemetryField.DrsStatus => data.DrsStatus,

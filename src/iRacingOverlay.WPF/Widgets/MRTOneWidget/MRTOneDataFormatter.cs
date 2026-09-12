@@ -169,7 +169,7 @@ public static class MRTOneDataFormatter
             TelemetryField.Speed when value is float speedMs =>
                 useMetricUnits
                     ? $"{(int)UnitConversions.MpsToKmh(speedMs)}"
-                    : $"{(int)UnitConversions.MpsToMph(speedMs)}",
+                    : UnitConversions.MpsToMph(speedMs).ToString("F1", CultureInfo.InvariantCulture),
 
             // RPM
             TelemetryField.RPM when value is float rpm => $"{(int)rpm}",

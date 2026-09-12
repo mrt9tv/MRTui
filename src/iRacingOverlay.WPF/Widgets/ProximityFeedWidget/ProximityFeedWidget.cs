@@ -90,8 +90,6 @@ public partial class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_TYRES = Color.FromRgb(255, 190, 90);         // amber — strategy
     private static readonly Color COLOR_MY_INCIDENT = Color.FromRgb(255, 120, 120);  // soft red — own incidents
     private static readonly Color COLOR_PIT_LANE = Color.FromRgb(255, 200, 50);      // yellow — matches pitting
-    private static readonly Color COLOR_REACTION = Color.FromRgb(120, 230, 160);     // mint — the start went fine
-    private static readonly Color COLOR_JUMP_START = Color.FromRgb(255, 60, 60);     // red — penalty incoming
 
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
@@ -129,23 +127,41 @@ public partial class ProximityFeedWidget : WidgetBase
     /// <summary>Feed grows upward (newest at bottom, older slides up).</summary>
     public bool GrowUpward { get; set; } = false;
 
-    /// <summary>Show higher-class overtaking imminent alerts.</summary>
+    // ── Event families ────────────────────────────────────────────────
+    // Every event type belongs to exactly one family, and each family has one
+    // switch. Before this, five of the twelve families had a switch and the
+    // rest were gated by a "Session alerts" toggle on a different page, so
+    // turning something off here often did nothing.
+
+    /// <summary>Off-track, spins, stopped and slow cars, collisions, tows.</summary>
+    public bool ShowCarIncidents { get; set; } = true;
+
+    /// <summary>Cars entering, in and leaving the pits.</summary>
+    public bool ShowPitActivity { get; set; } = true;
+
+    /// <summary>A faster class closing, or a fast car coming at you while you are slow.</summary>
     public bool ShowOvertakingAlert { get; set; } = true;
 
-    /// <summary>Show race start sequence events (READY/SET/GO).</summary>
+    /// <summary>Meatball, black flag, DSQ and local yellow on other cars.</summary>
+    public bool ShowCarFlags { get; set; } = true;
+
+    /// <summary>Pace laps and the green.</summary>
     public bool ShowStartSequence { get; set; } = true;
 
-    /// <summary>Show checkered flag event.</summary>
+    /// <summary>Chequered flag.</summary>
     public bool ShowCheckeredFlag { get; set; } = true;
 
-    /// <summary>Show pace car / caution events (safety car, pace flags).</summary>
+    /// <summary>Safety car, end of line, free pass and wave-around.</summary>
     public bool ShowPaceFlags { get; set; } = true;
 
-    /// <summary>Show the player's own incident count going up.</summary>
-    public bool ShowMyIncidents { get; set; } = true;
+    /// <summary>Red flag, white flag, and your own blue flag.</summary>
+    public bool ShowRaceControlFlags { get; set; } = true;
 
-    /// <summary>Announce the reaction and launch time after the start lights.</summary>
-    public bool ShowRaceStart { get; set; } = true;
+    /// <summary>Weather, engine warnings, connection, FFB clipping, tyre sets, pit lane open/closed.</summary>
+    public bool ShowConditions { get; set; } = true;
+
+    /// <summary>The player's own incident count going up.</summary>
+    public bool ShowMyIncidents { get; set; } = true;
 
     /// <summary>Detection range ahead of the player in seconds (1-30, default 12).</summary>
     public float DetectionAheadSeconds { get; set; } = 12.0f;
@@ -164,6 +180,58 @@ public partial class ProximityFeedWidget : WidgetBase
     // iRacing SessionState constants (mirrored from NearbyEventDetector for UI logic)
     private const int SESSION_STATE_PARADE_LAPS = 3;
     private const int SESSION_STATE_RACING = 4;
+
+    /// <summary>
+    /// Which family each event type belongs to, as a predicate on this widget's
+    /// switches. The one place the mapping lives.
+    /// </summary>
+    private bool IsTypeEnabled(NearbyEventType type) => type switch
+    {
+        NearbyEventType.OffTrack or NearbyEventType.Spin or NearbyEventType.Stopped
+            or NearbyEventType.SlowCar or NearbyEventType.Collision or NearbyEventType.Towed
+            => ShowCarIncidents,
+
+        NearbyEventType.Pitting or NearbyEventType.InBox or NearbyEventType.PitExit
+            => ShowPitActivity,
+
+        NearbyEventType.OvertakingImminent or NearbyEventType.IncomingFast
+            => ShowOvertakingAlert,
+
+        NearbyEventType.MeatballFlag or NearbyEventType.BlackFlag
+            or NearbyEventType.Disqualified or NearbyEventType.LocalYellow
+            => ShowCarFlags,
+
+        NearbyEventType.StartSequence => ShowStartSequence,
+        NearbyEventType.CheckeredFlag => ShowCheckeredFlag,
+
+        NearbyEventType.SafetyCar or NearbyEventType.PaceEndOfLine
+            or NearbyEventType.PaceFreePass or NearbyEventType.PaceWaveAround
+            => ShowPaceFlags,
+
+        NearbyEventType.RedFlag or NearbyEventType.WhiteFlag or NearbyEventType.BlueFlagged
+            => ShowRaceControlFlags,
+
+        NearbyEventType.WeatherChange or NearbyEventType.DeclaredWet
+            or NearbyEventType.EngineWarning or NearbyEventType.PoorConnection
+            or NearbyEventType.FfbClipping or NearbyEventType.LowTireSets
+            or NearbyEventType.PitLaneStatus
+            => ShowConditions,
+
+        NearbyEventType.IncidentGained => ShowMyIncidents,
+
+        _ => true,
+    };
+
+    /// <summary>
+    /// Push the switches into the detector so disabled types are dropped at
+    /// emission and never take one of its six slots. Call after any switch changes.
+    /// </summary>
+    public void ApplyEventFilters()
+    {
+        _detector.DisabledTypes.Clear();
+        foreach (NearbyEventType type in Enum.GetValues<NearbyEventType>())
+            if (!IsTypeEnabled(type)) _detector.DisabledTypes.Add(type);
+    }
 
     #endregion
 
@@ -190,73 +258,58 @@ public partial class ProximityFeedWidget : WidgetBase
         LoadSettings();
     }
 
+    // Settings arrive as JsonElement from a loaded layout and as CLR values once
+    // set in-process; the readers accept both.
+
+    private bool ReadBool(string key, bool fallback)
+    {
+        if (!Config.Settings.TryGetValue(key, out var v)) return fallback;
+        return v switch
+        {
+            JsonElement je => je.ValueKind == JsonValueKind.True,
+            bool b => b,
+            _ => fallback,
+        };
+    }
+
+    private float ReadFloat(string key, float fallback, float min, float max)
+    {
+        if (!Config.Settings.TryGetValue(key, out var v)) return fallback;
+        double d = v switch
+        {
+            JsonElement je when je.ValueKind == JsonValueKind.Number => je.GetDouble(),
+            float f => f,
+            double dd => dd,
+            int i => i,
+            _ => fallback,
+        };
+        return (float)Math.Clamp(d, min, max);
+    }
+
     private void LoadSettings()
     {
-        if (Config.Settings.TryGetValue("maxVisibleEvents", out var v1))
-        {
-            if (v1 is JsonElement je1 && je1.TryGetInt32(out var n)) MaxVisibleEvents = Math.Clamp(n, 1, MAX_VISIBLE_ROWS);
-            else if (v1 is int i1) MaxVisibleEvents = Math.Clamp(i1, 1, MAX_VISIBLE_ROWS);
-        }
-        if (Config.Settings.TryGetValue("showDirection", out var v2))
-        {
-            if (v2 is JsonElement je2) ShowDirection = je2.ValueKind == JsonValueKind.True;
-            else if (v2 is bool b2) ShowDirection = b2;
-        }
-        if (Config.Settings.TryGetValue("showInterval", out var v3))
-        {
-            if (v3 is JsonElement je3) ShowInterval = je3.ValueKind == JsonValueKind.True;
-            else if (v3 is bool b3) ShowInterval = b3;
-        }
-        if (Config.Settings.TryGetValue("growUpward", out var v4))
-        {
-            if (v4 is JsonElement je4) GrowUpward = je4.ValueKind == JsonValueKind.True;
-            else if (v4 is bool b4) GrowUpward = b4;
-        }
-        if (Config.Settings.TryGetValue("showOvertakingAlert", out var v5))
-        {
-            if (v5 is JsonElement je5) ShowOvertakingAlert = je5.ValueKind == JsonValueKind.True;
-            else if (v5 is bool b5) ShowOvertakingAlert = b5;
-        }
-        if (Config.Settings.TryGetValue("showStartSequence", out var v6))
-        {
-            if (v6 is JsonElement je6) ShowStartSequence = je6.ValueKind == JsonValueKind.True;
-            else if (v6 is bool b6) ShowStartSequence = b6;
-        }
-        if (Config.Settings.TryGetValue("showCheckeredFlag", out var v7))
-        {
-            if (v7 is JsonElement je7) ShowCheckeredFlag = je7.ValueKind == JsonValueKind.True;
-            else if (v7 is bool b7) ShowCheckeredFlag = b7;
-        }
-        if (Config.Settings.TryGetValue("showPaceFlags", out var v8))
-        {
-            if (v8 is JsonElement je8) ShowPaceFlags = je8.ValueKind == JsonValueKind.True;
-            else if (v8 is bool b8) ShowPaceFlags = b8;
-        }
-        if (Config.Settings.TryGetValue("showMyIncidents", out var v11))
-        {
-            if (v11 is JsonElement je11) ShowMyIncidents = je11.ValueKind == JsonValueKind.True;
-            else if (v11 is bool b11) ShowMyIncidents = b11;
-        }
-        if (Config.Settings.TryGetValue("showRaceStart", out var v12))
-        {
-            if (v12 is JsonElement je12) ShowRaceStart = je12.ValueKind == JsonValueKind.True;
-            else if (v12 is bool b12) ShowRaceStart = b12;
-        }
-        if (Config.Settings.TryGetValue("detectionAhead", out var v9))
-        {
-            if (v9 is JsonElement je9 && je9.TryGetDouble(out var d9)) DetectionAheadSeconds = (float)Math.Clamp(d9, 1.0, 30.0);
-            else if (v9 is float f9) DetectionAheadSeconds = Math.Clamp(f9, 1.0f, 30.0f);
-            else if (v9 is double dd9) DetectionAheadSeconds = (float)Math.Clamp(dd9, 1.0, 30.0);
-        }
-        if (Config.Settings.TryGetValue("detectionBehind", out var v10))
-        {
-            if (v10 is JsonElement je10 && je10.TryGetDouble(out var d10)) DetectionBehindSeconds = (float)Math.Clamp(d10, 1.0, 15.0);
-            else if (v10 is float f10) DetectionBehindSeconds = Math.Clamp(f10, 1.0f, 15.0f);
-            else if (v10 is double dd10) DetectionBehindSeconds = (float)Math.Clamp(dd10, 1.0, 15.0);
-        }
-        // Apply detection range to detector
+        MaxVisibleEvents = (int)ReadFloat("maxVisibleEvents", MaxVisibleEvents, 1, MAX_VISIBLE_ROWS);
+        ShowDirection = ReadBool("showDirection", ShowDirection);
+        ShowInterval = ReadBool("showInterval", ShowInterval);
+        GrowUpward = ReadBool("growUpward", GrowUpward);
+
+        ShowCarIncidents = ReadBool("showCarIncidents", ShowCarIncidents);
+        ShowPitActivity = ReadBool("showPitActivity", ShowPitActivity);
+        ShowOvertakingAlert = ReadBool("showOvertakingAlert", ShowOvertakingAlert);
+        ShowCarFlags = ReadBool("showCarFlags", ShowCarFlags);
+        ShowStartSequence = ReadBool("showStartSequence", ShowStartSequence);
+        ShowCheckeredFlag = ReadBool("showCheckeredFlag", ShowCheckeredFlag);
+        ShowPaceFlags = ReadBool("showPaceFlags", ShowPaceFlags);
+        ShowRaceControlFlags = ReadBool("showRaceControlFlags", ShowRaceControlFlags);
+        ShowConditions = ReadBool("showConditions", ShowConditions);
+        ShowMyIncidents = ReadBool("showMyIncidents", ShowMyIncidents);
+
+        DetectionAheadSeconds = ReadFloat("detectionAhead", DetectionAheadSeconds, 1f, 30f);
+        DetectionBehindSeconds = ReadFloat("detectionBehind", DetectionBehindSeconds, 1f, 15f);
+
         _detector.DetectionAheadSeconds = DetectionAheadSeconds;
         _detector.DetectionBehindSeconds = DetectionBehindSeconds;
+        ApplyEventFilters();
     }
 
     protected override void SaveWidgetSettings() => SaveSettings();
@@ -267,15 +320,20 @@ public partial class ProximityFeedWidget : WidgetBase
         Config.Settings["showDirection"] = ShowDirection;
         Config.Settings["showInterval"] = ShowInterval;
         Config.Settings["growUpward"] = GrowUpward;
+        Config.Settings["showCarIncidents"] = ShowCarIncidents;
+        Config.Settings["showPitActivity"] = ShowPitActivity;
         Config.Settings["showOvertakingAlert"] = ShowOvertakingAlert;
+        Config.Settings["showCarFlags"] = ShowCarFlags;
         Config.Settings["showStartSequence"] = ShowStartSequence;
         Config.Settings["showCheckeredFlag"] = ShowCheckeredFlag;
         Config.Settings["showPaceFlags"] = ShowPaceFlags;
+        Config.Settings["showRaceControlFlags"] = ShowRaceControlFlags;
+        Config.Settings["showConditions"] = ShowConditions;
         Config.Settings["showMyIncidents"] = ShowMyIncidents;
-        Config.Settings["showRaceStart"] = ShowRaceStart;
         Config.Settings["detectionAhead"] = DetectionAheadSeconds;
         Config.Settings["detectionBehind"] = DetectionBehindSeconds;
     }
+
 
     private void InitializeWidget()
     {
@@ -366,7 +424,6 @@ public partial class ProximityFeedWidget : WidgetBase
         // Sync adjustable detection range to detector
         _detector.DetectionAheadSeconds = DetectionAheadSeconds;
         _detector.DetectionBehindSeconds = DetectionBehindSeconds;
-        _detector.EnableSessionAlerts = AppSettings.Instance.ShowSessionAlerts;
 
         // Track formation phase: suppress Stopped/SlowCar during parade laps
         // and during the race start grace period (detector handles the timer).
@@ -405,16 +462,10 @@ public partial class ProximityFeedWidget : WidgetBase
         {
             var e = events[i];
 
-            // Apply per-type toggle filters (inlined)
-            if (!ShowOvertakingAlert && e.EventType == NearbyEventType.OvertakingImminent) continue;
-            if (!ShowStartSequence && e.EventType == NearbyEventType.StartSequence) continue;
-            if (!ShowCheckeredFlag && e.EventType == NearbyEventType.CheckeredFlag) continue;
-            if (!ShowMyIncidents && e.EventType == NearbyEventType.IncidentGained) continue;
-            if (!ShowRaceStart && e.EventType is (NearbyEventType.ReactionTime or NearbyEventType.JumpStart)) continue;
-            if (!ShowPaceFlags && (e.EventType == NearbyEventType.SafetyCar
-                || e.EventType == NearbyEventType.PaceEndOfLine
-                || e.EventType == NearbyEventType.PaceFreePass
-                || e.EventType == NearbyEventType.PaceWaveAround)) continue;
+            // Family switches are enforced in the detector at emission; this is
+            // only the belt to that brace, for an event emitted before a switch
+            // was flipped.
+            if (!IsTypeEnabled(e.EventType)) continue;
             if (_isFormationPhase && (e.EventType == NearbyEventType.Stopped
                 || e.EventType == NearbyEventType.SlowCar)) continue;
 
@@ -829,8 +880,6 @@ public partial class ProximityFeedWidget : WidgetBase
         NearbyEventType.LowTireSets => COLOR_TYRES,
         NearbyEventType.IncidentGained => COLOR_MY_INCIDENT,
         NearbyEventType.PitLaneStatus => COLOR_PIT_LANE,
-        NearbyEventType.ReactionTime => COLOR_REACTION,
-        NearbyEventType.JumpStart => COLOR_JUMP_START,
 
         _ => GetSeverityColor(evt.Severity),
     };

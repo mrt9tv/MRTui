@@ -113,7 +113,6 @@
     <sys:Double x:Key="Radius.Card">8</sys:Double>
     <CornerRadius x:Key="CR.Control">5</CornerRadius>
     <CornerRadius x:Key="CR.Card">8</CornerRadius>
-    <CornerRadius x:Key="CR.Pill">999</CornerRadius>
 
     <Thickness x:Key="Pad.Card">16</Thickness>
     <Thickness x:Key="Pad.Control">12,7</Thickness>
@@ -392,7 +391,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
                     <Grid VerticalAlignment="Center">
-                        <Border Height="4" CornerRadius="{StaticResource CR.Pill}"
+                        <Border Height="4" CornerRadius="2"
                                 Background="{StaticResource SurfaceRaised}"
                                 BorderBrush="{StaticResource Border}" BorderThickness="1"
                                 VerticalAlignment="Center"/>
@@ -401,7 +400,7 @@
                                 <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Height="4" CornerRadius="{StaticResource CR.Pill}"
+                                            <Border Height="4" CornerRadius="2"
                                                     Background="{StaticResource Teal}"
                                                     VerticalAlignment="Center"/>
                                         </ControlTemplate>
@@ -422,16 +421,16 @@
                                 <Thumb x:Name="Thumb" Width="14" Height="14" Cursor="Hand">
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Ellipse x:Name="Dot"
-                                                     Fill="{StaticResource TextPrimary}"
-                                                     Stroke="{StaticResource TealBright}"
-                                                     StrokeThickness="2"/>
+                                            <Border x:Name="Dot" CornerRadius="3"
+                                                    Background="{StaticResource TextPrimary}"
+                                                    BorderBrush="{StaticResource TealBright}"
+                                                    BorderThickness="2"/>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="Dot" Property="Stroke" Value="{StaticResource OrangeBright}"/>
+                                                    <Setter TargetName="Dot" Property="BorderBrush" Value="{StaticResource OrangeBright}"/>
                                                 </Trigger>
                                                 <Trigger Property="IsDragging" Value="True">
-                                                    <Setter TargetName="Dot" Property="Stroke" Value="{StaticResource Orange}"/>
+                                                    <Setter TargetName="Dot" Property="BorderBrush" Value="{StaticResource Orange}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
