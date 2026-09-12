@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.2] - 2026-09-12
+
+### Changed
+- **Switch** — rounded rectangle with a square-cornered knob instead of a pill; matches the cards and inputs around it
+- **Scrollbar** — 8 px rounded-rectangle thumb in a faint lane instead of a hairline
+- Action descriptions sit under their button rather than beside it
+
+---
+
 ## [0.3.1] - 2026-09-12
 
 ### Added

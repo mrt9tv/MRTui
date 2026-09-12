@@ -2,7 +2,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=.net)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.3.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-0.3.2-blue.svg)](CHANGELOG.md)
 
 > **Professional-grade telemetry overlay system for iRacing featuring modular widgets, intelligent fuel strategy, and race-optimized UI design.**
 
