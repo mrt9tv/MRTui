@@ -94,7 +94,7 @@ public static class MRTOneDataFormatter
             TelemetryField.Brake when value is float brake => $"{(int)(brake * 100)}%",
             TelemetryField.ABSActive when value is int abs => "ABS",
             TelemetryField.WheelLock when value is int lockup => "WHEEL\nLOCKUP",
-            TelemetryField.BrakeBias when value is float bias => $"{bias:F1}%",
+            TelemetryField.BrakeBias when value is float bias => Inv($"{bias:F1}%"),
 
             // Traction Control (car-specific scales)
             TelemetryField.TractionControl => value switch
@@ -193,9 +193,9 @@ public static class MRTOneDataFormatter
             
             // Delta times (with +/- sign, max 3 decimals)
             TelemetryField.DeltaToBestLap when value is float delta =>
-                delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
+                delta >= 0 ? Inv($"+{delta:F3}") : Inv($"{delta:F3}"),
             TelemetryField.DeltaToSessionBest when value is float delta =>
-                delta >= 0 ? $"+{delta:F3}" : $"{delta:F3}",
+                delta >= 0 ? Inv($"+{delta:F3}") : Inv($"{delta:F3}"),
 
             // Reached when the mapper returned null because iRacing marked the delta
             // invalid. The caller substitutes 0 for null, so without this the widget
@@ -204,7 +204,7 @@ public static class MRTOneDataFormatter
             TelemetryField.DeltaToBestLap or TelemetryField.DeltaToSessionBest => "-",
             
             // Track position percentage
-            TelemetryField.LapDistPct when value is float pct => $"{(pct * 100):F1}%",
+            TelemetryField.LapDistPct when value is float pct => Inv($"{(pct * 100):F1}%"),
 
             // Lap numbers and counts
             TelemetryField.LapNumber when value is int lap => $"{lap}",
@@ -244,18 +244,18 @@ public static class MRTOneDataFormatter
             TelemetryField.TireTempRR when value is float temp => $"{(int)temp}",
             
             // Tire wear (1 decimal %)
-            TelemetryField.TireWearLF when value is float wear => $"{wear:F1}%",
-            TelemetryField.TireWearRF when value is float wear => $"{wear:F1}%",
-            TelemetryField.TireWearLR when value is float wear => $"{wear:F1}%",
-            TelemetryField.TireWearRR when value is float wear => $"{wear:F1}%",
+            TelemetryField.TireWearLF when value is float wear => Inv($"{wear:F1}%"),
+            TelemetryField.TireWearRF when value is float wear => Inv($"{wear:F1}%"),
+            TelemetryField.TireWearLR when value is float wear => Inv($"{wear:F1}%"),
+            TelemetryField.TireWearRR when value is float wear => Inv($"{wear:F1}%"),
             
             // Steering angle (1 decimal, in degrees — iRacing gives radians)
             TelemetryField.SteeringAngle when value is float rad =>
-                $"{(rad * 57.2958f):F1}°",
+                Inv($"{(rad * 57.2958f):F1}°"),
             
             // Wind
             TelemetryField.WindSpeed when value is float vel =>
-                useMetricUnits ? $"{vel:F1}" : $"{(vel * 2.23694f):F1}", // m/s or mph
+                useMetricUnits ? Inv($"{vel:F1}") : Inv($"{(vel * 2.23694f):F1}"), // m/s or mph
             TelemetryField.WindDirection when value is float dir =>
                 FormatWindArrow(dir),
             
@@ -297,23 +297,23 @@ public static class MRTOneDataFormatter
                 wet > 0 ? TelemetryStatus.WetnessLabel(wet) : "-",
 
             TelemetryField.Precipitation when value is float rain =>
-                rain > 0.001f ? $"{rain * 100:F0}%" : "-",
+                rain > 0.001f ? Inv($"{rain * 100:F0}%") : "-",
 
             TelemetryField.TimeOfDay when value is float tod =>
                 $"{(int)(tod / 3600) % 24:D2}:{(int)(tod / 60) % 60:D2}",
 
             // FFB: at or above 100% the wheel is clipping and detail is lost.
             TelemetryField.FfbTorquePct when value is float ffb =>
-                $"{ffb:F0}%",
+                Inv($"{ffb:F0}%"),
             TelemetryField.FfbMaxForce when value is float nm =>
-                nm > 0 ? $"{nm:F1}Nm" : "-",
+                nm > 0 ? Inv($"{nm:F1}Nm") : "-",
 
             TelemetryField.SimFrameRate when value is float fps =>
-                fps > 0 ? $"{fps:F0}" : "-",
+                fps > 0 ? Inv($"{fps:F0}") : "-",
             TelemetryField.ConnectionQuality when value is float q =>
-                q > 0 ? $"{q:F0}%" : "-",
+                q > 0 ? Inv($"{q:F0}%") : "-",
             TelemetryField.ConnectionLatency when value is float ms =>
-                ms > 0 ? $"{ms:F0}ms" : "-",
+                ms > 0 ? Inv($"{ms:F0}ms") : "-",
 
             TelemetryField.TireSetsLeft when value is int sets =>
                 sets >= 0 ? sets.ToString() : "-",
@@ -323,21 +323,21 @@ public static class MRTOneDataFormatter
             TelemetryField.ColdPressureLF or TelemetryField.ColdPressureRF
                 or TelemetryField.ColdPressureLR or TelemetryField.ColdPressureRR
                 when value is float kpa =>
-                kpa > 0 ? (useMetricUnits ? $"{kpa:F0}kPa" : $"{kpa * 0.145038f:F1}psi") : "-",
+                kpa > 0 ? (useMetricUnits ? Inv($"{kpa:F0}kPa") : Inv($"{kpa * 0.145038f:F1}psi")) : "-",
 
             TelemetryField.TeamIncidents when value is int inc => $"{inc}x",
             TelemetryField.WeightPenalty when value is float kg =>
-                kg > 0.1f ? $"{kg:F0}kg" : "-",
+                kg > 0.1f ? Inv($"{kg:F0}kg") : "-",
 
             // Null here means the sim marked the delta invalid (out-lap, in-lap,
             // no reference set) — the app used to show the number regardless.
             TelemetryField.DeltaToOptimal =>
-                value is float d ? (d >= 0 ? $"+{d:F2}" : $"{d:F2}") : "-",
+                value is float d ? (d >= 0 ? Inv($"+{d:F2}") : Inv($"{d:F2}")) : "-",
 
             TelemetryField.BatteryVoltage when value is float v =>
-                v > 0.1f ? $"{v:F1}V" : "-",
+                v > 0.1f ? Inv($"{v:F1}V") : "-",
             TelemetryField.ShiftIndicator when value is float sh =>
-                $"{sh:F0}%",
+                Inv($"{sh:F0}%"),
 
             // Hybrid / DRS.
             // UNVERIFIED: no DRS-equipped car was in either live session used to check
@@ -368,7 +368,7 @@ public static class MRTOneDataFormatter
 
         int minutes = (int)(seconds / 60);
         float remainingSeconds = seconds % 60;
-        return $"{minutes}:{remainingSeconds:00.000}";
+        return Inv($"{minutes}:{remainingSeconds:00.000}");
     }
     
     /// <summary>
@@ -408,6 +408,13 @@ public static class MRTOneDataFormatter
             ? $"{(int)celsius}"
             : $"{(int)UnitConversions.CelsiusToFahrenheit(celsius)}";
     }
+
+    /// <summary>
+    /// Format with the invariant culture. A plain interpolated string formats with
+    /// the machine's locale, and on a comma-decimal system that turned lap times
+    /// into "1:32,345" — a racing display uses the point everywhere.
+    /// </summary>
+    private static string Inv(FormattableString s) => s.ToString(CultureInfo.InvariantCulture);
 
     #endregion
 

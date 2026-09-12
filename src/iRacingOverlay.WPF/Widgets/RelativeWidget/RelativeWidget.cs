@@ -931,13 +931,13 @@ public partial class RelativeWidget : WidgetBase
                 double fractionalTotal = estLapsRemain > 0
                     ? currentLap + estLapsRemain
                     : (double)estimatedTotal;
-                UiUpdate.SetText(_infoEstLaps, $"{currentLap}/~{fractionalTotal:F1}");
+                UiUpdate.SetText(_infoEstLaps, string.Format(CultureInfo.InvariantCulture, "{0}/~{1:F1}", currentLap, fractionalTotal));
             }
             else if (estLapsRemain > 0)
             {
                 // Fallback: SDK estimated laps remaining
                 double estTotal = currentLap + estLapsRemain;
-                UiUpdate.SetText(_infoEstLaps, $"{currentLap}/~{estTotal:F1}");
+                UiUpdate.SetText(_infoEstLaps, string.Format(CultureInfo.InvariantCulture, "{0}/~{1:F1}", currentLap, estTotal));
             }
             else
             {

@@ -13,6 +13,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iRacingOverlay.Core.Tests", "tests\iRacingOverlay.Core.Tests\iRacingOverlay.Core.Tests.csproj", "{DA73A196-C2EB-47BF-949A-BF760026C47F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "iRacingOverlay.WPF.Tests", "tests\iRacingOverlay.WPF.Tests\iRacingOverlay.WPF.Tests.csproj", "{8131E018-657C-4857-AA8C-7EA03C665695}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,6 +61,18 @@ Global
 		{DA73A196-C2EB-47BF-949A-BF760026C47F}.Release|x64.Build.0 = Release|Any CPU
 		{DA73A196-C2EB-47BF-949A-BF760026C47F}.Release|x86.ActiveCfg = Release|Any CPU
 		{DA73A196-C2EB-47BF-949A-BF760026C47F}.Release|x86.Build.0 = Release|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Debug|x64.Build.0 = Debug|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Debug|x86.Build.0 = Debug|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Release|x64.ActiveCfg = Release|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Release|x64.Build.0 = Release|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Release|x86.ActiveCfg = Release|Any CPU
+		{8131E018-657C-4857-AA8C-7EA03C665695}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -67,5 +81,6 @@ Global
 		{DCD49F61-D876-4928-B462-39B15F0ADF83} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{7DD9CA9F-8497-43D5-A69C-DC331DBCD5E9} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{DA73A196-C2EB-47BF-949A-BF760026C47F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{8131E018-657C-4857-AA8C-7EA03C665695} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
