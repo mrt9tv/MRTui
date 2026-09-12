@@ -357,24 +357,18 @@ public sealed class SettingsRenderer
 
         if (string.IsNullOrWhiteSpace(s.Description)) return button;
 
-        // Action with a description: the caption sits beside the button rather
+        // Action with a description: the caption sits under the button rather
         // than hiding in a tooltip, like every other row.
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         button.Margin = new Thickness(0);
-        button.VerticalAlignment = VerticalAlignment.Center;
-        grid.Children.Add(button);
-        var caption = new TextBlock
+        stack.Children.Add(button);
+        stack.Children.Add(new TextBlock
         {
             Text = s.Description,
             Style = Res("T.Caption"),
-            Margin = new Thickness(12, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(caption, 1);
-        grid.Children.Add(caption);
-        return grid;
+            Margin = new Thickness(2, 4, 0, 0),
+        });
+        return stack;
     }
 
     private static FrameworkElement BuildNote(WidgetSetting s) => new TextBlock

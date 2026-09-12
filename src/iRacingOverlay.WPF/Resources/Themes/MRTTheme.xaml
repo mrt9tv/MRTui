@@ -288,28 +288,33 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- 42×24 track, 18 knob, 18 px of travel. The knob slides
-                             rather than jumps, and the on state gets a soft halo so
-                             it reads from across the room, not only from colour. -->
-                        <Grid Grid.Column="0" Width="42" Height="24" VerticalAlignment="Center">
+                        <!-- 40×22 rounded-rectangle track with a square-cornered
+                             16 px knob and 18 px of travel. Pill shapes read as
+                             dated; the rectangle matches the cards and inputs
+                             around it. The knob slides rather than jumps, and the
+                             on state's outline brightens so state reads from the
+                             edge as well as the fill. -->
+                        <Grid Grid.Column="0" Width="40" Height="22" VerticalAlignment="Center">
                             <Border x:Name="Halo"
-                                    CornerRadius="{StaticResource CR.Pill}"
-                                    Background="{StaticResource TealBright}"
+                                    CornerRadius="8"
+                                    BorderBrush="{StaticResource TealBright}"
+                                    BorderThickness="1.5"
                                     Margin="-3" Opacity="0"/>
                             <Border x:Name="Track"
-                                    CornerRadius="{StaticResource CR.Pill}"
+                                    CornerRadius="6"
                                     Background="{StaticResource SurfaceRaised}"
                                     BorderBrush="{StaticResource BorderStrong}"
                                     BorderThickness="1"/>
-                            <Ellipse x:Name="Knob" Width="18" Height="18"
-                                     Fill="{StaticResource TextMuted}"
-                                     HorizontalAlignment="Left"
-                                     VerticalAlignment="Center"
-                                     Margin="3,0,0,0">
-                                <Ellipse.RenderTransform>
+                            <Border x:Name="Knob" Width="16" Height="16"
+                                    CornerRadius="4"
+                                    Background="{StaticResource TextMuted}"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    Margin="3,0,0,0">
+                                <Border.RenderTransform>
                                     <TranslateTransform x:Name="KnobSlide" X="0"/>
-                                </Ellipse.RenderTransform>
-                            </Ellipse>
+                                </Border.RenderTransform>
+                            </Border>
                         </Grid>
 
                         <ContentPresenter x:Name="Label" Grid.Column="1"
@@ -321,7 +326,7 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Track" Property="Background" Value="{StaticResource Teal}"/>
                             <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource TealBright}"/>
-                            <Setter TargetName="Knob" Property="Fill" Value="{StaticResource TextPrimary}"/>
+                            <Setter TargetName="Knob" Property="Background" Value="{StaticResource TextPrimary}"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
@@ -335,7 +340,7 @@
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Halo"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.22" Duration="0:0:0.16"/>
+                                                         To="0.6" Duration="0:0:0.16"/>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -358,7 +363,7 @@
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource TealBright}"/>
-                            <Setter TargetName="Knob" Property="Fill" Value="{StaticResource TextPrimary}"/>
+                            <Setter TargetName="Knob" Property="Background" Value="{StaticResource TextPrimary}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
                             <Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource OrangeBright}"/>
@@ -586,27 +591,22 @@
     <Style TargetType="TextBox" BasedOn="{StaticResource TextBox.Mrt}"/>
 
     <!-- ══════════════ SCROLLBAR ══════════════ -->
-    <!-- An overlay-style bar: a hairline thumb that widens when the pointer is
-         anywhere in its lane, no arrows, no visible track. It reads as part of
-         the content edge rather than as chrome, and turns brand teal while
-         dragged so the drag state is unmistakable. -->
+    <!-- A rounded-rectangle thumb in a faint lane, no arrows. The thumb is a
+         constant 8 px so it is always easy to catch; it brightens under the
+         pointer and turns brand teal while dragged. -->
 
     <ControlTemplate x:Key="ScrollThumb.Vertical" TargetType="Thumb">
         <Grid Background="Transparent">
-            <Border x:Name="T" Width="4" Margin="0,0,4,0"
+            <Border x:Name="T" Width="8" Margin="0,0,1,0"
                     HorizontalAlignment="Right"
-                    Background="{StaticResource TextFaint}"
-                    CornerRadius="{StaticResource CR.Pill}"/>
+                    Background="{StaticResource BorderStrong}"
+                    CornerRadius="3"/>
         </Grid>
         <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ScrollBar}}" Value="True">
-                <Setter TargetName="T" Property="Width" Value="8"/>
-                <Setter TargetName="T" Property="Margin" Value="0,0,2,0"/>
                 <Setter TargetName="T" Property="Background" Value="{StaticResource TextMuted}"/>
             </DataTrigger>
             <Trigger Property="IsDragging" Value="True">
-                <Setter TargetName="T" Property="Width" Value="8"/>
-                <Setter TargetName="T" Property="Margin" Value="0,0,2,0"/>
                 <Setter TargetName="T" Property="Background" Value="{StaticResource TealBright}"/>
             </Trigger>
         </ControlTemplate.Triggers>
@@ -614,20 +614,16 @@
 
     <ControlTemplate x:Key="ScrollThumb.Horizontal" TargetType="Thumb">
         <Grid Background="Transparent">
-            <Border x:Name="T" Height="4" Margin="0,0,0,4"
+            <Border x:Name="T" Height="8" Margin="0,0,0,1"
                     VerticalAlignment="Bottom"
-                    Background="{StaticResource TextFaint}"
-                    CornerRadius="{StaticResource CR.Pill}"/>
+                    Background="{StaticResource BorderStrong}"
+                    CornerRadius="3"/>
         </Grid>
         <ControlTemplate.Triggers>
             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ScrollBar}}" Value="True">
-                <Setter TargetName="T" Property="Height" Value="8"/>
-                <Setter TargetName="T" Property="Margin" Value="0,0,0,2"/>
                 <Setter TargetName="T" Property="Background" Value="{StaticResource TextMuted}"/>
             </DataTrigger>
             <Trigger Property="IsDragging" Value="True">
-                <Setter TargetName="T" Property="Height" Value="8"/>
-                <Setter TargetName="T" Property="Margin" Value="0,0,0,2"/>
                 <Setter TargetName="T" Property="Background" Value="{StaticResource TealBright}"/>
             </Trigger>
         </ControlTemplate.Triggers>
@@ -640,7 +636,12 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
-                    <Grid Background="Transparent" Margin="0,2">
+                    <Grid Margin="0,2">
+                        <!-- A visible lane, so the bar reads as a control rather than a stray line. -->
+                        <Border Width="10" HorizontalAlignment="Right"
+                                Background="{StaticResource Surface}"
+                                BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                CornerRadius="4"/>
                         <Track x:Name="PART_Track" IsDirectionReversed="True">
                             <Track.DecreaseRepeatButton>
                                 <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False"/>
@@ -664,7 +665,11 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ScrollBar">
-                            <Grid Background="Transparent" Margin="2,0">
+                            <Grid Margin="2,0">
+                                <Border Height="10" VerticalAlignment="Bottom"
+                                        Background="{StaticResource Surface}"
+                                        BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                        CornerRadius="4"/>
                                 <Track x:Name="PART_Track">
                                     <Track.DecreaseRepeatButton>
                                         <RepeatButton Command="ScrollBar.PageLeftCommand" Opacity="0" Focusable="False"/>
