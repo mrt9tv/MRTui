@@ -392,6 +392,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private string _driverName = "";
     private string _carNumber = "";
     private string _carScreenName = ""; // Car model name (e.g., "Ferrari 488 GT3")
+    private string _carClassShortName = ""; // Player's class, e.g. "GT3" — what a profile binds to
     private string _driverSetupName = ""; // Current setup name from garage
     private int _driverSetupIsModified = 0; // 0 = unmodified, 1 = modified
     private string _trackName = ""; // Display name (e.g., "Circuit de Spa-Francorchamps")
@@ -883,6 +884,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 DriverName = _driverName,
                 CarNumber = _carNumber,
                 CarScreenName = _carScreenName,
+                CarClassShortName = _carClassShortName,
                 DriverSetupName = _driverSetupName,
                 DriverSetupIsModified = _driverSetupIsModified,
                 TrackName = _trackName,
@@ -1537,6 +1539,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                             _carScreenName = driver.CarScreenName;
                         else if (!string.IsNullOrEmpty(driver.CarScreenNameShort))
                             _carScreenName = driver.CarScreenNameShort;
+                        _carClassShortName = driver.CarClassShortName ?? "";
                     }
                 }
             }

@@ -119,39 +119,57 @@ public class ProfileStorageService
         var profile = GetProfile(profileId);
         if (profile == null) return;
 
+        // The layout is the whole truth: every widget's position, size, opacity,
+        // settings and visibility. Cloned so the profile does not alias the live
+        // Config objects the widgets keep mutating.
+        profile.Layout = CloneLayout(widgetManager.GetCurrentLayout().Widgets);
+
+        // Kept in step for the older readers of WidgetVisibility.
         profile.WidgetVisibility.Clear();
         profile.WidgetSettings.Clear();
-
         foreach (WidgetType wt in Enum.GetValues<WidgetType>())
-        {
-            bool exists = widgetManager.HasWidgetType(wt);
-            profile.WidgetVisibility[wt] = exists;
-
-            if (exists)
-            {
-                var widget = widgetManager.GetWidgetsByType(wt).FirstOrDefault();
-                if (widget != null)
-                {
-                    // Copy the widget's current Config.Settings as the profile snapshot
-                    profile.WidgetSettings[wt] = new Dictionary<string, object>(
-                        widget.Config.Settings ?? new Dictionary<string, object>());
-                }
-            }
-        }
+            profile.WidgetVisibility[wt] = profile.Layout.Any(c => c.Type == wt && c.IsVisible);
 
         profile.LastModified = DateTime.UtcNow;
         Save();
-        _logger.LogInformation("Captured state into profile: {Name}", profile.Name);
+        _logger.LogInformation("Captured layout into profile: {Name} ({Count} widgets)",
+            profile.Name, profile.Layout.Count);
+    }
+
+    /// <summary>Create a profile holding the current layout.</summary>
+    public WidgetProfile CreateFromCurrent(string name, WidgetManager widgetManager,
+                                           SessionCategory? session, string? carClass)
+    {
+        var profile = CreateProfile(name);
+        profile.SessionBinding = session;
+        profile.CarClassBinding = carClass;
+        CaptureToProfile(profile.Id, widgetManager);
+        return profile;
     }
 
     /// <summary>
-    /// Apply a profile's widget settings to the WidgetManager.
-    /// This toggles widget visibility AND pushes stored settings into each widget.
+    /// Apply a profile to the WidgetManager. A profile with a layout rebuilds the
+    /// widgets from it; an older one without falls back to toggling visibility and
+    /// pushing settings into whatever widgets exist.
+    /// Must run on the UI thread — it creates and destroys windows.
     /// </summary>
     public void ApplyProfile(Guid profileId, WidgetManager widgetManager)
     {
         var profile = GetProfile(profileId);
         if (profile == null) return;
+
+        if (profile.HasLayout)
+        {
+            widgetManager.LoadLayout(new LayoutConfig
+            {
+                Name = profile.Name,
+                Version = WidgetManager.CurrentLayoutVersion,
+                Widgets = CloneLayout(profile.Layout),
+            });
+            SetActiveProfile(profileId);
+            _logger.LogInformation("Applied profile layout: {Name}", profile.Name);
+            return;
+        }
 
         foreach (var (wt, visible) in profile.WidgetVisibility)
         {
@@ -183,6 +201,38 @@ public class ProfileStorageService
         SetActiveProfile(profileId);
         _logger.LogInformation("Applied profile: {Name}", profile.Name);
     }
+
+    /// <summary>
+    /// The profile after the active one in list order, wrapping; the first when none
+    /// is active. For the cycle hotkey — the driver taps through them from the wheel.
+    /// </summary>
+    public WidgetProfile? NextProfile()
+    {
+        if (Profiles.Count == 0) return null;
+
+        int current = ActiveProfileId.HasValue
+            ? Profiles.FindIndex(p => p.Id == ActiveProfileId.Value)
+            : -1;
+
+        return Profiles[(current + 1) % Profiles.Count];
+    }
+
+    /// <summary>
+    /// Deep copy through JSON, the same serialiser layout.json uses, so a stored
+    /// profile and a loaded layout are the same shape.
+    /// </summary>
+    private static List<WidgetConfig> CloneLayout(List<WidgetConfig> source)
+    {
+        var json = JsonSerializer.Serialize(source, LayoutJson);
+        return JsonSerializer.Deserialize<List<WidgetConfig>>(json, LayoutJson) ?? new();
+    }
+
+    private static readonly JsonSerializerOptions LayoutJson = new()
+    {
+        WriteIndented = true,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() },
+    };
 
     // ── Auto-match ──────────────────────────────────────────────────
 
@@ -298,11 +348,11 @@ public class ProfileStorageService
                     WidgetSettings = p.WidgetSettings.ToDictionary(
                         kv => kv.Key.ToString(),
                         kv => kv.Value.ToDictionary(s => s.Key, s => s.Value)),
+                    Layout = p.Layout.Count > 0 ? p.Layout : null,
                 }).ToList()
             };
 
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            File.WriteAllText(ConfigFilePath, JsonSerializer.Serialize(data, options));
+            File.WriteAllText(ConfigFilePath, JsonSerializer.Serialize(data, LayoutJson));
         }
         catch (Exception ex)
         {
@@ -317,8 +367,7 @@ public class ProfileStorageService
             if (!File.Exists(ConfigFilePath)) return;
 
             var json = File.ReadAllText(ConfigFilePath);
-            var data = JsonSerializer.Deserialize<ProfileStorageData>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var data = JsonSerializer.Deserialize<ProfileStorageData>(json, LayoutJson);
             if (data == null) return;
 
             AutoSwitch = data.AutoSwitch;
@@ -344,6 +393,8 @@ public class ProfileStorageService
                     CarClassBinding = pd.CarClassBinding,
                     LastModified = pd.LastModified,
                 };
+
+                if (pd.Layout != null) profile.Layout = pd.Layout;
 
                 foreach (var kv in pd.WidgetVisibility)
                 {
@@ -390,5 +441,6 @@ public class ProfileStorageService
         public DateTime LastModified { get; set; }
         public Dictionary<string, bool> WidgetVisibility { get; set; } = new();
         public Dictionary<string, Dictionary<string, object>>? WidgetSettings { get; set; }
+        public List<WidgetConfig>? Layout { get; set; }
     }
 }

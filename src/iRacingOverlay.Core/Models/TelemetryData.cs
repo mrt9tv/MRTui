@@ -675,7 +675,14 @@ public class TelemetryData
     /// Parsed from YAML SessionInfo → DriverInfo → Drivers[PlayerIdx] → CarScreenName
     /// </summary>
     public string CarScreenName { get; set; } = string.Empty;
-    
+
+    /// <summary>
+    /// The player's car class as iRacing abbreviates it ("GT3", "LMP2", "Formula Vee").
+    /// From DriverInfo → Drivers[PlayerIdx] → CarClassShortName. Empty in single-class
+    /// sessions where iRacing leaves the field blank.
+    /// </summary>
+    public string CarClassShortName { get; set; } = string.Empty;
+
     /// <summary>
     /// Current setup name loaded in iRacing garage
     /// Parsed from YAML SessionInfo → DriverInfo → DriverSetupName

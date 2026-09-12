@@ -38,6 +38,7 @@ public partial class MainWindow : Window
 
     private GlobalHotkey? _toggleLockHotkey;
     private GlobalHotkey? _toggleVisibilityHotkey;
+    private GlobalHotkey? _cycleProfileHotkey;
 
     /// <summary>When true, Close() exits instead of minimising to tray.</summary>
     private bool _forceClose;
@@ -288,10 +289,15 @@ public partial class MainWindow : Window
             var matchedProfile = _sessionConfig.CheckProfileMatch();
             if (matchedProfile != null)
             {
+                // The car becoming known re-raises this event; the same profile
+                // must not rebuild every widget a second time.
+                if (_profileService.ActiveProfileId == matchedProfile.Id) return;
+
                 _profileService.ApplyProfile(matchedProfile.Id, _widgetManager);
-                _logger.LogInformation("Applied profile: {Name} for {Category}", matchedProfile.Name, category);
+                _logger.LogInformation("Applied profile: {Name} for {Category} / {Car}",
+                    matchedProfile.Name, category, _sessionConfig.DetectedCarClass ?? "any car");
             }
-            else
+            else if (_sessionConfig.IsEnabled)
             {
                 var preset = _sessionConfig.GetPreset(category);
                 if (preset != null)
@@ -391,6 +397,7 @@ public partial class MainWindow : Window
     /// <summary>Whether Windows accepted each binding, for display in Settings.</summary>
     public bool LockHotkeyRegistered { get; private set; }
     public bool VisibilityHotkeyRegistered { get; private set; }
+    public bool ProfileHotkeyRegistered { get; private set; }
 
     /// <summary>Format a modifier + key pair for display, e.g. "Ctrl+L".</summary>
     public static string FormatHotkey(string modifier, string key)
@@ -410,12 +417,14 @@ public partial class MainWindow : Window
 
         _toggleLockHotkey?.Dispose();
         _toggleVisibilityHotkey?.Dispose();
+        _cycleProfileHotkey?.Dispose();
         LockHotkeyRegistered = false;
         VisibilityHotkeyRegistered = false;
+        ProfileHotkeyRegistered = false;
 
         if (s.HotkeysConflict())
         {
-            _logger.LogWarning("Both hotkeys are bound to the same key");
+            _logger.LogWarning("Two hotkeys are bound to the same key");
             UpdateHotkeysDisplay();
             return;
         }
@@ -430,11 +439,20 @@ public partial class MainWindow : Window
         _toggleVisibilityHotkey.HotkeyPressed += (_, _) => Dispatcher.BeginInvoke(ToggleWidgetVisibility);
         VisibilityHotkeyRegistered = _toggleVisibilityHotkey.Register(s.ToggleVisibilityModifier, s.ToggleVisibilityKey);
 
-        if (!LockHotkeyRegistered || !VisibilityHotkeyRegistered)
+        // Optional: an empty key means the driver has not asked for it.
+        if (!string.IsNullOrEmpty(s.CycleProfileKey))
+        {
+            _cycleProfileHotkey = new GlobalHotkey(this, hotkeyId: 9003, hotkeyLogger);
+            _cycleProfileHotkey.HotkeyPressed += (_, _) => Dispatcher.BeginInvoke(CycleProfile);
+            ProfileHotkeyRegistered = _cycleProfileHotkey.Register(s.CycleProfileModifier, s.CycleProfileKey);
+        }
+
+        bool profileWanted = !string.IsNullOrEmpty(s.CycleProfileKey);
+        if (!LockHotkeyRegistered || !VisibilityHotkeyRegistered || (profileWanted && !ProfileHotkeyRegistered))
         {
             _logger.LogWarning(
-                "Hotkey registration failed (lock: {Lock}, visibility: {Vis}) — another application may own the combination",
-                LockHotkeyRegistered, VisibilityHotkeyRegistered);
+                "Hotkey registration failed (lock: {Lock}, visibility: {Vis}, profile: {Prof}) — another application may own the combination",
+                LockHotkeyRegistered, VisibilityHotkeyRegistered, ProfileHotkeyRegistered);
         }
 
         UpdateHotkeysDisplay();
@@ -449,8 +467,13 @@ public partial class MainWindow : Window
         string lockLabel = LockHotkeyRegistered ? lockHk : $"{lockHk} unavailable";
         string visLabel = VisibilityHotkeyRegistered ? visHk : $"{visHk} unavailable";
 
-        HotkeysText.Text = $"{lockLabel} lock  ·  {visLabel} show/hide";
-        HotkeysText.Foreground = LockHotkeyRegistered && VisibilityHotkeyRegistered
+        bool profileWanted = !string.IsNullOrEmpty(s.CycleProfileKey);
+        string profLabel = profileWanted
+            ? $"  ·  {FormatHotkey(s.CycleProfileModifier, s.CycleProfileKey)}{(ProfileHotkeyRegistered ? "" : " unavailable")} profile"
+            : "";
+
+        HotkeysText.Text = $"{lockLabel} lock  ·  {visLabel} show/hide{profLabel}";
+        HotkeysText.Foreground = LockHotkeyRegistered && VisibilityHotkeyRegistered && (!profileWanted || ProfileHotkeyRegistered)
             ? (FindResource("TextMuted") as Brush ?? Brushes.Gray)
             : (FindResource("Warn") as Brush ?? Brushes.Orange);
     }
@@ -468,6 +491,17 @@ public partial class MainWindow : Window
     {
         _widgetManager.ToggleAllWidgets();
         _overlayPage.Refresh();
+    }
+
+    /// <summary>Step to the next saved profile — the wheel-button path to a different layout.</summary>
+    private void CycleProfile()
+    {
+        var next = _profileService.NextProfile();
+        if (next == null) return;
+
+        _profileService.ApplyProfile(next.Id, _widgetManager);
+        _overlayPage.Refresh();
+        _logger.LogInformation("Cycled to profile: {Name}", next.Name);
     }
 
     // ── Window lifecycle ──────────────────────────────────────────────

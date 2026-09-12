@@ -52,27 +52,44 @@ public class SessionConfigService
     /// </summary>
     public bool CheckSessionChange(TelemetryData data)
     {
-        if (!IsEnabled) return false;
+        // Profiles auto-switch on their own; they never needed the presets on.
+        bool anyAutomation = IsEnabled || (ProfileService?.AutoSwitch ?? false);
+        if (!anyAutomation) return false;
 
+        // Car first — the profile match raised below reads it. It used to be set
+        // after the event, so the first match of a session always saw the
+        // previous car. Class is what a profile is really about ("GT3"); the
+        // model name stands in for single-class sessions where iRacing leaves
+        // the class blank.
+        string car = !string.IsNullOrEmpty(data.CarClassShortName)
+            ? data.CarClassShortName
+            : data.CarScreenName ?? string.Empty;
+        bool carChanged = car.Length > 0
+            && !string.Equals(car, DetectedCarClass, StringComparison.OrdinalIgnoreCase);
+        if (carChanged) DetectedCarClass = car;
+
+        bool sessionChanged = false;
         string sessionType = data.SessionType ?? string.Empty;
-        if (sessionType == _lastSessionType) return false;
+        if (sessionType != _lastSessionType)
+        {
+            _lastSessionType = sessionType;
+            var newCategory = MapSessionType(sessionType);
 
-        _lastSessionType = sessionType;
-        var newCategory = MapSessionType(sessionType);
+            if (newCategory != _currentCategory && newCategory != SessionCategory.Unknown)
+            {
+                _logger.LogInformation("Session type changed: {Old} → {New} ({SessionType})",
+                    _currentCategory, newCategory, sessionType);
+                _currentCategory = newCategory;
+                sessionChanged = true;
+            }
+        }
 
-        if (newCategory == _currentCategory || newCategory == SessionCategory.Unknown)
-            return false;
+        // A car becoming known after the session did is the common order on
+        // connect: session info carries the car and can land a tick later.
+        if (!sessionChanged && !carChanged) return false;
+        if (_currentCategory == SessionCategory.Unknown) return false;
 
-        _logger.LogInformation("Session type changed: {Old} → {New} ({SessionType})",
-            _currentCategory, newCategory, sessionType);
-
-        _currentCategory = newCategory;
-        SessionCategoryChanged?.Invoke(this, newCategory);
-
-        // Update detected car class from telemetry
-        if (!string.IsNullOrEmpty(data.CarScreenName))
-            DetectedCarClass = data.CarScreenName;
-
+        SessionCategoryChanged?.Invoke(this, _currentCategory);
         return true;
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -359,6 +360,15 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public string ToggleVisibilityKey { get; set; } = "H";
 
+    /// <summary>Modifier for the cycle-profile hotkey.</summary>
+    public string CycleProfileModifier { get; set; } = "Ctrl";
+
+    /// <summary>
+    /// Main key for the cycle-profile hotkey. Empty means unbound — this one is
+    /// opt-in, since most drivers never make a second profile.
+    /// </summary>
+    public string CycleProfileKey { get; set; } = "";
+
     // Window State Settings
     /// <summary>
     /// Manager window width (default 1280)
@@ -495,8 +505,15 @@ public class AppSettings : INotifyPropertyChanged
     /// </summary>
     public bool HotkeysConflict()
     {
-        return ToggleLockModifier == ToggleVisibilityModifier &&
-               ToggleLockKey == ToggleVisibilityKey;
+        var bound = new List<string>
+        {
+            $"{ToggleLockModifier}+{ToggleLockKey}",
+            $"{ToggleVisibilityModifier}+{ToggleVisibilityKey}",
+        };
+        if (!string.IsNullOrEmpty(CycleProfileKey))
+            bound.Add($"{CycleProfileModifier}+{CycleProfileKey}");
+
+        return bound.Distinct(StringComparer.OrdinalIgnoreCase).Count() != bound.Count;
     }
     
     // ── Persistence ─────────────────────────────────────────────────────

@@ -261,13 +261,135 @@ public partial class SettingsPage : UserControl, IDisposable
             }
         }
 
-        if (_profiles.Profiles.Count > 0)
+        foreach (var s in ProfileSettings()) yield return s;
+    }
+
+    // ── Profiles ──────────────────────────────────────────────────────
+    //
+    // A profile is a complete saved layout — every widget's position, size and
+    // settings — that can be bound to a session type and a car class. The
+    // presets above only switch widgets on and off; a profile moves them too.
+
+    private IEnumerable<WidgetSetting> ProfileSettings()
+    {
+        yield return WidgetSetting.Note(
+            "A profile is a whole layout: which widgets, where, and how each is set up. "
+            + "Bind one to a session type and a car class and it takes priority over the "
+            + "presets above. Cycle through them from the wheel with the hotkey.",
+            group: "Profiles");
+
+        yield return WidgetSetting.Toggle(
+            "Apply the matching profile automatically",
+            () => _profiles.AutoSwitch,
+            v => { _profiles.AutoSwitch = v; _profiles.Save(); },
+            group: "Profiles",
+            description: "When the session or car changes, load the best-matching profile.");
+
+        yield return WidgetSetting.Action(
+            "Save current layout as a new profile", NewProfileFromCurrent,
+            group: "Profiles",
+            description: CurrentContextLabel());
+
+        foreach (var profile in _profiles.Profiles.ToList())
         {
+            var p = profile;
+            string group = $"Profile: {p.Name}";
+            bool active = _profiles.ActiveProfileId == p.Id;
+
             yield return WidgetSetting.Note(
-                $"{_profiles.Profiles.Count} saved profile(s). A matching profile takes priority "
-                + "over the session presets above.",
-                group: "Profiles");
+                (active ? "Active now. " : "")
+                + (p.HasLayout
+                    ? $"{p.Layout.Count} widget(s) with positions and settings."
+                    : "Saved before layouts were captured — holds visibility only. Save the current layout into it to upgrade."),
+                group: group);
+
+            yield return WidgetSetting.Choice(
+                "Session", SessionChoices,
+                () => p.SessionBinding.HasValue ? (int)p.SessionBinding.Value : 0,
+                v => { p.SessionBinding = v == 0 ? null : (SessionCategory)v; _profiles.Save(); },
+                group: group,
+                description: "Which session type this profile is for.");
+
+            var carChoices = CarChoicesFor(p);
+            yield return WidgetSetting.Choice(
+                "Car class", carChoices,
+                () => Math.Max(0, carChoices.FindIndex(c => string.Equals(c, p.CarClassBinding, StringComparison.OrdinalIgnoreCase))),
+                v => { p.CarClassBinding = v == 0 ? null : carChoices[v]; _profiles.Save(); },
+                group: group,
+                description: "Bind to the class you are in now, or leave it for any car.");
+
+            yield return WidgetSetting.Action(
+                "Apply", () => { _profiles.ApplyProfile(p.Id, _widgets); LayoutReset?.Invoke(); Refresh(); },
+                group: group);
+
+            yield return WidgetSetting.Action(
+                "Save current layout into this profile", () => { _profiles.CaptureToProfile(p.Id, _widgets); Refresh(); },
+                group: group,
+                description: "Overwrites what the profile holds with the widgets as they are now.");
+
+            yield return WidgetSetting.Action(
+                "Rename", () => RenameProfile(p),
+                group: group, tier: SettingTier.Advanced);
+
+            if (!p.IsDefault)
+            {
+                yield return WidgetSetting.Action(
+                    "Delete", () => { _profiles.DeleteProfile(p.Id); Refresh(); },
+                    group: group, tier: SettingTier.Advanced, destructive: true);
+            }
         }
+    }
+
+    private static readonly string[] SessionChoices =
+        Enum.GetValues<SessionCategory>()
+            .Select(c => c == SessionCategory.Unknown ? "Any session" : c.ToString())
+            .ToArray();
+
+    /// <summary>"Any car", the car detected now, and whatever the profile already names.</summary>
+    private List<string> CarChoicesFor(WidgetProfile p)
+    {
+        var choices = new List<string> { "Any car" };
+        var detected = _sessionConfig.DetectedCarClass;
+        if (!string.IsNullOrEmpty(detected)) choices.Add(detected);
+        if (!string.IsNullOrEmpty(p.CarClassBinding)
+            && !choices.Contains(p.CarClassBinding, StringComparer.OrdinalIgnoreCase))
+            choices.Add(p.CarClassBinding);
+        return choices;
+    }
+
+    private string CurrentContextLabel()
+    {
+        var session = _sessionConfig.CurrentCategory;
+        var car = _sessionConfig.DetectedCarClass;
+        if (session == SessionCategory.Unknown && string.IsNullOrEmpty(car))
+            return "Captures the widgets as they are now. Join a session first to bind it to a session type and car.";
+        return $"Captures the widgets as they are now, bound to {(session == SessionCategory.Unknown ? "any session" : session.ToString())}"
+             + $" / {(string.IsNullOrEmpty(car) ? "any car" : car)}.";
+    }
+
+    private void NewProfileFromCurrent()
+    {
+        var session = _sessionConfig.CurrentCategory;
+        var car = _sessionConfig.DetectedCarClass;
+        string suggested = session == SessionCategory.Unknown && string.IsNullOrEmpty(car)
+            ? $"Profile {_profiles.Profiles.Count + 1}"
+            : $"{(session == SessionCategory.Unknown ? "Any" : session.ToString())}{(string.IsNullOrEmpty(car) ? "" : " · " + car)}";
+
+        var name = PromptDialog.Show(Window.GetWindow(this), "New profile", "Profile name", suggested);
+        if (name == null) return;
+
+        _profiles.CreateFromCurrent(name, _widgets,
+            session == SessionCategory.Unknown ? null : session,
+            string.IsNullOrEmpty(car) ? null : car);
+        Refresh();
+    }
+
+    private void RenameProfile(WidgetProfile p)
+    {
+        var name = PromptDialog.Show(Window.GetWindow(this), "Rename profile", "Profile name", p.Name);
+        if (name == null || name == p.Name) return;
+        _profiles.RenameProfile(p.Id, name);
+        Refresh();
     }
 
     // ── Data ──────────────────────────────────────────────────────────
@@ -462,16 +584,20 @@ public partial class SettingsPage : UserControl, IDisposable
         var s = AppSettings.Instance;
         TxtHotkeyLock.Text = MainWindow.FormatHotkey(s.ToggleLockModifier, s.ToggleLockKey);
         TxtHotkeyVisibility.Text = MainWindow.FormatHotkey(s.ToggleVisibilityModifier, s.ToggleVisibilityKey);
+        TxtHotkeyProfile.Text = string.IsNullOrEmpty(s.CycleProfileKey)
+            ? "Not set"
+            : MainWindow.FormatHotkey(s.CycleProfileModifier, s.CycleProfileKey);
 
         if (s.HotkeysConflict())
         {
-            TxtHotkeyStatus.Text = "Both actions are bound to the same key — change one.";
+            TxtHotkeyStatus.Text = "Two actions are bound to the same key — change one.";
             TxtHotkeyStatus.Foreground = (Brush)FindResource("Warn");
             return;
         }
 
         var main = Window.GetWindow(this) as MainWindow;
-        if (main != null && (!main.LockHotkeyRegistered || !main.VisibilityHotkeyRegistered))
+        bool profileWanted = !string.IsNullOrEmpty(s.CycleProfileKey);
+        if (main != null && (!main.LockHotkeyRegistered || !main.VisibilityHotkeyRegistered || (profileWanted && !main.ProfileHotkeyRegistered)))
         {
             TxtHotkeyStatus.Text = "Windows refused a binding — another application already owns it.";
             TxtHotkeyStatus.Foreground = (Brush)FindResource("Warn");
@@ -487,7 +613,9 @@ public partial class SettingsPage : UserControl, IDisposable
     /// to be display-only text: the storage and the conflict check already existed,
     /// only the capture step was missing, so a conflict could not be resolved.
     /// </summary>
-    private void CaptureHotkey(bool forLock, Button trigger)
+    private enum HotkeyAction { Lock, Visibility, Profile }
+
+    private void CaptureHotkey(HotkeyAction action, Button trigger)
     {
         var original = trigger.Content;
         trigger.Content = "Press…";
@@ -518,15 +646,20 @@ public partial class SettingsPage : UserControl, IDisposable
                 (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? "Shift" : "None";
 
             var s = AppSettings.Instance;
-            if (forLock)
+            switch (action)
             {
-                s.ToggleLockModifier = modifier;
-                s.ToggleLockKey = key.ToString();
-            }
-            else
-            {
-                s.ToggleVisibilityModifier = modifier;
-                s.ToggleVisibilityKey = key.ToString();
+                case HotkeyAction.Lock:
+                    s.ToggleLockModifier = modifier;
+                    s.ToggleLockKey = key.ToString();
+                    break;
+                case HotkeyAction.Visibility:
+                    s.ToggleVisibilityModifier = modifier;
+                    s.ToggleVisibilityKey = key.ToString();
+                    break;
+                case HotkeyAction.Profile:
+                    s.CycleProfileModifier = modifier;
+                    s.CycleProfileKey = key.ToString();
+                    break;
             }
             s.Save();
 
@@ -539,10 +672,22 @@ public partial class SettingsPage : UserControl, IDisposable
     }
 
     private void BtnRebindLock_Click(object sender, RoutedEventArgs e) =>
-        CaptureHotkey(forLock: true, (Button)sender);
+        CaptureHotkey(HotkeyAction.Lock, (Button)sender);
 
     private void BtnRebindVisibility_Click(object sender, RoutedEventArgs e) =>
-        CaptureHotkey(forLock: false, (Button)sender);
+        CaptureHotkey(HotkeyAction.Visibility, (Button)sender);
+
+    private void BtnRebindProfile_Click(object sender, RoutedEventArgs e) =>
+        CaptureHotkey(HotkeyAction.Profile, (Button)sender);
+
+    private void BtnClearProfileHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        var s = AppSettings.Instance;
+        s.CycleProfileKey = "";
+        s.Save();
+        HotkeysChanged?.Invoke();
+        RefreshHotkeyDisplay();
+    }
 
     public void Dispose() { }
 }

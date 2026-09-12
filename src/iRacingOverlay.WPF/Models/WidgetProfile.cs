@@ -46,6 +46,20 @@ public class WidgetProfile
     /// </summary>
     public Dictionary<WidgetType, Dictionary<string, object>> WidgetSettings { get; set; } = new();
 
+    /// <summary>
+    /// The full widget layout — position, size, opacity, settings and visibility of
+    /// every widget, exactly as layout.json stores it. Applying a profile with a
+    /// layout rebuilds the widgets from it, which is also how start-up works, so
+    /// nothing a widget reads in its constructor can be missed.
+    ///
+    /// Empty on profiles saved before layouts were captured; those fall back to
+    /// <see cref="WidgetVisibility"/> and <see cref="WidgetSettings"/>.
+    /// </summary>
+    public List<WidgetConfig> Layout { get; set; } = new();
+
+    /// <summary>Whether this profile carries a full layout or only the older visibility snapshot.</summary>
+    public bool HasLayout => Layout.Count > 0;
+
     /// <summary>When this profile was last modified.</summary>
     public DateTime LastModified { get; set; } = DateTime.UtcNow;
 
