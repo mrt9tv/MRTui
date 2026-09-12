@@ -20,6 +20,9 @@ public partial class App : System.Windows.Application
 {
     private IHost? _host;
 
+    /// <summary>Logs UI-thread stalls so a freeze report comes with timings.</summary>
+    private UiWatchdog? _uiWatchdog;
+
     /// <summary>Cancels telemetry monitoring on shutdown so the SDK loop stops cleanly.</summary>
     private readonly CancellationTokenSource _shutdownCts = new();
 
@@ -30,6 +33,7 @@ public partial class App : System.Windows.Application
         // File logging first: everything below should be diagnosable from the log.
         AppLog.Start();
         InstallGlobalExceptionHandlers();
+        _uiWatchdog = new UiWatchdog(Dispatcher);
 
         // Initialize application start time (single source of truth for uptime)
         ApplicationInfo.ApplicationStartTime = DateTime.Now;
@@ -72,27 +76,70 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Connect and start monitoring, observing both tasks so a failure is logged
-    /// rather than silently swallowed as an unobserved task exception.
+    /// Connect and start monitoring, and keep doing so for the life of the app.
+    ///
+    /// The SDK's Monitor loop can fault — a shared-memory read failing while the
+    /// sim reloads between sessions is the likely case. Before this loop a fault
+    /// was logged once and the overlay sat on its last frame until restart, which
+    /// from the driver's seat is indistinguishable from a freeze. Now the client
+    /// is torn down and rebuilt, with a backoff so a persistent failure does not
+    /// spin.
     /// </summary>
     private void StartTelemetry(ITelemetryService telemetryService)
     {
         _ = Task.Run(async () =>
         {
-            try
-            {
-                await telemetryService.ConnectAsync(_shutdownCts.Token).ConfigureAwait(false);
+            var token = _shutdownCts.Token;
+            var backoff = TimeSpan.FromSeconds(2);
+            var maxBackoff = TimeSpan.FromSeconds(30);
 
-                if (telemetryService is IRacingTelemetryService racingService)
-                    await racingService.MonitorAsync(_shutdownCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
+            while (!token.IsCancellationRequested)
             {
-                AppLog.Info("Telemetry monitoring stopped (shutdown)");
-            }
-            catch (Exception ex)
-            {
-                AppLog.Error("Telemetry monitoring stopped unexpectedly", ex);
+                var started = DateTime.UtcNow;
+                try
+                {
+                    await telemetryService.ConnectAsync(token).ConfigureAwait(false);
+
+                    if (telemetryService is IRacingTelemetryService racingService)
+                        await racingService.MonitorAsync(token).ConfigureAwait(false);
+
+                    // Monitor returns normally only on cancellation.
+                    AppLog.Info("Telemetry monitoring stopped (shutdown)");
+                    return;
+                }
+                catch (OperationCanceledException)
+                {
+                    AppLog.Info("Telemetry monitoring stopped (shutdown)");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    // A fault after a healthy run is a fresh incident, not a retry.
+                    if (DateTime.UtcNow - started > TimeSpan.FromMinutes(1))
+                        backoff = TimeSpan.FromSeconds(2);
+
+                    AppLog.Error($"Telemetry monitoring faulted — restarting in {backoff.TotalSeconds:F0} s", ex);
+                }
+
+                try
+                {
+                    await telemetryService.DisconnectAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Error("Could not release the faulted telemetry client", ex);
+                }
+
+                try
+                {
+                    await Task.Delay(backoff, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, maxBackoff.TotalSeconds));
             }
         });
     }
@@ -129,6 +176,7 @@ public partial class App : System.Windows.Application
         try
         {
             _shutdownCts.Cancel();
+            _uiWatchdog?.Dispose();
             Models.AppSettings.Flush();
             _host?.Dispose();
         }

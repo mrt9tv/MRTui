@@ -14,13 +14,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <!--
-      2.0.0, not 2.3.0: the 2.1+ source generators are built against Roslyn 5.6/5.9,
-      which ship with SDK 10.0.3xx/4xx. This machine has 10.0.204 (Roslyn 5.3), and
-      2.0.0's generator targets 5.0. 2.0.0 already carries every telemetry channel
-      added through 1.2.0 (DRS, ERS, dc*/dp* extensions) and the 2.x handler API.
-      Bump to 2.3.0 once SDK 10.0.400 is installed — no code change needed.
+      2.3.0's source generator is built against Roslyn 5.9, which ships with the
+      .NET SDK 10.0.400+. On an older SDK the generator is silently skipped and the
+      build fails with CS9057; global.json pins 10.0.200 with latestFeature roll-forward
+      so a machine with 10.0.4xx picks it up automatically.
     -->
-    <PackageReference Include="SVappsLAB.iRacingTelemetrySDK" Version="2.0.0" />
+    <PackageReference Include="SVappsLAB.iRacingTelemetrySDK" Version="2.3.0" />
   </ItemGroup>
 
   <ItemGroup>
