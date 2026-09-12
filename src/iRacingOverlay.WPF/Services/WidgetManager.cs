@@ -28,7 +28,7 @@ public class WidgetManager
 #if DEBUG
         new(Enum.GetValues<WidgetType>());
 #else
-        new() { WidgetType.MRTOne, WidgetType.ProximityFeed, WidgetType.PitConfirm };
+        new() { WidgetType.MRTOne, WidgetType.ProximityFeed, WidgetType.PitConfirm, WidgetType.RaceStart };
 #endif
 
     public event EventHandler<WidgetBase>? WidgetCreated;
@@ -64,6 +64,9 @@ public class WidgetManager
 
         _widgetFactories[WidgetType.PitConfirm] = (service, config) =>
             new Widgets.PitConfirmWidget.PitConfirmWidget(service, config);
+
+        _widgetFactories[WidgetType.RaceStart] = (service, config) =>
+            new Widgets.RaceStartWidget.RaceStartWidget(service, config);
     }
 
     public WidgetBase CreateWidget(WidgetType type, WidgetConfig? config = null)

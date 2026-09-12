@@ -48,6 +48,25 @@ public class TelemetryDataMapperTests
         Assert.Equal(9000f, TelemetryDataMapper.GetValue(TelemetryField.Redline, data));
     }
 
+    [Theory]
+    [InlineData(7000f, 0f)]      // below the lights
+    [InlineData(7500f, 50f)]     // halfway up the ramp
+    [InlineData(8000f, 100f)]    // at optimal
+    [InlineData(8600f, 100f)]    // past it — held, not over 100
+    public void ShiftIndicator_IsTheRampFromLightsOnToOptimal(float rpm, float expected)
+    {
+        var data = new TelemetryData { RPM = rpm, ShiftLightsOnRPM = 7000f, ShiftOptimalRPM = 8000f };
+        var value = Assert.IsType<float>(TelemetryDataMapper.GetValue(TelemetryField.ShiftIndicator, data));
+        Assert.Equal(expected, value, precision: 2);
+    }
+
+    [Fact]
+    public void ShiftIndicator_IsZeroWithoutGeometry()
+    {
+        var data = new TelemetryData { RPM = 9000f };
+        Assert.Equal(0f, TelemetryDataMapper.GetValue(TelemetryField.ShiftIndicator, data));
+    }
+
     [Fact]
     public void EveryField_ResolvesWithoutThrowing()
     {

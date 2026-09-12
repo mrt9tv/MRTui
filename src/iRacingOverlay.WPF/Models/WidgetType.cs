@@ -41,7 +41,13 @@ public enum WidgetType
     /// and warns when nothing is selected or the fuel armed disagrees with what the
     /// fuel calculator says you need.
     /// </summary>
-    PitConfirm
+    PitConfirm,
+
+    /// <summary>
+    /// Race Start — the start lights as they come on, then your reaction time,
+    /// launch time and technique once they go out. Calls a jump start.
+    /// </summary>
+    RaceStart
 }
 
 /// <summary>
@@ -58,6 +64,7 @@ public static class WidgetTypeExtensions
         WidgetType.ProximityFeed => "Proximity Feed",
         WidgetType.Standings => "Standings",
         WidgetType.PitConfirm => "Pit Confirm",
+        WidgetType.RaceStart => "Race Start",
         _ => type.ToString()
     };
 }

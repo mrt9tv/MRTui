@@ -125,12 +125,18 @@ public partial class MainWindow : Window
         {
             _widgetManager.CreateWidget(WidgetType.MRTOne);
             _widgetManager.CreateWidget(WidgetType.ProximityFeed);
+            _widgetManager.CreateWidget(WidgetType.RaceStart);
             return;
         }
 
         // Guarantee the default set exists even if an older layout predates a widget.
         if (!_widgetManager.HasWidgetType(WidgetType.ProximityFeed))
             _widgetManager.CreateWidget(WidgetType.ProximityFeed);
+
+        // Race Start is hidden until the lights come up, so it costs nothing to
+        // have; a layout from before it existed gets one at the default spot.
+        if (!_widgetManager.HasWidgetType(WidgetType.RaceStart))
+            _widgetManager.CreateWidget(WidgetType.RaceStart);
     }
 
     private void BuildPages()
