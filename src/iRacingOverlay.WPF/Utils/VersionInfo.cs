@@ -37,7 +37,7 @@ public static class VersionInfo
     /// <summary>
     /// Patch version number (zero-padded to 3 digits in display).
     /// </summary>
-    public const int VERSION_PATCH = 0;
+    public const int VERSION_PATCH = 1;
 
     /// <summary>
     /// Current application version string (e.g., "0.1.000").
