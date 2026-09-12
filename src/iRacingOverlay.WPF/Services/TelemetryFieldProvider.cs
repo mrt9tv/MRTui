@@ -180,6 +180,7 @@ public static class TelemetryFieldProvider
         new(TelemetryField.DrsStatus, "DRS", "Engine", "DRS state as the car reports it", true),
         new(TelemetryField.DrsCount, "DRS Left", "Engine", "DRS activations remaining this session", true),
         new(TelemetryField.ErsBattery, "ERS Battery", "Engine", "Hybrid battery charge", true),
+        new(TelemetryField.ReactionTime, "Reaction", "Timing", "Lights-out to first input at the race start, with the launch technique", true),
     };
 
     /// <summary>

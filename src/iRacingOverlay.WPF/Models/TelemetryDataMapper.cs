@@ -185,6 +185,10 @@ public static class TelemetryDataMapper
             TelemetryField.DrsStatus => data.DrsStatus,
             TelemetryField.DrsCount => data.DrsCount,
             TelemetryField.ErsBattery => data.ErsBatteryPct * 100f,
+            // Negative encodes a jump start; zero means no start measured yet.
+            TelemetryField.ReactionTime => data.RaceStart == null ? 0f
+                : data.RaceStart.JumpStart ? -1f
+                : data.RaceStart.ReactionSeconds,
             
             // None
             TelemetryField.None => null,

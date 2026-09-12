@@ -175,6 +175,7 @@ public enum TelemetryField
     DrsStatus,           // DRS state as reported by the car
     DrsCount,            // DRS activations remaining
     ErsBattery,          // ERS battery charge %
+    ReactionTime,        // Seconds from lights-out to first input; negative = jump start
 
     // None (default)
     None

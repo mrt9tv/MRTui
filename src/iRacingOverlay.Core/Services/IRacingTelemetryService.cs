@@ -356,6 +356,9 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
     private readonly RelativeCalculator _relativeCalculator = new();
     private readonly StandingsCalculator _standingsCalculator = new();
     private readonly WheelLockupDetector _wheelLockupDetector = new();
+
+    /// <summary>Reaction and launch timing at the race start, once per start, on the telemetry thread.</summary>
+    private readonly RaceStartDetector _raceStartDetector = new();
     private readonly CarAdjustmentTracker _adjustmentTracker = new();
 
     /// <summary>Resolves the optimal shift point and RPM colour bands.</summary>
@@ -608,6 +611,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                         // Next session may be a different car; forget the YAML we
                         // matched against so the first document parses again.
                         _lastSessionYamlHash = 0;
+                        _raceStartDetector.Reset();
                     }
                 }
                 catch (Exception ex) { _logger.LogError(ex, "Connect state handler failed"); }
@@ -1300,6 +1304,17 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
         {
             _logger.LogError(ex, "Wheel lockup detection failed");
             data.WheelLockup = null;
+        }
+
+        try
+        {
+            _raceStartDetector.Update(data);
+            data.RaceStart = _raceStartDetector.Result;
+            data.RaceStartJustMeasured = _raceStartDetector.JustMeasured;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Race start timing failed");
         }
     }
 

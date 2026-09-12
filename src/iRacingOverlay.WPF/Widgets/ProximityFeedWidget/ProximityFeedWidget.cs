@@ -90,6 +90,8 @@ public partial class ProximityFeedWidget : WidgetBase
     private static readonly Color COLOR_TYRES = Color.FromRgb(255, 190, 90);         // amber — strategy
     private static readonly Color COLOR_MY_INCIDENT = Color.FromRgb(255, 120, 120);  // soft red — own incidents
     private static readonly Color COLOR_PIT_LANE = Color.FromRgb(255, 200, 50);      // yellow — matches pitting
+    private static readonly Color COLOR_REACTION = Color.FromRgb(120, 230, 160);     // mint — the start went fine
+    private static readonly Color COLOR_JUMP_START = Color.FromRgb(255, 60, 60);     // red — penalty incoming
 
     private static readonly SolidColorBrush BRUSH_TEXT = new(COLOR_TEXT);
     private static readonly SolidColorBrush BRUSH_MUTED = new(COLOR_MUTED);
@@ -817,6 +819,8 @@ public partial class ProximityFeedWidget : WidgetBase
         NearbyEventType.LowTireSets => COLOR_TYRES,
         NearbyEventType.IncidentGained => COLOR_MY_INCIDENT,
         NearbyEventType.PitLaneStatus => COLOR_PIT_LANE,
+        NearbyEventType.ReactionTime => COLOR_REACTION,
+        NearbyEventType.JumpStart => COLOR_JUMP_START,
 
         _ => GetSeverityColor(evt.Severity),
     };

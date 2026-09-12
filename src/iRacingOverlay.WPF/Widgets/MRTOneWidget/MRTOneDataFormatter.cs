@@ -350,6 +350,10 @@ public static class MRTOneDataFormatter
             TelemetryField.DrsCount when value is int drsLeft => drsLeft.ToString(),
             TelemetryField.ErsBattery when value is float ers => $"{(int)ers}%",
 
+            // Race start. Two decimals: 60 Hz frames give ~16 ms on each end.
+            TelemetryField.ReactionTime when value is float rt =>
+                rt < 0 ? "JUMP" : rt > 0 ? rt.ToString("0.00", CultureInfo.InvariantCulture) + "s" : "-",
+
             // Shift geometry — whole RPM, no decimals
             TelemetryField.OptimalShiftRPM or TelemetryField.Redline when value is float shiftRpm =>
                 shiftRpm > 0 ? shiftRpm.ToString("F0", CultureInfo.InvariantCulture) : "-",
@@ -551,6 +555,7 @@ public static class MRTOneDataFormatter
             TelemetryField.DrsStatus => "DRS",
             TelemetryField.DrsCount => "DRS LEFT",
             TelemetryField.ErsBattery => "ERS",
+            TelemetryField.ReactionTime => "REACTION",
 
             _ => field.ToString().ToUpper()
         };

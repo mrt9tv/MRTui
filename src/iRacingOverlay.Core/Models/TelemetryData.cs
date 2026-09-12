@@ -1338,6 +1338,15 @@ public class TelemetryData
     public WheelLockupState? WheelLockup { get; set; }
 
     /// <summary>
+    /// The most recent race start — reaction, launch, technique — or null before
+    /// the first. Persists for the session so a widget can keep showing it.
+    /// </summary>
+    public RaceStartResult? RaceStart { get; set; }
+
+    /// <summary>True only on the frame <see cref="RaceStart"/> was produced; the feed announces on it.</summary>
+    public bool RaceStartJustMeasured { get; set; }
+
+    /// <summary>
     /// Whether a full-course caution (safety car) is currently active.
     /// Derived from SessionFlags bit 0x4000 (Caution) or 0x8 (Yellow).
     /// </summary>

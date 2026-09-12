@@ -126,6 +126,28 @@ public class MRTOneDataFormatterTests
         Assert.Equal("64%", Fmt(TelemetryField.ErsBattery, 64.7f));
     }
 
+    // ── Race start ────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(0.24f, "0.24s")]
+    [InlineData(-1f, "JUMP")]
+    [InlineData(0f, "-")]
+    public void ReactionTime_TwoDecimals_JumpAndUnset(float value, string expected)
+    {
+        Assert.Equal(expected, Fmt(TelemetryField.ReactionTime, value));
+    }
+
+    [Fact]
+    public void ReactionTime_MapsJumpStartAsNegative()
+    {
+        var jumped = new TelemetryData { RaceStart = new RaceStartResult { JumpStart = true } };
+        var clean = new TelemetryData { RaceStart = new RaceStartResult { ReactionSeconds = 0.31f } };
+
+        Assert.Equal(-1f, TelemetryDataMapper.GetValue(TelemetryField.ReactionTime, jumped));
+        Assert.Equal(0.31f, TelemetryDataMapper.GetValue(TelemetryField.ReactionTime, clean));
+        Assert.Equal(0f, TelemetryDataMapper.GetValue(TelemetryField.ReactionTime, new TelemetryData()));
+    }
+
     // ── Labels ────────────────────────────────────────────────────────
 
     [Fact]

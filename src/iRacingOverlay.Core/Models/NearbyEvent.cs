@@ -185,6 +185,12 @@ public enum NearbyEventType
 
     /// <summary>Pit lane opened or closed.</summary>
     PitLaneStatus,
+
+    /// <summary>Reaction and launch time from the race start.</summary>
+    ReactionTime,
+
+    /// <summary>The car moved before the lights went out.</summary>
+    JumpStart,
 }
 
 /// <summary>

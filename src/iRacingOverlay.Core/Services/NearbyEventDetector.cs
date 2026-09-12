@@ -290,6 +290,11 @@ public sealed class NearbyEventDetector
         if (EnableSessionAlerts)
             _sessionAlerts.Update(data, _activeEvents, ref _nextEventId);
 
+        // The start is measured once, on the telemetry thread; announce it the
+        // tick it lands. Independent of the relative table — a lone car still starts.
+        if (data.RaceStartJustMeasured && data.RaceStart != null)
+            AnnounceRaceStart(data.RaceStart);
+
         if (relativeEntries == null || relativeEntries.Count == 0) return;
         if (data.CarIdxTrackSurface == null || data.CarIdxLapDistPct == null) return;
 
@@ -1218,6 +1223,26 @@ public sealed class NearbyEventDetector
     /// Emit a session-level event (not tied to a specific car).
     /// Uses CarIdx = -1, empty driver/car info.
     /// </summary>
+    private void AnnounceRaceStart(RaceStartResult start)
+    {
+        if (start.JumpStart)
+        {
+            EmitSessionEvent(NearbyEventType.JumpStart, "JUMP START", NearbyEventSeverity.Critical, 8.0f);
+            return;
+        }
+
+        var text = new System.Text.StringBuilder("REACTION ");
+        text.Append(start.ReactionSeconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append(" s");
+        if (start.LaunchSeconds > 0)
+            text.Append("  ·  MOVE ").Append(start.LaunchSeconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)).Append(" s");
+        if (start.TechniqueLabel.Length > 0)
+            text.Append("  ·  ").Append(start.TechniqueLabel);
+
+        // A slow reaction is worth a second look; a good one is just news.
+        var severity = start.ReactionSeconds > 0.5f ? NearbyEventSeverity.Warning : NearbyEventSeverity.Info;
+        EmitSessionEvent(NearbyEventType.ReactionTime, text.ToString(), severity, 10.0f);
+    }
+
     private void EmitSessionEvent(NearbyEventType type, string text,
         NearbyEventSeverity severity, float duration, bool isOngoing = false)
     {
