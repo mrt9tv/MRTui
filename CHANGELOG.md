@@ -10,11 +10,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Relative timing board widget (±3 positions with gaps)
 - Delta bar widget with optimal lap comparison
 - Sector times widget with color-coded splits
-- Profile system with auto-detection
 - Multi-driver / team mode for endurance racing
+- Hybrid power unit display (MGU-K/H, deploy mode) once a car with one is captured
+
+---
+
+## [0.3.0] - 2026-09-12
+
+### Added
+- **Race start timer** — reaction time from lights-out to first input, launch time to first movement, and the launch technique (clutch, N→gear, throttle-only, rolling). Jump starts are called out. Announced once in the Proximity Feed; a `Reaction` field for MRT One holds it for the session
+- **Profiles** — a profile is now a whole layout (positions, sizes, settings, visibility), bound to a session type and car class, applied automatically or from a new hotkey that cycles through them. Save/bind/apply/rename/delete from Settings → Sessions
+- **Fuel** — consumption trend (▲/▼ beside L/LAP), full-tank stint length, and a three-state pit window: range ahead, PIT NOW with the last safe lap, LATE
+- **Player alerts** — your own black flag, meatball and DSQ, incident gains with the new total, and PITS OPEN / CLOSED, through the Proximity Feed
+- **In-car adjustments overlay** — brake bias fine/peak, TC 2–4, DRS and every other `dc*` control the car exposes, shown as they change
+- **Pit Confirm** — auto-fill awareness (no more "NOTHING ARMED" in cars whose crew fills automatically), grille tape, weight jackers, charge to add
+- **Settings window** — rebuilt around declared settings with search, Basic/Advanced tiers and progressive disclosure; every widget's settings are reachable, including Fuel, Standings and Turn Display which had none before
+- **Overlay edit mode** and health diagnostics (dropped frames, frame time, update rate) in the status strip
+- **Diagnostics** — rolling log file in `Documents/MRT-UI/logs` with repeat suppression, a UI-thread stall watchdog, and `available_variables.txt` listing every channel the live session publishes
+- 48 new telemetry channels from the capability audit (track wetness, engine warnings, FFB clipping, connection quality, tire sets, and more)
+- Test projects for Core (106 tests) and WPF (53 tests)
+
+### Changed
+- Telemetry SDK moved from `1.0.0-beta.1` to `SVappsLAB.iRacingTelemetrySDK 2.3.0` (torn-read detection, 57 more channels). Builds with the .NET 10 SDK
+- Shift points come from the car's own data (`DriverCarSLShiftRPM` and friends) with a −2% / +0.5% window; the learned estimate is the fallback only
+- Session info parses once per change rather than once a second; roster changes are logged once
+- Per-frame state (relatives, standings, lockups, shift zones) is computed once on the telemetry thread and shared, rather than per widget
+- Atomic settings and layout writes with `.bak` recovery; debounced saves
+
+### Fixed
+- **UI freezes** — blocking `Dispatcher.Invoke` calls, unbounded render queues and per-tick settings writes removed; latest-wins rendering per widget
+- **Frozen overlay after a session change** — the telemetry monitor now restarts itself if the SDK's read loop faults
+- **Lap times on comma-decimal locales** rendered as `1:32,345` in MRT One; every formatted value is now culture-invariant
+- Profile matching read the car after the match ran, so the first match of a session saw the previous car; it now matches on `CarClassShortName`
+- Settings lost on crash; About page blocking the UI thread during update checks
 
 ---
 
