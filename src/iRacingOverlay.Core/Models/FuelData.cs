@@ -187,7 +187,21 @@ public class FuelData
     /// when they need the blended/best-available estimate.
     /// </summary>
     public float EffectiveAvgFuelPerLap { get; set; }
-    
+
+    /// <summary>
+    /// How the last three laps compare with the ten-lap baseline, as a fraction of
+    /// the baseline. +0.03 means the recent laps burn 3% more than the stint has
+    /// averaged — the number to watch when traffic or a lift-and-coast plan should
+    /// be changing consumption. Zero until six clean laps exist.
+    /// </summary>
+    public float ConsumptionTrendPct { get; set; }
+
+    /// <summary>
+    /// Laps a full tank covers at the effective average, after the sputter reserve.
+    /// The stint-length number strategy is built on; zero until an average exists.
+    /// </summary>
+    public float FullTankLaps { get; set; }
+
     /// <summary>
     /// Real-time fuel saving on current lap vs L3 average (positive = saving fuel).
     /// Shows how much less fuel the driver is projected to use this lap compared

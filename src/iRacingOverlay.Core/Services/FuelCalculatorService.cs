@@ -72,6 +72,8 @@ public sealed class FuelCalculatorService
         data.GreenFlagLapCount = 0;
         data.YellowFlagLapCount = 0;
         data.CurrentLapSaving = 0;
+        data.ConsumptionTrendPct = 0;
+        data.FullTankLaps = 0;
     }
 
     /// <summary>
@@ -407,6 +409,17 @@ public sealed class FuelCalculatorService
 
         // Expose the blended avg for downstream services (FuelSavingService, widget display)
         CurrentData.EffectiveAvgFuelPerLap = avgForCalc;
+
+        // Recent-vs-baseline trend. Six clean laps is the least that gives the
+        // three-lap window something other than itself to be compared against.
+        CurrentData.ConsumptionTrendPct =
+            _lapFuelUsage.Count >= 6 && CurrentData.AvgFuelPerLap_L10 > 0
+                ? (CurrentData.AvgFuelPerLap_L3 - CurrentData.AvgFuelPerLap_L10) / CurrentData.AvgFuelPerLap_L10
+                : 0f;
+
+        CurrentData.FullTankLaps = avgForCalc > 0 && data.FuelLevelMax > 0
+            ? Math.Max(0f, data.FuelLevelMax - CurrentData.FuelSputteringThreshold) / avgForCalc
+            : 0f;
 
         if (avgForCalc > 0 && effectiveRaceLaps > 0)
         {

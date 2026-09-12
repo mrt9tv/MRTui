@@ -15,7 +15,7 @@ namespace iRacingOverlay.WPF.Widgets.TurnDisplayWidget;
 /// Turn Display Widget - Vertical layout showing next and last turn.
 /// Compact vertical bar: NEXT (teal) → LAST (orange)
 /// </summary>
-public class TurnDisplayWidget : WidgetBase
+public partial class TurnDisplayWidget : WidgetBase
 {
     #region UI Elements
 

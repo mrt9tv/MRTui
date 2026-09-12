@@ -18,7 +18,7 @@ namespace iRacingOverlay.WPF.Widgets.StandingsWidget;
 /// Full-field standings overlay — Relative-style table sorted by race position.
 /// All columns are user-toggleable. MRT dark theme, high-contrast text, class stripes.
 /// </summary>
-public class StandingsWidget : WidgetBase
+public partial class StandingsWidget : WidgetBase
 {
     #region Constants
 

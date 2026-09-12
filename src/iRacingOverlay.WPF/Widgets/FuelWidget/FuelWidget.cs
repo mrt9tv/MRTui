@@ -18,7 +18,7 @@ namespace iRacingOverlay.WPF.Widgets.FuelWidget;
 /// Projected Delta, Saving Target, Strategy.
 /// MRT theme: dark background, teal/orange accents, high contrast text.
 /// </summary>
-public class FuelWidget : WidgetBase
+public partial class FuelWidget : WidgetBase
 {
     #region Constants
 
@@ -87,6 +87,10 @@ public class FuelWidget : WidgetBase
     private Grid _rowPitWindow = null!;
     private TextBlock _valPitWindow = null!;
 
+    // Full-tank stint length row
+    private Grid _rowTankLaps = null!;
+    private TextBlock _valTankLaps = null!;
+
     // Saving section
     private TextBlock _valDelta = null!;
     private TextBlock _valSavingTarget = null!;
@@ -133,6 +137,12 @@ public class FuelWidget : WidgetBase
     /// <summary>Show optimal pit window row (lap range to pit)</summary>
     public bool ShowPitWindow { get; set; } = true;
 
+    /// <summary>Show how many laps a full tank covers at the current average.</summary>
+    public bool ShowTankLaps { get; set; } = false;
+
+    /// <summary>Show the ▲/▼ consumption trend beside L/LAP.</summary>
+    public bool ShowTrend { get; set; } = true;
+
     /// <summary>Buffer laps for fuel calculation (synced with MRT One settings)</summary>
     public float BufferLaps { get; set; } = 1.0f;
 
@@ -161,51 +171,45 @@ public class FuelWidget : WidgetBase
     {
         if (Config?.Settings == null) return;
 
-        if (Config.Settings.TryGetValue("showL3Average", out var v1))
+        ShowL3Average = ReadBool("showL3Average", ShowL3Average);
+        ShowL5Average = ReadBool("showL5Average", ShowL5Average);
+        ShowBuffer = ReadBool("showBuffer", ShowBuffer);
+        ShowSavingSection = ReadBool("showSavingSection", ShowSavingSection);
+        ShowTankPct = ReadBool("showTankPct", ShowTankPct);
+        ShowAlert = ReadBool("showAlert", ShowAlert);
+        ShowPitLap = ReadBool("showPitLap", ShowPitLap);
+        ShowFillAmount = ReadBool("showFillAmount", ShowFillAmount);
+        ShowPitWindow = ReadBool("showPitWindow", ShowPitWindow);
+        ShowTankLaps = ReadBool("showTankLaps", ShowTankLaps);
+        ShowTrend = ReadBool("showTrend", ShowTrend);
+        ManualSaveTarget = ReadFloat("manualSaveTarget", ManualSaveTarget);
+    }
+
+    /// <summary>
+    /// Settings arrive as JsonElement from a loaded layout and as bool once set
+    /// in-process; both shapes must read the same.
+    /// </summary>
+    private bool ReadBool(string key, bool fallback)
+    {
+        if (!Config.Settings!.TryGetValue(key, out var v)) return fallback;
+        return v switch
         {
-            if (v1 is JsonElement je) ShowL3Average = je.ValueKind == JsonValueKind.True;
-            else if (v1 is bool b) ShowL3Average = b;
-        }
-        if (Config.Settings.TryGetValue("showL5Average", out var v2))
+            JsonElement je => je.ValueKind == JsonValueKind.True,
+            bool b => b,
+            _ => fallback,
+        };
+    }
+
+    private float ReadFloat(string key, float fallback)
+    {
+        if (!Config.Settings!.TryGetValue(key, out var v)) return fallback;
+        return v switch
         {
-            if (v2 is JsonElement je) ShowL5Average = je.ValueKind == JsonValueKind.True;
-            else if (v2 is bool b) ShowL5Average = b;
-        }
-        if (Config.Settings.TryGetValue("showBuffer", out var v3))
-        {
-            if (v3 is JsonElement je) ShowBuffer = je.ValueKind == JsonValueKind.True;
-            else if (v3 is bool b) ShowBuffer = b;
-        }
-        if (Config.Settings.TryGetValue("showSavingSection", out var v4))
-        {
-            if (v4 is JsonElement je) ShowSavingSection = je.ValueKind == JsonValueKind.True;
-            else if (v4 is bool b) ShowSavingSection = b;
-        }
-        if (Config.Settings.TryGetValue("showTankPct", out var v5))
-        {
-            if (v5 is JsonElement je) ShowTankPct = je.ValueKind == JsonValueKind.True;
-            else if (v5 is bool b) ShowTankPct = b;
-        }
-        if (Config.Settings.TryGetValue("showAlert", out var v6))
-        {
-            if (v6 is JsonElement je) ShowAlert = je.ValueKind == JsonValueKind.True;
-            else if (v6 is bool b) ShowAlert = b;
-        }
-        if (Config.Settings.TryGetValue("showPitLap", out var v7))
-        {
-            if (v7 is JsonElement je) ShowPitLap = je.ValueKind == JsonValueKind.True;
-            else if (v7 is bool b) ShowPitLap = b;
-        }
-        if (Config.Settings.TryGetValue("showFillAmount", out var v8))
-        {
-            if (v8 is JsonElement je) ShowFillAmount = je.ValueKind == JsonValueKind.True;
-            else if (v8 is bool b) ShowFillAmount = b;
-        }
-        if (Config.Settings.TryGetValue("showPitWindow", out var v9))
-        {
-            if (v9 is JsonElement je) ShowPitWindow = je.ValueKind == JsonValueKind.True;
-            else if (v9 is bool b) ShowPitWindow = b;
-        }
+            JsonElement je when je.ValueKind == JsonValueKind.Number => (float)je.GetDouble(),
+            float f => f,
+            double d => (float)d,
+            _ => fallback,
+        };
     }
 
     protected override void SaveWidgetSettings() => SaveSettings();
@@ -222,6 +226,9 @@ public class FuelWidget : WidgetBase
         Config.Settings["showPitLap"] = ShowPitLap;
         Config.Settings["showFillAmount"] = ShowFillAmount;
         Config.Settings["showPitWindow"] = ShowPitWindow;
+        Config.Settings["showTankLaps"] = ShowTankLaps;
+        Config.Settings["showTrend"] = ShowTrend;
+        Config.Settings["manualSaveTarget"] = ManualSaveTarget;
     }
 
     private void InitializeWidget()
@@ -302,6 +309,10 @@ public class FuelWidget : WidgetBase
         _valPitWindow = CreateToggleRow("PIT WINDOW", out _rowPitWindow);
         _rowPitWindow.Visibility = ShowPitWindow ? Visibility.Visible : Visibility.Collapsed;
 
+        // Full-tank stint length
+        _valTankLaps = CreateToggleRow("TANK LAPS", out _rowTankLaps);
+        _rowTankLaps.Visibility = ShowTankLaps ? Visibility.Visible : Visibility.Collapsed;
+
         // Toggleable saving section (separator + 4 rows)
         _savingContainer = new StackPanel();
         _savingContainer.Children.Add(CreateSeparator());
@@ -349,6 +360,7 @@ public class FuelWidget : WidgetBase
         if (ShowPitLap) extraRows++;
         if (ShowFillAmount) extraRows++;
         if (ShowPitWindow) extraRows++;
+        if (ShowTankLaps) extraRows++;
 
         // Saving section = separator(5) + 4 rows; alert = separator(5) + alert bar(22)
         double savingHeight = ShowSavingSection ? 5 + (4 * (ROW_HEIGHT + 2)) : 0;
@@ -370,10 +382,26 @@ public class FuelWidget : WidgetBase
         _rowPitLap.Visibility = ShowPitLap ? Visibility.Visible : Visibility.Collapsed;
         _rowFillAmount.Visibility = ShowFillAmount ? Visibility.Visible : Visibility.Collapsed;
         _rowPitWindow.Visibility = ShowPitWindow ? Visibility.Visible : Visibility.Collapsed;
+        _rowTankLaps.Visibility = ShowTankLaps ? Visibility.Visible : Visibility.Collapsed;
         _tankPctContainer.Visibility = ShowTankPct ? Visibility.Visible : Visibility.Collapsed;
         _savingContainer.Visibility = ShowSavingSection ? Visibility.Visible : Visibility.Collapsed;
         _alertContainer.Visibility = ShowAlert ? Visibility.Visible : Visibility.Collapsed;
         RecalcHeight();
+    }
+
+    /// <summary>
+    /// " ▲2%" / " ▼3%" after the L/LAP value once the three-lap window drifts more
+    /// than a percent from the ten-lap baseline. Below that it is noise, and the
+    /// service reports zero until six clean laps exist anyway.
+    /// </summary>
+    private string TrendSuffix(FuelData fuel)
+    {
+        if (!ShowTrend) return "";
+
+        float pct = fuel.ConsumptionTrendPct * 100f;
+        if (Math.Abs(pct) < 1f) return "";
+
+        return (pct > 0 ? " ▲" : " ▼") + Math.Abs(pct).ToString("F0", CultureInfo.InvariantCulture) + "%";
     }
 
     private TextBlock CreateRow(string label, out TextBlock labelBlock, Panel? parent = null)
@@ -495,7 +523,7 @@ public class FuelWidget : WidgetBase
             }
         }
         _valLPerLap.Text = lPerLap > 0
-            ? lPerLap.ToString("F3", CultureInfo.InvariantCulture) + (usingEstimate ? " ~est" : "")
+            ? lPerLap.ToString("F3", CultureInfo.InvariantCulture) + (usingEstimate ? " ~est" : "") + TrendSuffix(fuel)
             : "--";
         _valLPerLap.FontWeight = FontWeights.Normal;
         _valLPerLap.Foreground = BRUSH_TEAL;
@@ -581,10 +609,26 @@ public class FuelWidget : WidgetBase
         {
             if (!string.IsNullOrEmpty(fuel.PitWindowReason) && !fuel.CanFinishWithoutStop)
             {
-                _valPitWindow.Text = fuel.PitWindowReason;
-                // Color: orange normally, red if pit window is NOW (start <= current lap + 1)
-                _valPitWindow.Foreground = fuel.PitWindowStart <= data.Lap + 1
-                    ? BRUSH_RED : BRUSH_ORANGE;
+                // Three states the driver needs to tell apart at a glance: the
+                // window is ahead (orange, shows the range), this is the lap
+                // (red, says so), or the last safe lap has already gone by.
+                if (data.Lap > fuel.PitWindowEnd)
+                {
+                    _valPitWindow.Text = "PIT NOW · LATE";
+                    _valPitWindow.Foreground = BRUSH_RED;
+                }
+                else if (data.Lap + 1 >= fuel.PitWindowStart)
+                {
+                    _valPitWindow.Text = data.Lap >= fuel.PitWindowEnd
+                        ? "PIT NOW · LAST LAP"
+                        : $"PIT NOW · by L{fuel.PitWindowEnd}";
+                    _valPitWindow.Foreground = BRUSH_RED;
+                }
+                else
+                {
+                    _valPitWindow.Text = fuel.PitWindowReason;
+                    _valPitWindow.Foreground = BRUSH_ORANGE;
+                }
             }
             else if (fuel.CanFinishWithoutStop && fuel.HasSufficientData)
             {
@@ -596,6 +640,15 @@ public class FuelWidget : WidgetBase
                 _valPitWindow.Text = "--";
                 _valPitWindow.Foreground = BRUSH_MUTED;
             }
+        }
+
+        // Full-tank stint length — the number a strategy is planned around
+        if (ShowTankLaps)
+        {
+            _valTankLaps.Text = fuel.FullTankLaps > 0
+                ? fuel.FullTankLaps.ToString("F1", CultureInfo.InvariantCulture)
+                : "--";
+            _valTankLaps.Foreground = fuel.FullTankLaps > 0 ? BRUSH_TEXT : BRUSH_MUTED;
         }
 
         // ── Fuel saving section ─────────────────────────────────
