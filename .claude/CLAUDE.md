@@ -111,7 +111,7 @@ dotnet build                                           # Build the solution
 dotnet run --project src\iRacingOverlay.WPF           # Run the application
 dotnet clean                                           # Clean build artifacts
 
-# Testing (when implemented)
+# Testing — tests/iRacingOverlay.Core.Tests (calculators) and tests/iRacingOverlay.WPF.Tests (formatters, mappers, profiles)
 dotnet test                                            # Run test suite
 dotnet test --logger "console;verbosity=detailed"     # Verbose test output
 
