@@ -155,15 +155,63 @@ public sealed class SettingsRenderer
         _ => BuildNote(s),
     };
 
+    // ── Rows ──────────────────────────────────────────────────────────
+    //
+    // Every setting is a row: label and description on the left, the control on
+    // the right. The description used to live in a tooltip, which on a page of
+    // forty switches meant nobody read it. A row also gives the pointer a whole
+    // strip to hit rather than a 42 px switch.
+
+    private static Style Res(string key) => (Style)Application.Current.MainWindow!.FindResource(key);
+    private static Brush BrushRes(string key) => (Brush)Application.Current.MainWindow!.FindResource(key);
+
+    /// <summary>
+    /// A hoverable row with the label block on the left and <paramref name="control"/>
+    /// on the right. Returns the row; the caller decides what a click on it does.
+    /// </summary>
+    private static Border Row(WidgetSetting s, FrameworkElement control, double controlMinWidth = 0)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+        text.Children.Add(new TextBlock { Text = s.Label, Style = Res("T.Body"), TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrWhiteSpace(s.Description))
+        {
+            text.Children.Add(new TextBlock
+            {
+                Text = s.Description,
+                Style = Res("T.Caption"),
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        }
+        grid.Children.Add(text);
+
+        control.VerticalAlignment = VerticalAlignment.Center;
+        if (controlMinWidth > 0) control.MinWidth = controlMinWidth;
+        Grid.SetColumn(control, 1);
+        grid.Children.Add(control);
+
+        var row = new Border
+        {
+            Child = grid,
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(-10, 0, -10, 2),
+            CornerRadius = (CornerRadius)Application.Current.MainWindow!.FindResource("CR.Control"),
+            Background = Brushes.Transparent,
+        };
+        row.MouseEnter += (_, _) => row.Background = BrushRes("SurfaceHover");
+        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        return row;
+    }
+
     private FrameworkElement BuildToggle(WidgetSetting s)
     {
         var box = new CheckBox
         {
-            Content = s.Label,
-            Style = (Style)Application.Current.MainWindow!.FindResource("Switch"),
+            Style = Res("Switch"),
             IsChecked = s.GetBool?.Invoke() ?? false,
-            Margin = new Thickness(0, 0, 0, 9),
-            ToolTip = s.Description,
         };
 
         void Apply(object _, RoutedEventArgs __)
@@ -175,23 +223,32 @@ public sealed class SettingsRenderer
 
         box.Checked += Apply;
         box.Unchecked += Apply;
-        return box;
+
+        var row = Row(s, box);
+        row.Cursor = System.Windows.Input.Cursors.Hand;
+
+        // The whole row toggles. The switch handles its own clicks; only a click
+        // that reached the row unhandled flips it from here.
+        row.MouseLeftButtonUp += (_, e) =>
+        {
+            if (e.Handled) return;
+            box.IsChecked = box.IsChecked != true;
+            e.Handled = true;
+        };
+
+        return row;
     }
 
     private FrameworkElement BuildSlider(WidgetSetting s)
     {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        var grid = new Grid { Margin = new Thickness(0, 4, 0, 12) };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var label = new TextBlock
-        {
-            Text = s.Label,
-            Style = (Style)Application.Current.MainWindow!.FindResource("T.Body"),
-            ToolTip = s.Description,
-        };
+        var label = new TextBlock { Text = s.Label, Style = Res("T.Body") };
         Grid.SetRow(label, 0);
         grid.Children.Add(label);
 
@@ -200,7 +257,7 @@ public sealed class SettingsRenderer
         var readout = new TextBlock
         {
             Text = Format(s, current),
-            Style = (Style)Application.Current.MainWindow!.FindResource("T.Data"),
+            Style = Res("T.Data"),
             VerticalAlignment = VerticalAlignment.Center,
             MinWidth = 46,
             TextAlignment = TextAlignment.Right,
@@ -209,18 +266,32 @@ public sealed class SettingsRenderer
         Grid.SetColumn(readout, 1);
         grid.Children.Add(readout);
 
+        int sliderRow = 1;
+        if (!string.IsNullOrWhiteSpace(s.Description))
+        {
+            var desc = new TextBlock
+            {
+                Text = s.Description,
+                Style = Res("T.Caption"),
+                Margin = new Thickness(0, 2, 0, 0),
+            };
+            Grid.SetRow(desc, 1);
+            Grid.SetColumnSpan(desc, 2);
+            grid.Children.Add(desc);
+            sliderRow = 2;
+        }
+
         var slider = new Slider
         {
-            Style = (Style)Application.Current.MainWindow!.FindResource("Slider.Mrt"),
+            Style = Res("Slider.Mrt"),
             Minimum = s.Min,
             Maximum = s.Max,
             Value = Math.Clamp(current, s.Min, s.Max),
             TickFrequency = s.Step,
             IsSnapToTickEnabled = s.Step > 0,
-            Margin = new Thickness(0, 6, 0, 0),
-            ToolTip = s.Description,
+            Margin = new Thickness(0, 8, 0, 0),
         };
-        Grid.SetRow(slider, 1);
+        Grid.SetRow(slider, sliderRow);
         Grid.SetColumnSpan(slider, 2);
         grid.Children.Add(slider);
 
@@ -240,17 +311,7 @@ public sealed class SettingsRenderer
 
     private FrameworkElement BuildChoice(WidgetSetting s)
     {
-        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = s.Label,
-            Style = (Style)Application.Current.MainWindow!.FindResource("T.Body"),
-            Margin = new Thickness(0, 0, 0, 6),
-            ToolTip = s.Description,
-        });
-
-        var combo = new ComboBox { ToolTip = s.Description };
+        var combo = new ComboBox();
         foreach (var choice in s.Choices ?? Array.Empty<string>())
             combo.Items.Add(new ComboBoxItem { Content = choice });
 
@@ -265,8 +326,7 @@ public sealed class SettingsRenderer
             Changed?.Invoke();
         };
 
-        stack.Children.Add(combo);
-        return stack;
+        return Row(s, combo, controlMinWidth: 170);
     }
 
     private FrameworkElement BuildAction(WidgetSetting s)
@@ -295,7 +355,26 @@ public sealed class SettingsRenderer
             Changed?.Invoke();
         };
 
-        return button;
+        if (string.IsNullOrWhiteSpace(s.Description)) return button;
+
+        // Action with a description: the caption sits beside the button rather
+        // than hiding in a tooltip, like every other row.
+        var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        button.Margin = new Thickness(0);
+        button.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(button);
+        var caption = new TextBlock
+        {
+            Text = s.Description,
+            Style = Res("T.Caption"),
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Grid.SetColumn(caption, 1);
+        grid.Children.Add(caption);
+        return grid;
     }
 
     private static FrameworkElement BuildNote(WidgetSetting s) => new TextBlock

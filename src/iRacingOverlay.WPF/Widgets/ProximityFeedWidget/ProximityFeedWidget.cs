@@ -144,6 +144,9 @@ public partial class ProximityFeedWidget : WidgetBase
     /// <summary>Show the player's own incident count going up.</summary>
     public bool ShowMyIncidents { get; set; } = true;
 
+    /// <summary>Announce the reaction and launch time after the start lights.</summary>
+    public bool ShowRaceStart { get; set; } = true;
+
     /// <summary>Detection range ahead of the player in seconds (1-30, default 12).</summary>
     public float DetectionAheadSeconds { get; set; } = 12.0f;
 
@@ -234,6 +237,11 @@ public partial class ProximityFeedWidget : WidgetBase
             if (v11 is JsonElement je11) ShowMyIncidents = je11.ValueKind == JsonValueKind.True;
             else if (v11 is bool b11) ShowMyIncidents = b11;
         }
+        if (Config.Settings.TryGetValue("showRaceStart", out var v12))
+        {
+            if (v12 is JsonElement je12) ShowRaceStart = je12.ValueKind == JsonValueKind.True;
+            else if (v12 is bool b12) ShowRaceStart = b12;
+        }
         if (Config.Settings.TryGetValue("detectionAhead", out var v9))
         {
             if (v9 is JsonElement je9 && je9.TryGetDouble(out var d9)) DetectionAheadSeconds = (float)Math.Clamp(d9, 1.0, 30.0);
@@ -264,6 +272,7 @@ public partial class ProximityFeedWidget : WidgetBase
         Config.Settings["showCheckeredFlag"] = ShowCheckeredFlag;
         Config.Settings["showPaceFlags"] = ShowPaceFlags;
         Config.Settings["showMyIncidents"] = ShowMyIncidents;
+        Config.Settings["showRaceStart"] = ShowRaceStart;
         Config.Settings["detectionAhead"] = DetectionAheadSeconds;
         Config.Settings["detectionBehind"] = DetectionBehindSeconds;
     }
@@ -401,6 +410,7 @@ public partial class ProximityFeedWidget : WidgetBase
             if (!ShowStartSequence && e.EventType == NearbyEventType.StartSequence) continue;
             if (!ShowCheckeredFlag && e.EventType == NearbyEventType.CheckeredFlag) continue;
             if (!ShowMyIncidents && e.EventType == NearbyEventType.IncidentGained) continue;
+            if (!ShowRaceStart && e.EventType is (NearbyEventType.ReactionTime or NearbyEventType.JumpStart)) continue;
             if (!ShowPaceFlags && (e.EventType == NearbyEventType.SafetyCar
                 || e.EventType == NearbyEventType.PaceEndOfLine
                 || e.EventType == NearbyEventType.PaceFreePass

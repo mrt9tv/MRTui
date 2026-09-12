@@ -50,7 +50,7 @@ public partial class ProximityFeedWidget
             description: "Warn when a faster-class car is about to come past.");
 
         yield return WidgetSetting.Toggle(
-            "Race start sequence", () => ShowStartSequence, v => ShowStartSequence = v,
+            "Start lights", () => ShowStartSequence, v => ShowStartSequence = v,
             group: "Event types",
             description: "Ready / Set / Go at the start.");
 
@@ -67,6 +67,11 @@ public partial class ProximityFeedWidget
             "My incidents", () => ShowMyIncidents, v => ShowMyIncidents = v,
             group: "Event types",
             description: "Note each time your own incident count goes up, with the new total.");
+
+        yield return WidgetSetting.Toggle(
+            "Race start", () => ShowRaceStart, v => ShowRaceStart = v,
+            group: "Event types",
+            description: "Reaction time, launch time and technique after the lights, and a warning on a jump start.");
 
         foreach (var s in base.GetSettings()) yield return s;
     }

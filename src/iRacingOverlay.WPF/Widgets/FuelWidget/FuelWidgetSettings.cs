@@ -53,7 +53,7 @@ public partial class FuelWidget
             description: "Override the computed target with a fixed litres-per-lap saving. 0 uses the computed value.",
             tier: SettingTier.Advanced,
             step: 0.05,
-            format: v => v <= 0 ? "Auto" : $"{v:F2} L/lap");
+            format: v => v <= 0 ? "Auto" : v.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + " L/lap");
 
         yield return Row("Alert bar",
             "The strip along the bottom that flags low fuel and pit-now conditions.",
