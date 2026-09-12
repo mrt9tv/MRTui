@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2026-09-12
+
+### Added
+- **Race start** toggle in the Proximity Feed event types, so the reaction timer can be switched off
+
+### Changed
+- **Settings rows** — every toggle and choice is a row with its description visible under the label (it was tooltip-only), the control on the right, and the whole row clickable
+- **Switch** — larger (42×24), knob slides with an ease, on state has a teal halo, keyboard focus is an orange ring
+- **Scrollbar** — overlay style: hairline thumb, no arrows or track, widens under the pointer and turns teal while dragged
+
+### Fixed
+- Fuel save-target readout formatted with the machine culture ("0,25 L/lap")
+
+---
+
 ## [0.3.0] - 2026-09-12
 
 ### Added
