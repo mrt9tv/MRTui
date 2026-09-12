@@ -189,8 +189,8 @@ public class MRTOneVisualEffects : IDisposable
 
         // Same zone and same redline the rest of the widget uses — both resolved once
         // per tick from the car's own values rather than recomputed here.
-        var zone = ShiftPointCalculator.GetZone(_lastTelemetryData);
-        double redline = ShiftPointCalculator.GetRedline(_lastTelemetryData);
+        var zone = _lastTelemetryData.ShiftZone;
+        double redline = _lastTelemetryData.ShiftRedlineRPM;
 
         // Hide if no valid RPM
         if (rpm <= 0 || redline <= 0)
@@ -239,13 +239,7 @@ public class MRTOneVisualEffects : IDisposable
         _rpmIndicatorBead.Visibility = Visibility.Visible;
 
         // Color based on RPM zone
-        Color beadColor = zone switch
-        {
-            ShiftPointCalculator.RPMZone.Danger => Colors.Red,
-            ShiftPointCalculator.RPMZone.Optimal => _secondaryColor, // Orange
-            ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,
-            _ => Color.FromRgb(0, 128, 128) // Teal for safe zone
-        };
+        Color beadColor = RpmZonePalette.For(zone, _secondaryColor, Color.FromRgb(0, 128, 128));
         _rpmIndicatorBead.Fill = BrushCache.Get(beadColor);
     }
 

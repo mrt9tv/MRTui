@@ -722,8 +722,7 @@ public class IRacingTelemetryService : ITelemetryService, IDisposable
                 Speed = sdkData.Speed.GetValueOrDefault(),
                 RPM = sdkData.RPM.GetValueOrDefault(),
                 // SDK exposes DriverCarSLBlinkRPM (shift light) - consider using for more accurate shift point
-                // For now, leave at 0 and let ShiftPointCalculator learn it
-                // From session info (DriverCarRedLine). This was hardcoded to 0 with a
+                                // From session info (DriverCarRedLine). This was hardcoded to 0 with a
                 // "will be populated if the SDK provides it" note — the SDK does provide
                 // it, so every consumer fell through to the learned estimate instead.
                 EngineRedlineRPM = _carRedline,

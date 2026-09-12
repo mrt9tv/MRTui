@@ -1205,14 +1205,14 @@ public partial class MRTOneWidget : WidgetBase
     /// reused by the gauge ring and the RPM value colour, which previously each
     /// called GetRPMZone with identical arguments.
     /// </summary>
-    private ShiftPointCalculator.RPMZone _currentRpmZone;
+    private ShiftZone _currentRpmZone;
 
     protected override void UpdateUI(TelemetryData data)
     {
         // The shift zone was resolved once on the telemetry thread from the car's own
         // shift points — no per-widget recalculation, and no static learner being
         // advanced as a side effect of rendering.
-        _currentRpmZone = ShiftPointCalculator.GetZone(data);
+        _currentRpmZone = data.ShiftZone;
 
         // Update TOP section (SecondaryField - typically Speed or RPM)
         if (_dataBinding.SecondaryField.HasValue)
@@ -1292,13 +1292,7 @@ public partial class MRTOneWidget : WidgetBase
         if (!pitLimiterBlinkActive)
         {
             // Update gauge circle color based on this frame's RPM zone
-            Color borderColor = _currentRpmZone switch
-            {
-                ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // RED - at limiter
-                ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // ORANGE - optimal shift
-                ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,     // YELLOW - approaching shift
-                _ => _primaryColor                                          // TEAL - safe range
-            };
+            Color borderColor = RpmZonePalette.For(_currentRpmZone, _secondaryColor, _primaryColor);
             
             _gaugeCircle.Stroke = BrushCache.Get(borderColor);
         }
@@ -1362,13 +1356,7 @@ public partial class MRTOneWidget : WidgetBase
         // recompute the identical zone a second time with the same arguments.
         else if (field == TelemetryField.RPM && value is float)
         {
-            UiUpdate.SetForeground(valueText, BrushCache.Get(_currentRpmZone switch
-            {
-                ShiftPointCalculator.RPMZone.Danger => Colors.Red,         // At limiter
-                ShiftPointCalculator.RPMZone.Optimal => _secondaryColor,   // Optimal shift (Orange)
-                ShiftPointCalculator.RPMZone.Warning => Colors.Yellow,     // Approaching shift
-                _ => _primaryColor                                          // Safe range (Teal)
-            }));
+            UiUpdate.SetForeground(valueText, BrushCache.Get(RpmZonePalette.For(_currentRpmZone, _secondaryColor, _primaryColor)));
         }
         else
         {
